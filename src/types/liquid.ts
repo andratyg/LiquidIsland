@@ -57,6 +57,11 @@ export interface SystemSettings {
   enableSfx: boolean;
   selectedMonitor: number;
   taskbarMode: TaskbarMode;
+
+  // Phase 3 Extensions (backward compatible)
+  volume: number;              // 0–100 (Default: 75)
+  brightness: number;          // 0–100 (Default: 80)
+  isAudioPlaying: boolean;      // True when waveform visualizer is active
 }
 
 export interface ClipboardSnippetItem {

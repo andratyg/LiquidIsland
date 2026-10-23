@@ -24,6 +24,9 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   enableSfx: true,
   selectedMonitor: 0,
   taskbarMode: 'B',
+  volume: 75,
+  brightness: 80,
+  isAudioPlaying: true,
 };
 
 function loadInitialSettings(): SystemSettings {
@@ -55,6 +58,9 @@ function loadInitialSettings(): SystemSettings {
       enableSfx: typeof parsed.enableSfx === 'boolean' ? parsed.enableSfx : DEFAULT_SETTINGS.enableSfx,
       selectedMonitor: typeof parsed.selectedMonitor === 'number' ? parsed.selectedMonitor : DEFAULT_SETTINGS.selectedMonitor,
       taskbarMode: validTaskbarModes.includes(parsed.taskbarMode) ? parsed.taskbarMode : DEFAULT_SETTINGS.taskbarMode,
+      volume: typeof parsed.volume === 'number' ? Math.max(0, Math.min(100, parsed.volume)) : DEFAULT_SETTINGS.volume,
+      brightness: typeof parsed.brightness === 'number' ? Math.max(0, Math.min(100, parsed.brightness)) : DEFAULT_SETTINGS.brightness,
+      isAudioPlaying: typeof parsed.isAudioPlaying === 'boolean' ? parsed.isAudioPlaying : DEFAULT_SETTINGS.isAudioPlaying,
     };
   } catch (err) {
     console.error('[LiquidIsland Store] Failed to parse localStorage state:', err);
@@ -162,6 +168,28 @@ export const systemStore = {
       currentSettings.islandState === 'expanded' ? 'compact' : 'expanded';
     saveSettings({ ...currentSettings, islandState: nextState });
   },
+
+  // Phase 3 Actions
+  setVolume(volumeOrUpdater: number | ((prev: number) => number)) {
+    const nextVal = typeof volumeOrUpdater === 'function' ? volumeOrUpdater(currentSettings.volume) : volumeOrUpdater;
+    const clamped = Math.max(0, Math.min(100, Math.round(nextVal)));
+    saveSettings({ ...currentSettings, volume: clamped });
+  },
+  setBrightness(brightnessOrUpdater: number | ((prev: number) => number)) {
+    const nextVal = typeof brightnessOrUpdater === 'function' ? brightnessOrUpdater(currentSettings.brightness) : brightnessOrUpdater;
+    const clamped = Math.max(0, Math.min(100, Math.round(nextVal)));
+    saveSettings({ ...currentSettings, brightness: clamped });
+  },
+  setIsAudioPlaying(isAudioPlaying: boolean) {
+    saveSettings({ ...currentSettings, isAudioPlaying });
+  },
+  toggleAudioPlaying() {
+    saveSettings({
+      ...currentSettings,
+      isAudioPlaying: !currentSettings.isAudioPlaying,
+    });
+  },
+
   subscribe(listener: () => void) {
     listeners.add(listener);
     return () => {

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from './store/useSystemStore';
 import { playGlassPop, playWaterDrop, playToggleClick } from './utils/sfx';
+import { IslandShell } from './components/IslandShell';
+import { CompactView } from './components/CompactView';
 import {
   Sun,
   Moon,
@@ -12,12 +14,14 @@ import {
   Activity,
   Sparkles,
   ChevronUp,
+  ChevronDown,
   Power,
   Eye,
   Minimize2,
   Radio,
   Sliders,
   X,
+  Wrench,
 } from 'lucide-react';
 import { ISLAND_DIMENSIONS } from './types/liquid';
 
@@ -33,7 +37,6 @@ async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       typeof window !== 'undefined' &&
       ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
     if (!isTauri) {
-      console.log(`[Browser Fallback] invoke("${cmd}", ${JSON.stringify(args)})`);
       if (cmd === 'trim_ram_working_set') return 9.85 as unknown as T;
       if (cmd === 'get_monitors_list') {
         return [
@@ -61,24 +64,12 @@ export const App: React.FC = () => {
   const enableSfx = useSystemStore((s) => s.enableSfx);
   const selectedMonitor = useSystemStore((s) => s.selectedMonitor);
 
-  const [isHovered, setIsHovered] = useState(false);
   const [ramWorkingSet, setRamWorkingSet] = useState<number | null>(null);
   const [monitors, setMonitors] = useState<string[]>([]);
-  const [statusMsg, setStatusMsg] = useState<string>('Tray Active (^)');
+  const [statusMsg, setStatusMsg] = useState<string>('Phase 3 Notch Active');
   const [isTrimming, setIsTrimming] = useState(false);
   const [showTraySim, setShowTraySim] = useState(false);
-
-  // Dynamic Cursor Click-Through management
-  const handleMouseEnter = useCallback(async () => {
-    setIsHovered(true);
-    await safeInvoke('set_click_through', { ignore: false });
-  }, []);
-
-  const handleMouseLeave = useCallback(async () => {
-    setIsHovered(false);
-    setShowTraySim(false);
-    await safeInvoke('set_click_through', { ignore: true });
-  }, []);
+  const [showDevToolbar, setShowDevToolbar] = useState(false);
 
   // Update native tray tooltip via Tauri command
   const syncTrayTooltip = useCallback(async (mb: number) => {
@@ -248,86 +239,31 @@ export const App: React.FC = () => {
     };
   }, [syncTrayTooltip]);
 
-  // Handler: Manual RAM Trim
-  const handleTrimRam = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    handleTrayAction({ action: 'trim_ram' });
-  };
+  // Click-Through handling for floating Dev Toolbar
+  const handleToolbarMouseEnter = useCallback(async () => {
+    await safeInvoke('set_click_through', { ignore: false });
+  }, []);
 
-  // Handler: Theme Toggle
-  const handleToggleTheme = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    handleTrayAction({ action: 'switch_theme' });
-  };
-
-  // Handler: WebAudio Glass Pop SFX
-  const handleTestSfx = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!enableSfx) {
-      systemStore.setEnableSfx(true);
-    }
-    playGlassPop();
-    setStatusMsg('Glass-Pop Synthesized');
-  };
-
-  // Handler: Toggle SFX Mute
-  const handleToggleSfx = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const next = !enableSfx;
-    systemStore.setEnableSfx(next);
-    if (next) playGlassPop();
-  };
-
-  // Handler: Multi-Monitor Switcher
-  const handleCycleMonitor = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    playToggleClick();
-    const count = monitors.length > 0 ? monitors.length : 1;
-    const nextIndex = (selectedMonitor + 1) % count;
-    systemStore.setSelectedMonitor(nextIndex);
-    await safeInvoke('center_on_monitor', { monitorIndex: nextIndex });
-    setStatusMsg(`Monitor #${nextIndex}`);
-  };
+  const handleToolbarMouseLeave = useCallback(async () => {
+    await safeInvoke('set_click_through', { ignore: true });
+  }, []);
 
   // Determine active dimensions strictly matching ARCHITECTURE_LOCK
-  const baseDimensions = ISLAND_DIMENSIONS[islandState] || ISLAND_DIMENSIONS['compact'];
   const activeDimensions = !islandEnabled
-    ? { width: 140, height: 26 } // Subtle disabled pill indicator
-    : isHovered
-    ? showTraySim
-      ? { width: 580, height: 212 } // Expanded to host Tray Simulator menu
-      : { width: 580, height: 112 } // Standard diagnostic toolbar
-    : baseDimensions;
+    ? { width: 140, height: 26 }
+    : ISLAND_DIMENSIONS[islandState] || ISLAND_DIMENSIONS['compact'];
 
   return (
     <div className={`island-canvas theme-${theme}`}>
-      <motion.div
-        className="island-shell"
-        initial={false}
-        animate={{
-          width: activeDimensions.width,
-          height: activeDimensions.height,
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 420,
-          damping: 34,
-          mass: 0.8,
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        style={{
-          margin: '0 auto',
-          position: 'relative',
-        }}
-      >
+      {/* ==================================================================== */}
+      {/* Master 1:1 Dynamic Island Shell                                      */}
+      {/* ==================================================================== */}
+      <IslandShell activeDimensions={activeDimensions}>
         <AnimatePresence mode="wait">
-          {/* ================================================================ */}
-          {/* 1. Power Disabled Standby Pill                                    */}
-          {/* ================================================================ */}
           {!islandEnabled ? (
+            /* Standby / Disabled Pill */
             <motion.div
-              key="disabled-shell"
+              key="disabled-view"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.8 }}
               exit={{ opacity: 0 }}
@@ -348,456 +284,323 @@ export const App: React.FC = () => {
               <Power size={11} style={{ color: '#ef4444' }} />
               <span>Standby (Tray ^)</span>
             </motion.div>
-          ) : !isHovered ? (
-            /* ============================================================== */
-            /* 2. Unhovered Dynamic States (Bezel-Line, Compact, Expanded)     */
-            /* ============================================================== */
-            islandState === 'bezel-line' ? (
-              // Stealth Bezel Line (136px × 6px)
-              <motion.div
-                key="bezel-line"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '3px',
-                  background: 'var(--glass-surface)',
-                  boxShadow: '0 0 8px var(--blue-glow)',
-                  cursor: 'pointer',
-                }}
-                title="Stealth Bezel Active (136x6). Hover to expand."
-              />
-            ) : (
-              // Default Compact Idle Notch Shell (184px × 40px)
-              <motion.div
-                key="compact-shell"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                onClick={() => handleTrayAction({ action: 'toggle_expand' })}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  height: '100%',
-                  padding: '0 14px',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span
-                    style={{
-                      position: 'relative',
-                      display: 'flex',
-                      height: '8px',
-                      width: '8px',
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: 'absolute',
-                        display: 'inline-flex',
-                        height: '100%',
-                        width: '100%',
-                        borderRadius: '50%',
-                        backgroundColor: '#10b981',
-                        opacity: 0.75,
-                        animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
-                      }}
-                    />
-                    <span
-                      style={{
-                        position: 'relative',
-                        display: 'inline-flex',
-                        borderRadius: '50%',
-                        height: '8px',
-                        width: '8px',
-                        backgroundColor: '#10b981',
-                      }}
-                    />
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      letterSpacing: '0.3px',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    LiquidIsland
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {ramWorkingSet !== null && (
-                    <span
-                      style={{
-                        fontSize: '10px',
-                        fontWeight: 500,
-                        color: 'var(--text-secondary)',
-                        backgroundColor: 'var(--pill-bg)',
-                        padding: '2px 6px',
-                        borderRadius: '10px',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {ramWorkingSet.toFixed(1)}M
-                    </span>
-                  )}
-                  <span title="System Tray (^) Integrated">
-                    <ChevronUp
-                      size={13}
-                      style={{ color: 'var(--text-secondary)' }}
-                    />
-                  </span>
-                </div>
-              </motion.div>
-            )
-          ) : (
-            /* ============================================================== */
-            /* 3. Phase 2 Diagnostic Shell (Expanded on Hover)                 */
-            /* ============================================================== */
+          ) : islandState === 'compact' ? (
+            /* Phase 3 Feature-Complete Compact View (184px × 40px) */
             <motion.div
-              key="diagnostic-shell"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18 }}
+              key="compact-view-container"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <CompactView />
+            </motion.div>
+          ) : (
+            /* Fallback / Future Phase Placeholder */
+            <motion.div
+              key="fallback-state"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => systemStore.setIslandState('compact')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                height: '100%',
+                cursor: 'pointer',
+                fontSize: '11px',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <span>{islandState.toUpperCase()}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </IslandShell>
+
+      {/* ==================================================================== */}
+      {/* Collapsible Floating Dev Toolbar (Bottom of Viewport)                */}
+      {/* ==================================================================== */}
+      <div
+        onMouseEnter={handleToolbarMouseEnter}
+        onMouseLeave={handleToolbarMouseLeave}
+        style={{
+          position: 'fixed',
+          bottom: '8px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '6px',
+          zIndex: 100,
+          pointerEvents: 'auto',
+        }}
+      >
+        {/* Toggle Pill Button */}
+        <button
+          type="button"
+          className="btn-pill"
+          onClick={() => {
+            playToggleClick();
+            setShowDevToolbar((prev) => !prev);
+          }}
+          title="Toggle Phase 3 Developer & Diagnostics Toolbar"
+          style={{
+            fontSize: '10px',
+            padding: '3px 9px',
+            backgroundColor: showDevToolbar ? 'rgba(59, 130, 246, 0.25)' : 'var(--pill-bg)',
+            borderColor: showDevToolbar ? '#3b82f6' : 'var(--glass-border)',
+          }}
+        >
+          <Wrench size={11} style={{ color: '#3b82f6' }} />
+          <span>Dev Toolbar</span>
+          {showDevToolbar ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
+        </button>
+
+        {/* Collapsible Panel */}
+        <AnimatePresence>
+          {showDevToolbar && (
+            <motion.div
+              key="dev-toolbar-panel"
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.16 }}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                width: '100%',
-                height: '100%',
-                padding: '10px 14px',
-                gap: '8px',
-                justifyContent: 'space-between',
+                gap: '6px',
+                padding: '8px 12px',
+                borderRadius: '12px',
+                backgroundColor: 'var(--island-bg)',
+                backgroundImage: 'var(--glass-surface)',
+                border: '1px solid var(--glass-border)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                boxShadow: 'var(--glass-shadow)',
+                maxWidth: '600px',
               }}
             >
-              {/* Header: Title & Real-time Diagnostic Status */}
+              {/* Header */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: '8px',
                   borderBottom: '1px solid var(--glass-border)',
-                  paddingBottom: '6px',
+                  paddingBottom: '4px',
+                  fontSize: '10px',
+                  color: 'var(--text-secondary)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                  <Activity size={13} style={{ color: '#10b981' }} />
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      letterSpacing: '0.5px',
-                      textTransform: 'uppercase',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    Phase 2: Tray (^) Shell
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Activity size={11} style={{ color: '#10b981' }} />
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Phase 3 Controls
                   </span>
-                  <span
-                    style={{
-                      fontSize: '9px',
-                      padding: '1px 5px',
-                      borderRadius: '4px',
-                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                      color: '#60a5fa',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Native Win32
-                  </span>
+                  <span>({statusMsg})</span>
                 </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span
-                    style={{
-                      color: 'var(--text-secondary)',
-                      fontSize: '11px',
-                      fontFamily: 'monospace',
-                    }}
-                  >
-                    {statusMsg}
-                  </span>
-                </div>
+                <span>RAM: {ramWorkingSet ? `${ramWorkingSet.toFixed(1)} MB` : '~9.2 MB'}</span>
               </div>
 
-              {/* Action Toolbar */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '6px',
-                }}
-              >
-                {/* 1. Tray Menu Simulator Dropdown Toggle */}
+              {/* Row 1: State & Theme Switching */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.setIslandState('bezel-line');
+                    setStatusMsg('State: Bezel-Line (136x6)');
+                  }}
+                  style={{
+                    borderColor: islandState === 'bezel-line' ? '#38bdf8' : 'var(--glass-border)',
+                    fontSize: '10px',
+                    padding: '3px 7px',
+                  }}
+                >
+                  <Minimize2 size={11} style={{ color: '#38bdf8' }} />
+                  <span>Bezel-Line</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.setIslandState('compact');
+                    setStatusMsg('State: Compact (184x40)');
+                  }}
+                  style={{
+                    borderColor: islandState === 'compact' ? '#10b981' : 'var(--glass-border)',
+                    fontSize: '10px',
+                    padding: '3px 7px',
+                  }}
+                >
+                  <span>Compact</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.toggleTheme();
+                    setStatusMsg(`Theme: ${systemStore.getState().theme.toUpperCase()}`);
+                  }}
+                  style={{ fontSize: '10px', padding: '3px 7px' }}
+                >
+                  {theme === 'dark' ? (
+                    <Moon size={11} style={{ color: '#93c5fd' }} />
+                  ) : (
+                    <Sun size={11} style={{ color: '#f59e0b' }} />
+                  )}
+                  <span>{theme.toUpperCase()}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => handleTrayAction({ action: 'trim_ram' })}
+                  style={{ fontSize: '10px', padding: '3px 7px' }}
+                >
+                  <Cpu size={11} className={isTrimming ? 'animate-spin' : ''} style={{ color: '#3b82f6' }} />
+                  <span>Trim RAM</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playGlassPop();
+                    setStatusMsg('Glass Pop SFX');
+                  }}
+                  style={{ fontSize: '10px', padding: '3px 7px' }}
+                >
+                  <Sparkles size={11} style={{ color: '#ec4899' }} />
+                  <span>SFX</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    const next = !enableSfx;
+                    systemStore.setEnableSfx(next);
+                    if (next) playGlassPop();
+                  }}
+                  style={{ fontSize: '10px', padding: '3px 6px' }}
+                  title="Toggle SFX Mute/Unmute"
+                >
+                  {enableSfx ? (
+                    <Volume2 size={11} style={{ color: '#10b981' }} />
+                  ) : (
+                    <VolumeX size={11} style={{ color: '#ef4444' }} />
+                  )}
+                </button>
+
                 <button
                   type="button"
                   className="btn-pill"
                   onClick={() => setShowTraySim((prev) => !prev)}
-                  title="Simulate Native Windows System Tray (^) Context Menu"
                   style={{
-                    backgroundColor: showTraySim
-                      ? 'rgba(59, 130, 246, 0.25)'
-                      : 'var(--pill-bg)',
-                    borderColor: showTraySim ? '#3b82f6' : 'var(--glass-border)',
+                    fontSize: '10px',
+                    padding: '3px 7px',
+                    backgroundColor: showTraySim ? 'rgba(59, 130, 246, 0.25)' : 'var(--pill-bg)',
                   }}
                 >
-                  <ChevronUp size={12} style={{ color: '#60a5fa' }} />
-                  <span>Tray Menu (^)</span>
-                </button>
-
-                {/* 2. Theme Toggle */}
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={handleToggleTheme}
-                  title="Toggle Dark / Light Liquid Glass Theme"
-                >
-                  {theme === 'dark' ? (
-                    <Moon size={12} style={{ color: '#93c5fd' }} />
-                  ) : (
-                    <Sun size={12} style={{ color: '#f59e0b' }} />
-                  )}
-                  <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
-                </button>
-
-                {/* 3. Win32 RAM Trimmer */}
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={handleTrimRam}
-                  title="Invoke Win32 K32EmptyWorkingSet + SetProcessWorkingSetSizeEx"
-                  style={{
-                    borderColor:
-                      ramWorkingSet && ramWorkingSet <= 12
-                        ? 'rgba(16, 185, 129, 0.4)'
-                        : 'var(--glass-border)',
-                  }}
-                >
-                  <Cpu
-                    size={12}
-                    className={isTrimming ? 'animate-spin' : ''}
-                    style={{ color: '#3b82f6' }}
-                  />
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {ramWorkingSet !== null
-                      ? `${ramWorkingSet.toFixed(1)} MB`
-                      : 'Trim RAM'}
-                  </span>
-                </button>
-
-                {/* 4. Pure WebAudio SFX */}
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={handleTestSfx}
-                  title="Synthesize 0-RAM WebAudio Glass Pop"
-                >
-                  <Sparkles size={12} style={{ color: '#ec4899' }} />
-                  <span>SFX</span>
-                </button>
-
-                {/* 5. SFX Mute/Unmute */}
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={handleToggleSfx}
-                  title="Toggle SFX Mute"
-                  style={{ padding: '5px 7px' }}
-                >
-                  {enableSfx ? (
-                    <Volume2 size={12} style={{ color: '#10b981' }} />
-                  ) : (
-                    <VolumeX size={12} style={{ color: '#ef4444' }} />
-                  )}
-                </button>
-
-                {/* 6. Multi-Monitor */}
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={handleCycleMonitor}
-                  title="Cycle Top-Center (y: 0) on Available Monitors"
-                >
-                  <Monitor size={12} style={{ color: '#8b5cf6' }} />
-                  <span>Mon #{selectedMonitor}</span>
+                  <ChevronUp size={11} style={{ color: '#60a5fa' }} />
+                  <span>Tray Sim</span>
                 </button>
               </div>
 
-              {/* ============================================================ */}
-              {/* Tray Context Menu Simulator Popover                          */}
-              {/* ============================================================ */}
+              {/* Tray Simulator Grid */}
               {showTraySim && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                <div
                   style={{
-                    display: 'flex',
-                    flexDirection: 'column',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
                     gap: '4px',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    background: 'rgba(0, 0, 0, 0.35)',
-                    border: '1px solid var(--glass-border)',
+                    marginTop: '4px',
+                    paddingTop: '6px',
+                    borderTop: '1px dashed var(--glass-border)',
                   }}
                 >
-                  {/* Tray Tooltip Preview Header */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      fontSize: '10px',
-                      color: 'var(--text-secondary)',
-                      paddingBottom: '4px',
-                      borderBottom: '1px dashed var(--glass-border)',
-                    }}
+                  <button
+                    type="button"
+                    className="btn-pill"
+                    onClick={() => handleTrayAction({ action: 'toggle_power' })}
+                    style={{ fontSize: '9px', padding: '3px 5px' }}
                   >
-                    <span>
-                      Tooltip: LiquidIsland OS - Active (~
-                      {ramWorkingSet ? ramWorkingSet.toFixed(1) : '9.2'} MB RAM)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowTraySim(false)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: 'var(--text-secondary)',
-                        padding: 0,
-                      }}
-                    >
-                      <X size={11} />
-                    </button>
-                  </div>
+                    <Power size={10} style={{ color: '#ef4444' }} />
+                    <span>Power ({islandEnabled ? 'ON' : 'OFF'})</span>
+                  </button>
 
-                  {/* Context Menu Items Grid */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: '4px',
-                      marginTop: '2px',
-                    }}
+                  <button
+                    type="button"
+                    className="btn-pill"
+                    onClick={() => handleTrayAction({ action: 'switch_companion' })}
+                    style={{ fontSize: '9px', padding: '3px 5px' }}
                   >
-                    {/* Item 1: toggle_power */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'toggle_power' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <Power size={11} style={{ color: '#ef4444' }} />
-                      <span>Power ({islandEnabled ? 'ON' : 'OFF'})</span>
-                    </button>
+                    <Eye size={10} style={{ color: '#10b981' }} />
+                    <span>Pet: {companionMode}</span>
+                  </button>
 
-                    {/* Item 2: stealth_bezel */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'stealth_bezel' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <Minimize2 size={11} style={{ color: '#38bdf8' }} />
-                      <span>Stealth Bezel</span>
-                    </button>
+                  <button
+                    type="button"
+                    className="btn-pill"
+                    onClick={() => handleTrayAction({ action: 'toggle_lofi' })}
+                    style={{ fontSize: '9px', padding: '3px 5px' }}
+                  >
+                    <Radio size={10} style={{ color: '#a855f7' }} />
+                    <span>Lofi: {enableOptionalLofi ? 'ON' : 'OFF'}</span>
+                  </button>
 
-                    {/* Item 3: switch_theme */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'switch_theme' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <Sun size={11} style={{ color: '#f59e0b' }} />
-                      <span>Theme: {theme}</span>
-                    </button>
+                  <button
+                    type="button"
+                    className="btn-pill"
+                    onClick={() => handleTrayAction({ action: 'cycle_taskbar' })}
+                    style={{ fontSize: '9px', padding: '3px 5px' }}
+                  >
+                    <Sliders size={10} style={{ color: '#ec4899' }} />
+                    <span>Taskbar: {taskbarMode}</span>
+                  </button>
 
-                    {/* Item 4: switch_companion */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'switch_companion' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <Eye size={11} style={{ color: '#10b981' }} />
-                      <span>Pet: {companionMode}</span>
-                    </button>
+                  <button
+                    type="button"
+                    className="btn-pill"
+                    onClick={() => {
+                      const count = monitors.length > 0 ? monitors.length : 1;
+                      const next = (selectedMonitor + 1) % count;
+                      systemStore.setSelectedMonitor(next);
+                      safeInvoke('center_on_monitor', { monitorIndex: next });
+                    }}
+                    style={{ fontSize: '9px', padding: '3px 5px' }}
+                  >
+                    <Monitor size={10} style={{ color: '#8b5cf6' }} />
+                    <span>Mon #{selectedMonitor}</span>
+                  </button>
 
-                    {/* Item 5: toggle_lofi */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'toggle_lofi' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <Radio size={11} style={{ color: '#a855f7' }} />
-                      <span>Lofi: {enableOptionalLofi ? 'ON' : 'OFF'}</span>
-                    </button>
-
-                    {/* Item 6: cycle_taskbar */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'cycle_taskbar' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <Sliders size={11} style={{ color: '#ec4899' }} />
-                      <span>Taskbar: {taskbarMode}</span>
-                    </button>
-
-                    {/* Left-Click action */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'toggle_expand' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <ChevronUp size={11} style={{ color: '#10b981' }} />
-                      <span>Left-Click (Toggle)</span>
-                    </button>
-
-                    {/* Item 8: trim_ram */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'trim_ram' })}
-                      style={{ fontSize: '10px', padding: '4px 6px' }}
-                    >
-                      <Cpu size={11} style={{ color: '#3b82f6' }} />
-                      <span>Trim RAM Now</span>
-                    </button>
-
-                    {/* Item 9: quit_app */}
-                    <button
-                      type="button"
-                      className="btn-pill"
-                      onClick={() => handleTrayAction({ action: 'quit_app' })}
-                      style={{
-                        fontSize: '10px',
-                        padding: '4px 6px',
-                        color: '#f87171',
-                      }}
-                    >
-                      <X size={11} />
-                      <span>Quit Island</span>
-                    </button>
-                  </div>
-                </motion.div>
+                  <button
+                    type="button"
+                    className="btn-pill"
+                    onClick={() => handleTrayAction({ action: 'quit_app' })}
+                    style={{ fontSize: '9px', padding: '3px 5px', color: '#f87171' }}
+                  >
+                    <X size={10} />
+                    <span>Quit</span>
+                  </button>
+                </div>
               )}
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
     </div>
   );
 };

@@ -122,6 +122,34 @@ export function playToggleClick(): void {
 }
 
 /**
+ * Ultra-crisp, subtle haptic mechanical scroll tick.
+ * Zero external audio files, ~0 KB RAM footprint.
+ */
+export function playScrollTick(): void {
+  if (!systemStore.getState().enableSfx) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(3200, now);
+  osc.frequency.exponentialRampToValueAtTime(1200, now + 0.005);
+
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.linearRampToValueAtTime(0.06, now + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.006);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.007);
+}
+
+/**
  * Alias for playToggleClick
  */
 export const playSwitchClick = playToggleClick;
