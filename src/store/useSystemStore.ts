@@ -133,6 +133,35 @@ export const systemStore = {
   setTaskbarMode(taskbarMode: TaskbarMode) {
     saveSettings({ ...currentSettings, taskbarMode });
   },
+  toggleIslandEnabled() {
+    saveSettings({
+      ...currentSettings,
+      islandEnabled: !currentSettings.islandEnabled,
+    });
+  },
+  cycleCompanionMode() {
+    const modes: CompanionMode[] = ['slime', 'cat', 'eyes', 'off'];
+    const currentIndex = modes.indexOf(currentSettings.companionMode);
+    const nextMode = modes[(currentIndex + 1) % modes.length];
+    saveSettings({ ...currentSettings, companionMode: nextMode });
+  },
+  cycleTaskbarMode() {
+    const modes: TaskbarMode[] = ['A', 'B', 'C'];
+    const currentIndex = modes.indexOf(currentSettings.taskbarMode);
+    const nextMode = modes[(currentIndex + 1) % modes.length];
+    saveSettings({ ...currentSettings, taskbarMode: nextMode });
+  },
+  toggleOptionalLofi() {
+    saveSettings({
+      ...currentSettings,
+      enableOptionalLofi: !currentSettings.enableOptionalLofi,
+    });
+  },
+  toggleExpandedState() {
+    const nextState: IslandState =
+      currentSettings.islandState === 'expanded' ? 'compact' : 'expanded';
+    saveSettings({ ...currentSettings, islandState: nextState });
+  },
   subscribe(listener: () => void) {
     listeners.add(listener);
     return () => {
