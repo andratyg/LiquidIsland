@@ -62,6 +62,9 @@ export interface SystemSettings {
   volume: number;              // 0–100 (Default: 75)
   brightness: number;          // 0–100 (Default: 80)
   isAudioPlaying: boolean;      // True when waveform visualizer is active
+
+  // Phase 4 Extensions (backward compatible)
+  isPomodoroRunning: boolean;   // True when focus timer is active (triggers focus glasses)
 }
 
 export interface ClipboardSnippetItem {

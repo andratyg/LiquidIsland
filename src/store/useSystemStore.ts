@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   volume: 75,
   brightness: 80,
   isAudioPlaying: true,
+  isPomodoroRunning: false,
 };
 
 function loadInitialSettings(): SystemSettings {
@@ -61,6 +62,7 @@ function loadInitialSettings(): SystemSettings {
       volume: typeof parsed.volume === 'number' ? Math.max(0, Math.min(100, parsed.volume)) : DEFAULT_SETTINGS.volume,
       brightness: typeof parsed.brightness === 'number' ? Math.max(0, Math.min(100, parsed.brightness)) : DEFAULT_SETTINGS.brightness,
       isAudioPlaying: typeof parsed.isAudioPlaying === 'boolean' ? parsed.isAudioPlaying : DEFAULT_SETTINGS.isAudioPlaying,
+      isPomodoroRunning: typeof parsed.isPomodoroRunning === 'boolean' ? parsed.isPomodoroRunning : DEFAULT_SETTINGS.isPomodoroRunning,
     };
   } catch (err) {
     console.error('[LiquidIsland Store] Failed to parse localStorage state:', err);
@@ -187,6 +189,15 @@ export const systemStore = {
     saveSettings({
       ...currentSettings,
       isAudioPlaying: !currentSettings.isAudioPlaying,
+    });
+  },
+  setIsPomodoroRunning(isPomodoroRunning: boolean) {
+    saveSettings({ ...currentSettings, isPomodoroRunning });
+  },
+  togglePomodoroRunning() {
+    saveSettings({
+      ...currentSettings,
+      isPomodoroRunning: !currentSettings.isPomodoroRunning,
     });
   },
 

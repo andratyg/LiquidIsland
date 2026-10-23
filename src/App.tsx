@@ -4,6 +4,7 @@ import { useSystemStore, systemStore } from './store/useSystemStore';
 import { playGlassPop, playWaterDrop, playToggleClick } from './utils/sfx';
 import { IslandShell } from './components/IslandShell';
 import { CompactView } from './components/CompactView';
+import { CompanionStage } from './components/companions/CompanionStage';
 import {
   Sun,
   Moon,
@@ -22,6 +23,13 @@ import {
   Sliders,
   X,
   Wrench,
+  Cat,
+  Smile,
+  Headphones,
+  Glasses,
+  Upload,
+  Heart,
+  Palette,
 } from 'lucide-react';
 import { ISLAND_DIMENSIONS } from './types/liquid';
 
@@ -59,6 +67,8 @@ export const App: React.FC = () => {
   const islandState = useSystemStore((s) => s.islandState);
   const theme = useSystemStore((s) => s.theme);
   const companionMode = useSystemStore((s) => s.companionMode);
+  const companionColor = useSystemStore((s) => s.companionColor);
+  const autoAccessories = useSystemStore((s) => s.autoAccessories);
   const enableOptionalLofi = useSystemStore((s) => s.enableOptionalLofi);
   const taskbarMode = useSystemStore((s) => s.taskbarMode);
   const enableSfx = useSystemStore((s) => s.enableSfx);
@@ -66,10 +76,16 @@ export const App: React.FC = () => {
 
   const [ramWorkingSet, setRamWorkingSet] = useState<number | null>(null);
   const [monitors, setMonitors] = useState<string[]>([]);
-  const [statusMsg, setStatusMsg] = useState<string>('Phase 3 Notch Active');
+  const [statusMsg, setStatusMsg] = useState<string>('Phase 4 Companions Active');
   const [isTrimming, setIsTrimming] = useState(false);
   const [showTraySim, setShowTraySim] = useState(false);
   const [showDevToolbar, setShowDevToolbar] = useState(false);
+
+  // Companion Phase 4 Test Toggles
+  const [testHeadphones, setTestHeadphones] = useState(false);
+  const [testGlasses, setTestGlasses] = useState(false);
+  const [testFileDrag, setTestFileDrag] = useState(false);
+  const [testPetting, setTestPetting] = useState(false);
 
   // Update native tray tooltip via Tauri command
   const syncTrayTooltip = useCallback(async (mb: number) => {
@@ -284,6 +300,23 @@ export const App: React.FC = () => {
               <Power size={11} style={{ color: '#ef4444' }} />
               <span>Standby (Tray ^)</span>
             </motion.div>
+          ) : islandState === 'eyes' ? (
+            /* Phase 4 Custom Interactive Companion Stage (168px × 40px) */
+            <motion.div
+              key="companion-stage-container"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <CompanionStage
+                testHeadphones={testHeadphones}
+                testGlasses={testGlasses}
+                testFileDrag={testFileDrag}
+                testPetting={testPetting}
+              />
+            </motion.div>
           ) : islandState === 'compact' ? (
             /* Phase 3 Feature-Complete Compact View (184px × 40px) */
             <motion.div
@@ -401,14 +434,14 @@ export const App: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <Activity size={11} style={{ color: '#10b981' }} />
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Phase 3 Controls
+                    Phase 4 Companion Controls
                   </span>
                   <span>({statusMsg})</span>
                 </div>
                 <span>RAM: {ramWorkingSet ? `${ramWorkingSet.toFixed(1)} MB` : '~9.2 MB'}</span>
               </div>
 
-              {/* Row 1: State & Theme Switching */}
+              {/* Row 1: Island State & Theme Switching */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
@@ -443,6 +476,24 @@ export const App: React.FC = () => {
                   }}
                 >
                   <span>Compact</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.setIslandState('eyes');
+                    setStatusMsg('State: Eyes (168x40 Companion)');
+                  }}
+                  style={{
+                    borderColor: islandState === 'eyes' ? '#ec4899' : 'var(--glass-border)',
+                    fontSize: '10px',
+                    padding: '3px 7px',
+                  }}
+                >
+                  <Eye size={11} style={{ color: '#ec4899' }} />
+                  <span>Eyes (Pet)</span>
                 </button>
 
                 <button
@@ -516,6 +567,247 @@ export const App: React.FC = () => {
                 >
                   <ChevronUp size={11} style={{ color: '#60a5fa' }} />
                   <span>Tray Sim</span>
+                </button>
+              </div>
+
+              {/* Row 2: Companion Characters & Tint Color Swatches */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  flexWrap: 'wrap',
+                  paddingTop: '3px',
+                  borderTop: '1px dashed var(--glass-border)',
+                }}
+              >
+                <span style={{ fontSize: '9.5px', color: 'var(--text-secondary)', marginRight: '2px' }}>
+                  Character:
+                </span>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.setCompanionMode('slime');
+                    if (islandState !== 'eyes') systemStore.setIslandState('eyes');
+                    setStatusMsg('Companion: Liquid Slime (B)');
+                  }}
+                  style={{
+                    borderColor: companionMode === 'slime' ? '#10b981' : 'var(--glass-border)',
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                  }}
+                >
+                  <Smile size={10} style={{ color: '#10b981' }} />
+                  <span>Slime (B)</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.setCompanionMode('cat');
+                    if (islandState !== 'eyes') systemStore.setIslandState('eyes');
+                    setStatusMsg('Companion: Shadow Cat (C)');
+                  }}
+                  style={{
+                    borderColor: companionMode === 'cat' ? '#a855f7' : 'var(--glass-border)',
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                  }}
+                >
+                  <Cat size={10} style={{ color: '#a855f7' }} />
+                  <span>Shadow Cat</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.setCompanionMode('eyes');
+                    if (islandState !== 'eyes') systemStore.setIslandState('eyes');
+                    setStatusMsg('Companion: Cyber-Eyes');
+                  }}
+                  style={{
+                    borderColor: companionMode === 'eyes' ? '#06b6d4' : 'var(--glass-border)',
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                  }}
+                >
+                  <Eye size={10} style={{ color: '#06b6d4' }} />
+                  <span>Cyber-Eyes</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.setCompanionMode('off');
+                    systemStore.setIslandState('compact');
+                    setStatusMsg('Companion: OFF (Pill Mode)');
+                  }}
+                  style={{
+                    borderColor: companionMode === 'off' ? '#ef4444' : 'var(--glass-border)',
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                  }}
+                >
+                  <X size={10} style={{ color: '#ef4444' }} />
+                  <span>Off</span>
+                </button>
+
+                {/* Color Swatches */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginLeft: '6px' }}>
+                  <Palette size={10} style={{ color: 'var(--text-secondary)' }} />
+                  {[
+                    { color: '#10b981', label: 'Emerald' },
+                    { color: '#06b6d4', label: 'Cyan' },
+                    { color: '#a855f7', label: 'Violet' },
+                    { color: '#f43f5e', label: 'Coral' },
+                    { color: '#f59e0b', label: 'Amber' },
+                  ].map((swatch) => (
+                    <button
+                      key={swatch.color}
+                      type="button"
+                      onClick={() => {
+                        playToggleClick();
+                        systemStore.setCompanionColor(swatch.color);
+                        setStatusMsg(`Color: ${swatch.label}`);
+                      }}
+                      title={`Tint: ${swatch.label}`}
+                      style={{
+                        width: '13px',
+                        height: '13px',
+                        borderRadius: '50%',
+                        backgroundColor: swatch.color,
+                        border: companionColor === swatch.color ? '2px solid #ffffff' : '1px solid rgba(0,0,0,0.3)',
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: Test Accessories & Reaction Triggers */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  flexWrap: 'wrap',
+                  paddingTop: '3px',
+                }}
+              >
+                <span style={{ fontSize: '9.5px', color: 'var(--text-secondary)', marginRight: '2px' }}>
+                  Test Triggers:
+                </span>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    setTestHeadphones((prev) => {
+                      const next = !prev;
+                      setStatusMsg(`Test Headphones: ${next ? 'ON' : 'OFF'}`);
+                      return next;
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: testHeadphones ? '#3b82f6' : 'var(--glass-border)',
+                  }}
+                >
+                  <Headphones size={10} style={{ color: '#3b82f6' }} />
+                  <span>Headphones</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    setTestGlasses((prev) => {
+                      const next = !prev;
+                      setStatusMsg(`Test Glasses: ${next ? 'ON' : 'OFF'}`);
+                      return next;
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: testGlasses ? '#f59e0b' : 'var(--glass-border)',
+                  }}
+                >
+                  <Glasses size={10} style={{ color: '#f59e0b' }} />
+                  <span>Glasses</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    setTestFileDrag((prev) => {
+                      const next = !prev;
+                      setStatusMsg(`File Drag Anticipation: ${next ? 'ALERT' : 'IDLE'}`);
+                      return next;
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: testFileDrag ? '#ec4899' : 'var(--glass-border)',
+                  }}
+                >
+                  <Upload size={10} style={{ color: '#ec4899' }} />
+                  <span>File Catch</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    setTestPetting((prev) => {
+                      const next = !prev;
+                      setStatusMsg(`Petting Reaction: ${next ? 'ACTIVE (^ ^)' : 'IDLE'}`);
+                      return next;
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: testPetting ? '#f43f5e' : 'var(--glass-border)',
+                  }}
+                >
+                  <Heart size={10} style={{ color: '#f43f5e' }} />
+                  <span>Pet (^ ^)</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    const next = !autoAccessories;
+                    systemStore.setAutoAccessories(next);
+                    setStatusMsg(`Auto-Accessories: ${next ? 'ON' : 'OFF'}`);
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: autoAccessories ? '#10b981' : 'var(--glass-border)',
+                  }}
+                >
+                  <span>Auto-Acc: {autoAccessories ? 'ON' : 'OFF'}</span>
                 </button>
               </div>
 

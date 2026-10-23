@@ -298,3 +298,97 @@
   pointer-events: auto;
   font-size: 11px;
 }
+
+/* --------------------------------------------------------------------------
+   8. Companion Ecosystem Micro-Animations & GPU Keyframes
+   -------------------------------------------------------------------------- */
+
+@keyframes catPurrVibration {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(0.5px, -0.4px, 0) scale(1.01);
+  }
+  50% {
+    transform: translate3d(-0.4px, 0.3px, 0) scale(1);
+  }
+  75% {
+    transform: translate3d(0.4px, 0.4px, 0) scale(1.01);
+  }
+}
+
+.cat-purr-active {
+  animation: catPurrVibration 0.12s linear infinite;
+  will-change: transform;
+}
+
+@keyframes slimeZeroGravity {
+  0%, 100% {
+    transform: translateY(0px) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.02, 0.98);
+  }
+}
+
+.slime-breathing {
+  animation: slimeZeroGravity 3.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes earTwitchAnim {
+  0%, 90%, 100% {
+    transform: rotate(0deg);
+  }
+  92% {
+    transform: rotate(-7deg);
+  }
+  95% {
+    transform: rotate(4deg);
+  }
+  97% {
+    transform: rotate(-3deg);
+  }
+}
+
+.cat-ear-twitch-left {
+  transform-origin: 20% 100%;
+  animation: earTwitchAnim 6.5s ease-in-out infinite;
+}
+
+.cat-ear-twitch-right {
+  transform-origin: 80% 100%;
+  animation: earTwitchAnim 8.2s ease-in-out infinite 2.4s;
+}
+
+@keyframes cyberEyeGlow {
+  0%, 100% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 4px var(--blue-glow));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 9px var(--blue-glow));
+  }
+}
+
+.cyber-eye-luminous {
+  animation: cyberEyeGlow 2.4s ease-in-out infinite;
+}
+
+@keyframes headphonePulseAnim {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.5));
+  }
+  50% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.85));
+  }
+}
+
+.headphone-pulse {
+  animation: headphonePulseAnim 1.6s ease-in-out infinite;
+}
+

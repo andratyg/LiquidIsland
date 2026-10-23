@@ -4,6 +4,7 @@ import { useSystemStore, systemStore } from '../store/useSystemStore';
 import { playScrollTick, playToggleClick, playGlassPop } from '../utils/sfx';
 import { Volume2, SunMedium } from 'lucide-react';
 import { IslandDimensions } from '../types/liquid';
+import { CatCompanion } from './companions/CatCompanion';
 
 // Safe Tauri IPC invoker with web browser fallback
 async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
@@ -33,6 +34,9 @@ export const IslandShell: React.FC<IslandShellProps> = ({
 }) => {
   const islandState = useSystemStore((s) => s.islandState);
   const currentVolume = useSystemStore((s) => s.volume);
+  const companionMode = useSystemStore((s) => s.companionMode);
+  const companionColor = useSystemStore((s) => s.companionColor);
+  const theme = useSystemStore((s) => s.theme);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const [isMagneticHover, setIsMagneticHover] = useState(false);
@@ -224,7 +228,18 @@ export const IslandShell: React.FC<IslandShellProps> = ({
             className={`bezel-line-strip ${isMagneticHover ? 'magnetic-hover' : ''}`}
             onClick={handleWakeFromBezel}
             title="Stealth Bezel Active (136x6). Click or hover to wake into Compact view."
-          />
+          >
+            {companionMode === 'cat' && (
+              <CatCompanion
+                isBezelLine
+                cursorDelta={{ x: 0, y: 0, angle: Math.PI / 2, distance: 0 }}
+                isPetting={false}
+                isDraggingFile={false}
+                companionColor={companionColor}
+                theme={theme}
+              />
+            )}
+          </div>
         ) : (
           /* Active Island Content (Compact, Expanded, etc.) */
           <>

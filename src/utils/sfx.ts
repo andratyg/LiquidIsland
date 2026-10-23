@@ -150,6 +150,74 @@ export function playScrollTick(): void {
 }
 
 /**
+ * Soft, squishy jelly droplet bounce sound for Slime interactions.
+ */
+export function playJellyBounce(): void {
+  if (!systemStore.getState().enableSfx) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(320, now);
+  osc.frequency.exponentialRampToValueAtTime(540, now + 0.05);
+  osc.frequency.exponentialRampToValueAtTime(280, now + 0.14);
+
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.linearRampToValueAtTime(0.20, now + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.15);
+}
+
+/**
+ * Gentle feline purr micro-chime for Cat petting interaction.
+ */
+export function playPetPurr(): void {
+  if (!systemStore.getState().enableSfx) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const modOsc = ctx.createOscillator();
+  const modGain = ctx.createGain();
+  const mainGain = ctx.createGain();
+
+  // Low frequency carrier with ~28Hz vibrato to simulate purring throat rumble
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(120, now);
+  osc.frequency.linearRampToValueAtTime(140, now + 0.15);
+
+  modOsc.type = 'sine';
+  modOsc.frequency.setValueAtTime(28, now); // 28Hz purr rumble
+
+  modGain.gain.setValueAtTime(30, now);
+  modOsc.connect(modGain);
+  modGain.connect(osc.frequency);
+
+  mainGain.gain.setValueAtTime(0.001, now);
+  mainGain.gain.linearRampToValueAtTime(0.14, now + 0.04);
+  mainGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+  osc.connect(mainGain);
+  mainGain.connect(ctx.destination);
+
+  modOsc.start(now);
+  osc.start(now);
+
+  modOsc.stop(now + 0.23);
+  osc.stop(now + 0.23);
+}
+
+/**
  * Alias for playToggleClick
  */
 export const playSwitchClick = playToggleClick;
