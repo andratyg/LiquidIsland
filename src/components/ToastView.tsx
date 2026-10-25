@@ -9,6 +9,7 @@ import {
   Layers,
   Pin,
   X,
+  Camera,
 } from 'lucide-react';
 
 /* ==========================================================================
@@ -934,6 +935,131 @@ export const ToastView: React.FC = () => {
             >
               {type === 'window-pin' ? 'PINNED' : direction === 'left' ? 'DESK 1' : 'DESK 2'}
             </span>
+
+            <button
+              type="button"
+              onClick={handleDismiss}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '2px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                opacity: 0.6,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              title="Dismiss"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 40MB Edition - Stage 1: Screenshot Captured Preview Toast             */}
+      {/* ==================================================================== */}
+      {type === 'screenshot' && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            height: '100%',
+            gap: '12px',
+          }}
+        >
+          {/* Left: Real Captured Thumbnail */}
+          {toastPayload?.thumbnail ? (
+            <img
+              src={toastPayload.thumbnail}
+              alt="Screenshot Preview"
+              style={{
+                width: '52px',
+                height: '38px',
+                borderRadius: '8px',
+                objectFit: 'cover',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(56, 189, 248, 0.18)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Camera size={18} color="#38bdf8" />
+            </div>
+          )}
+
+          {/* Center: Title & Subtitle */}
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              lineHeight: 1.25,
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                fontSize: '13.5px',
+                fontWeight: 600,
+                color: '#ffffff',
+                letterSpacing: '-0.2px',
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 400,
+                color: 'var(--text-secondary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {subtitle}
+            </div>
+          </div>
+
+          {/* Right Action: Open in Shelf */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => {
+                systemStore.dismissToast();
+                systemStore.setIslandState('expanded');
+                systemStore.setActiveSlide(3); // Shelf
+              }}
+              style={{
+                padding: '4px 8px',
+                borderRadius: '8px',
+                background: 'rgba(56, 189, 248, 0.18)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                color: '#38bdf8',
+                fontSize: '10.5px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Shelf
+            </button>
 
             <button
               type="button"

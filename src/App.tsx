@@ -11,6 +11,8 @@ import { SpotlightModal } from './components/SpotlightModal';
 import { SettingsModal } from './components/SettingsModal';
 import { TaskbarPreviewDock } from './components/TaskbarPreviewDock';
 import { LaunchpadModal } from './components/LaunchpadModal';
+import { CaptureBarModal } from './components/CaptureBarModal';
+import { WorkspaceSwitcherOverlay } from './components/WorkspaceSwitcherOverlay';
 import {
   Sun,
   Moon,
@@ -33,6 +35,7 @@ import {
   Layout,
   Zap,
   Bluetooth,
+  Crop,
 } from 'lucide-react';
 import { ISLAND_DIMENSIONS, type SystemMediaPayload, type HardwareToastPayload, type WorkspaceActivityPayload } from './types/liquid';
 import { fetchLiveLyrics } from './utils/liveLyricsFetcher';
@@ -77,12 +80,15 @@ export const App: React.FC = () => {
   const selectedMonitor = useSystemStore((s) => s.selectedMonitor);
   const spotlightOpen = useSystemStore((s) => s.spotlightOpen ?? false);
   const launchpadOpen = useSystemStore((s) => s.launchpadOpen ?? false);
+  const captureBarOpen = useSystemStore((s) => s.captureBarOpen ?? false);
+  const isScreenRecording = useSystemStore((s) => s.isScreenRecording ?? false);
   const autoFullscreenStealth = useSystemStore((s) => s.autoFullscreenStealth ?? false);
   const toastPayload = useSystemStore((s) => s.toastPayload);
   const privacyBlurEnabled = useSystemStore((s) => s.privacyBlurEnabled);
   const nightEyeCareEnabled = useSystemStore((s) => s.nightEyeCareEnabled);
   const showTaskbarDock = useSystemStore((s) => s.showTaskbarDock);
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
+  const workspaceActivity = useSystemStore((s) => s.workspaceActivity);
 
   const isTaskbarWindow =
     typeof window !== 'undefined' &&
@@ -98,6 +104,15 @@ export const App: React.FC = () => {
     return () => clearInterval(ticker);
   }, [isAudioPlaying]);
 
+  // Screen recording ticker (+1s)
+  useEffect(() => {
+    if (!isScreenRecording) return;
+    const interval = setInterval(() => {
+      systemStore.tickRecordingSeconds();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isScreenRecording]);
+
   const [ramWorkingSet, setRamWorkingSet] = useState<number | null>(null);
   const [monitors, setMonitors] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState<string>('Phase 10 Liquid Glass Final Active');
@@ -106,6 +121,22 @@ export const App: React.FC = () => {
   const [showDevControls, setShowDevControls] = useState(false);
   const [showDevToolbar, setShowDevToolbar] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Window sizing synchronization for Modals, CaptureBar, and 3D Workspace Switcher Overlay
+  useEffect(() => {
+    if (isTaskbarWindow) return;
+    if (captureBarOpen || spotlightOpen || launchpadOpen || showSettingsModal) {
+      safeInvoke('set_window_size', { width: 680, height: 640 });
+      safeInvoke('update_hit_box', { width: 640, height: 640, modalOpen: true });
+    } else if (workspaceActivity) {
+      // 40MB Edition - Stage 3: VisionOS 3D Stage deck is 540x148 at top:76 (needs ~260px height)
+      safeInvoke('set_window_size', { width: 640, height: 260 });
+      safeInvoke('update_hit_box', { width: 540, height: 240, modalOpen: false });
+    } else {
+      safeInvoke('set_window_size', { width: 640, height: 240 });
+      safeInvoke('update_hit_box', { width: 184, height: 40, modalOpen: false });
+    }
+  }, [captureBarOpen, spotlightOpen, launchpadOpen, showSettingsModal, workspaceActivity, isTaskbarWindow]);
   const [wallpaperPreview, setWallpaperPreview] = useState<'none' | 'dark' | 'light' | 'vibrant'>('none');
   const [testHeadphones, setTestHeadphones] = useState(false);
   const [testGlasses, setTestGlasses] = useState(false);
@@ -286,6 +317,8 @@ export const App: React.FC = () => {
     let unlistenWorkspace: (() => void) | null = null;
     let unlistenHud: (() => void) | null = null;
     let unlistenToast: (() => void) | null = null;
+    let unlistenCaptureBar: (() => void) | null = null;
+    let unlistenScreenshot: (() => void) | null = null;
     let isMounted = true;
 
     async function registerTrayListeners() {
@@ -417,6 +450,65 @@ export const App: React.FC = () => {
           }
         });
         unlistenToast = sub11;
+
+        const sub12 = await listen('open-capture-bar', async () => {
+          systemStore.toggleCaptureBar();
+          const isOpen = systemStore.getState().captureBarOpen;
+          if (isOpen) {
+            await safeInvoke('set_window_size', { width: 680, height: 640 });
+            safeInvoke('update_hit_box', { width: 640, height: 640, modalOpen: true });
+          } else {
+            await safeInvoke('set_window_size', { width: 640, height: 240 });
+            safeInvoke('update_hit_box', { width: 184, height: 40, modalOpen: false });
+          }
+        });
+        unlistenCaptureBar = sub12;
+
+        const sub13 = await listen<{
+          data_url: string;
+          filename: string;
+          width: number;
+          height: number;
+        }>('screenshot-captured', (event) => {
+          if (event.payload && event.payload.data_url) {
+            const autoShelf =
+              typeof window !== 'undefined'
+                ? window.localStorage.getItem('liquid_capture_auto_shelf') !== 'false'
+                : true;
+            if (autoShelf) {
+              systemStore.addShelfFile({
+                id: `shelf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                name: event.payload.filename,
+                size: Math.round(event.payload.data_url.length * 0.75),
+                formattedSize: `${Math.round((event.payload.data_url.length * 0.75) / 1024)} KB`,
+                type: 'image/png',
+                previewUrl: event.payload.data_url,
+                timestamp: 'Just now',
+                isCompressed: false,
+              });
+            }
+            systemStore.showScreenshotToast(
+              event.payload.filename,
+              event.payload.data_url
+            );
+
+            // Add notification to Notification Center feed
+            const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            systemStore.addNotification({
+              id: `notif-snip-${Date.now()}`,
+              appName: 'Snipping Tool',
+              title: 'Screenshot copied to clipboard',
+              subtitle: 'Select here to mark up and share the image',
+              timestamp: nowTime,
+              icon: 'snipping-tool',
+              thumbnail: event.payload.data_url,
+              unread: true,
+              actionType: 'shelf',
+              slideIndex: 3,
+            });
+          }
+        });
+        unlistenScreenshot = sub13;
       } catch (err) {
         console.warn('[Tauri Event Listener] Failed to subscribe to tray/media/hardware events:', err);
       }
@@ -440,6 +532,8 @@ export const App: React.FC = () => {
       if (unlistenWorkspace) unlistenWorkspace();
       if (unlistenHud) unlistenHud();
       if (unlistenToast) unlistenToast();
+      if (unlistenCaptureBar) unlistenCaptureBar();
+      if (unlistenScreenshot) unlistenScreenshot();
     };
   }, [handleTrayAction]);
 
@@ -935,6 +1029,36 @@ export const App: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* ==================================================================== */}
+      {/* 40MB Edition - Stage 1: Custom Screen Capture Bar (PrtScn / Alt+C)   */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {captureBarOpen && (
+          <CaptureBarModal
+            onClose={() => systemStore.setCaptureBarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+
+      {/* ==================================================================== */}
+      {/* 40MB Edition - Stage 3: VisionOS 3D CoverFlow & Panorama Stage HUD   */}
+      {/* ==================================================================== */}
+      <WorkspaceSwitcherOverlay />
+
+      {/* 40MB Edition - Stage 3: Top Bezel Cyan/Violet Aurora Sweep on Desktop Switch */}
+      <AnimatePresence>
+        {workspaceActivity?.kind === 'desktop-switch' && (
+          <motion.div
+            key={`aurora-bezel-${workspaceActivity.timestamp}`}
+            className="aurora-bezel-sweep"
+            initial={{ opacity: 0, scaleX: 0.2 }}
+            animate={{ opacity: [0, 1, 0.85, 0], scaleX: [0.2, 1, 1, 1] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ==================================================================== */}
       {/* Full Settings Dashboard & Companion Character Studio                 */}
@@ -1272,6 +1396,20 @@ export const App: React.FC = () => {
                 >
                   <Layout size={11} style={{ color: '#38bdf8' }} />
                   <span>Launchpad</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playGlassPop();
+                    systemStore.toggleCaptureBar();
+                  }}
+                  style={{ fontSize: '10px', padding: '3px 7px', borderColor: captureBarOpen ? '#38bdf8' : 'var(--glass-border)' }}
+                  title="Toggle Screen Capture Bar (PrtScn / Alt+C)"
+                >
+                  <Crop size={11} style={{ color: '#38bdf8' }} />
+                  <span>Capture Bar</span>
                 </button>
               </div>
 

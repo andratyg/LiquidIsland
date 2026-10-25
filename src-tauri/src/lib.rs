@@ -7,6 +7,7 @@ pub mod clipboard_ports;
 pub mod media_session;
 pub mod hardware_monitor;
 pub mod app_launcher;
+pub mod screen_capture;
 
 use tauri::Manager;
 
@@ -76,11 +77,15 @@ pub fn run() {
             taskbar::launch_system_action,
             taskbar::set_taskbar_flyout_open,
             taskbar::set_dock_pinned,
+            taskbar::poll_dock_autohide_state,
             app_launcher::get_installed_apps,
             app_launcher::launch_installed_app,
             app_launcher::inspect_dropped_file,
             app_launcher::open_file_in_explorer,
             app_launcher::open_file_default,
+            screen_capture::capture_fullscreen,
+            screen_capture::capture_active_window,
+            screen_capture::open_snipping_tool,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LiquidIsland application")

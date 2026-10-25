@@ -11,6 +11,7 @@ import {
   BatteryStatus,
   type ShelfFileItem,
   type TodoTaskItem,
+  type SystemNotificationItem,
   type SystemMediaPayload,
   type WorkspaceActivityPayload,
 } from '../types/liquid';
@@ -24,7 +25,33 @@ import {
   playWaterDrop,
   playToggleClick,
   playOvershootChime,
+  playGlassPop,
 } from '../utils/sfx';
+
+export const DEFAULT_NOTIFICATIONS: SystemNotificationItem[] = [
+  {
+    id: 'notif-snip-1',
+    appName: 'Snipping Tool',
+    title: 'Screenshot copied to clipboard',
+    subtitle: 'Select here to mark up and share the image',
+    timestamp: '16:35',
+    icon: 'snipping-tool',
+    thumbnail: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80"><rect width="120" height="80" fill="%231e293b"/><circle cx="60" cy="40" r="18" fill="%2338bdf8" opacity="0.3"/><path d="M48 40l8 8 16-16" stroke="%2338bdf8" stroke-width="3" fill="none"/></svg>',
+    unread: true,
+    actionType: 'shelf',
+    slideIndex: 3,
+  },
+  {
+    id: 'notif-sys-2',
+    appName: 'LiquidIsland OS',
+    title: '40 MB High-Fluidity Tier Active',
+    subtitle: '120fps GPU blur shaders and memory governor calibrated',
+    timestamp: '16:30',
+    icon: 'system',
+    unread: false,
+    actionType: 'settings',
+  },
+];
 
 export const STORAGE_KEY = 'liquidisland_os_state_v1';
 
@@ -114,6 +141,15 @@ export const DEFAULT_SETTINGS: SystemSettings = {
 
   // Fix Stage 3 defaults
   launchpadOpen: false,
+
+  // 40MB Edition - Stage 1 defaults
+  captureBarOpen: false,
+  isScreenRecording: false,
+  recordingSeconds: 0,
+
+  // 40MB Edition - Stage 2 defaults
+  doNotDisturb: false,
+  notifications: DEFAULT_NOTIFICATIONS,
 };
 
 function loadInitialSettings(): SystemSettings {
@@ -189,8 +225,13 @@ function loadInitialSettings(): SystemSettings {
       // Stage 2: Always start null on fresh boot
       workspaceActivity: null,
 
-      // Fix Stage 2 settings
-      dockPinned: typeof parsed.dockPinned === 'boolean' ? parsed.dockPinned : false,
+      // Fix Stage 2 settings & 40MB Edition - Stage 1 auto-hide migration (liquid_dock_pinned_v2)
+      dockPinned: (() => {
+        const v2 = window.localStorage.getItem('liquid_dock_pinned_v2');
+        if (v2 !== null) return v2 === 'true';
+        window.localStorage.setItem('liquid_dock_pinned_v2', 'false');
+        return false;
+      })(),
       networkSsid: typeof parsed.networkSsid === 'string' ? parsed.networkSsid : 'Home-WiFi-5G',
       isWifiEnabled: typeof parsed.isWifiEnabled === 'boolean' ? parsed.isWifiEnabled : true,
       isBluetoothEnabled: typeof parsed.isBluetoothEnabled === 'boolean' ? parsed.isBluetoothEnabled : true,
@@ -200,6 +241,17 @@ function loadInitialSettings(): SystemSettings {
 
       // Fix Stage 3: Always closed on fresh boot
       launchpadOpen: false,
+
+      // 40MB Edition - Stage 1: Always reset capture & recording states on boot
+      captureBarOpen: false,
+      isScreenRecording: false,
+      recordingSeconds: 0,
+
+      // 40MB Edition - Stage 2: Do Not Disturb & Notifications
+      doNotDisturb: typeof parsed.doNotDisturb === 'boolean' ? parsed.doNotDisturb : false,
+      notifications: Array.isArray(parsed.notifications) && parsed.notifications.length > 0
+        ? parsed.notifications
+        : DEFAULT_NOTIFICATIONS,
     };
   } catch (err) {
     console.error('[LiquidIsland Store] Failed to parse localStorage state:', err);
@@ -863,6 +915,18 @@ export const systemStore = {
         icon: 'bluetooth',
         ...payload,
       };
+    } else if (type === 'screenshot') {
+      playWaterDrop();
+      fullPayload = {
+        type: 'screenshot',
+        title: payload?.title ?? 'Screenshot Saved',
+        subtitle: payload?.subtitle ?? (payload?.filename || 'Saved to Shelf & Clipboard'),
+        icon: 'screenshot',
+        thumbnail: payload?.thumbnail,
+        filename: payload?.filename,
+        dataUrl: payload?.dataUrl,
+        ...payload,
+      };
     } else {
       fullPayload = {
         type: 'airbuds',
@@ -973,14 +1037,16 @@ export const systemStore = {
       playSlideWaveSound();
     }
 
-    // Save activity in settings for bottom dock synchronization
-    currentSettings = {
-      ...currentSettings,
-      workspaceActivity: {
-        ...payload,
-        timestamp: Date.now(),
-      },
+    const activityData: WorkspaceActivityPayload = {
+      ...payload,
+      timestamp: Date.now(),
     };
+
+    // Save activity in settings immediately for bottom dock and overlay synchronization
+    saveSettings({
+      ...currentSettings,
+      workspaceActivity: activityData,
+    });
 
     // UNIFIED DYNAMIC ISLAND: Expand the top notch into a seamless Apple-style system alert!
     const kindLabel =
@@ -996,7 +1062,7 @@ export const systemStore = {
       appName: payload.app_name,
       tabTitle: payload.tab_title,
       accentColor: payload.accent_color || '#38bdf8',
-      workspaceActivity: payload,
+      workspaceActivity: activityData,
     });
 
     // Auto-revert back to compact pill after 1.8 seconds (1800ms)
@@ -1102,6 +1168,9 @@ export const systemStore = {
   // Fix Stage 2: Supercharged System Tray & Smart Dock Auto-Hide
   setDockPinned(dockPinned: boolean) {
     playToggleClick();
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('liquid_dock_pinned_v2', String(dockPinned));
+    }
     saveSettings({ ...currentSettings, dockPinned });
   },
 
@@ -1158,6 +1227,105 @@ export const systemStore = {
   toggleLaunchpad() {
     const next = !currentSettings.launchpadOpen;
     systemStore.setLaunchpadOpen(next);
+  },
+
+  // 40MB Edition - Stage 1: Custom Screen Capture & Recording
+  setCaptureBarOpen(captureBarOpen: boolean) {
+    playToggleClick();
+    saveSettings({ ...currentSettings, captureBarOpen });
+  },
+
+  toggleCaptureBar() {
+    const next = !currentSettings.captureBarOpen;
+    systemStore.setCaptureBarOpen(next);
+  },
+
+  setIsScreenRecording(isScreenRecording: boolean) {
+    playToggleClick();
+    saveSettings({
+      ...currentSettings,
+      isScreenRecording,
+      recordingSeconds: isScreenRecording ? 0 : (currentSettings.recordingSeconds ?? 0),
+    });
+  },
+
+  tickRecordingSeconds() {
+    saveSettings({
+      ...currentSettings,
+      recordingSeconds: (currentSettings.recordingSeconds ?? 0) + 1,
+    });
+  },
+
+  showScreenshotToast(filename: string, thumbnail: string) {
+    this.triggerToast('screenshot', {
+      title: 'Screenshot Saved',
+      subtitle: filename,
+      thumbnail,
+      filename,
+      dataUrl: thumbnail,
+      icon: 'screenshot',
+    });
+  },
+
+  // 40MB Edition - Stage 2: Notification Center, DND & Focus Session
+  setDoNotDisturb(doNotDisturb: boolean) {
+    playToggleClick();
+    saveSettings({ ...currentSettings, doNotDisturb });
+  },
+
+  toggleDoNotDisturb() {
+    const next = !currentSettings.doNotDisturb;
+    playToggleClick();
+    saveSettings({ ...currentSettings, doNotDisturb: next });
+    this.triggerToast('airbuds', {
+      title: next ? 'Do Not Disturb On' : 'Do Not Disturb Off',
+      subtitle: next ? 'Only priority alerts will appear' : 'All notifications active',
+    });
+  },
+
+  addNotification(notif: SystemNotificationItem) {
+    const existing = currentSettings.notifications ?? [];
+    saveSettings({
+      ...currentSettings,
+      notifications: [notif, ...existing.filter((n) => n.id !== notif.id)],
+    });
+  },
+
+  removeNotification(id: string) {
+    playToggleClick();
+    const existing = currentSettings.notifications ?? [];
+    saveSettings({
+      ...currentSettings,
+      notifications: existing.filter((n) => n.id !== id),
+    });
+  },
+
+  clearAllNotifications() {
+    playGlassPop();
+    saveSettings({
+      ...currentSettings,
+      notifications: [],
+    });
+  },
+
+  startFocusSession(durationMinutes: number) {
+    playGlassPop();
+    const totalSecs = Math.max(5, Math.min(180, durationMinutes)) * 60;
+    saveSettings({
+      ...currentSettings,
+      pomodoroMode: 'focus',
+      pomodoroTotalSeconds: totalSecs,
+      pomodoroSecondsLeft: totalSecs,
+      isPomodoroRunning: true,
+      pomodoroActive: true,
+      doNotDisturb: true,
+      islandState: 'expanded',
+      activeSlide: 1, // Pomodoro Slide
+    });
+    this.triggerToast('airbuds', {
+      title: `Focus Session Started (${durationMinutes}m)`,
+      subtitle: 'Do Not Disturb enabled • Focus Glasses equipped',
+    });
   },
 
   subscribe(listener: () => void) {

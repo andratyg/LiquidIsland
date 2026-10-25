@@ -18,6 +18,12 @@ async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
   }
 }
 
+function formatRecordingTime(sec: number = 0) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 export const CompactView: React.FC = () => {
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
   const volume = useSystemStore((s) => s.volume);
@@ -26,6 +32,8 @@ export const CompactView: React.FC = () => {
   const mediaSourceApp = useSystemStore((s) => s.mediaSourceApp || 'Spotify');
   const mediaThumbnail = useSystemStore((s) => s.mediaThumbnail);
   const workspaceActivity = useSystemStore((s) => s.workspaceActivity);
+  const isScreenRecording = useSystemStore((s) => s.isScreenRecording ?? false);
+  const recordingSeconds = useSystemStore((s) => s.recordingSeconds ?? 0);
 
   // Compute source app badge (Spotify = Green, YouTube = Red, YouTube Music = Crimson)
   const sourceAppNormalized = (mediaSourceApp || '').toLowerCase();
@@ -149,10 +157,44 @@ export const CompactView: React.FC = () => {
       </div>
 
       {/* ==================================================================== */}
-      {/* 2. Center Content: Workspace Activity OR Live Track OR Digital Clock */}
+      {/* 2. Center Content: Recording Pill OR Workspace Activity OR Live Track */}
       {/* ==================================================================== */}
       <AnimatePresence mode="wait">
-        {workspaceActivity ? (
+        {isScreenRecording ? (
+          <motion.div
+            key="compact-recording-pill"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+          >
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: '#ef4444',
+                boxShadow: '0 0 10px #ef4444',
+              }}
+            />
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#ef4444',
+                fontVariantNumeric: 'tabular-nums',
+                letterSpacing: '0.2px',
+              }}
+            >
+              REC {formatRecordingTime(recordingSeconds)}
+            </span>
+          </motion.div>
+        ) : workspaceActivity ? (
           <motion.div
             key={`ws-activity-${workspaceActivity.timestamp}`}
             initial={{ y: 10, opacity: 0 }}
@@ -267,38 +309,69 @@ export const CompactView: React.FC = () => {
       </AnimatePresence>
 
       {/* ==================================================================== */}
-      {/* 3. Right Audio Visualizer: 5 Crisp White Waveform Bars               */}
+      {/* 3. Right: Recording Stop Button OR Audio Visualizer Waveform         */}
       {/* ==================================================================== */}
-      <div
-        title={`Audio Visualizer (${isAudioPlaying ? 'Playing' : 'Paused'})`}
-        onClick={handleToggleAudio}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '2px',
-          height: '18px',
-          width: '20px',
-          cursor: 'pointer',
-          padding: '0 1px',
-        }}
-      >
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-      </div>
+      {isScreenRecording ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            playGlassPop();
+            systemStore.setIsScreenRecording(false);
+            systemStore.triggerToast('airbuds', {
+              title: 'Recording Saved',
+              subtitle: `Captured ${formatRecordingTime(recordingSeconds)} • Saved to Captures`,
+            });
+          }}
+          title="Stop Screen Recording"
+          style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: '6px',
+            background: 'rgba(239, 68, 68, 0.22)',
+            border: '1px solid rgba(239, 68, 68, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            padding: 0,
+            outline: 'none',
+          }}
+        >
+          <div style={{ width: '8px', height: '8px', borderRadius: '1.5px', background: '#ef4444' }} />
+        </button>
+      ) : (
+        <div
+          title={`Audio Visualizer (${isAudioPlaying ? 'Playing' : 'Paused'})`}
+          onClick={handleToggleAudio}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '2px',
+            height: '18px',
+            width: '20px',
+            cursor: 'pointer',
+            padding: '0 1px',
+          }}
+        >
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+        </div>
+      )}
     </div>
   );
 };

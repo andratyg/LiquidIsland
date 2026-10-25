@@ -11,11 +11,18 @@ use tauri::{Emitter, Manager, Window};
 use windows_sys::Win32::Foundation::{BOOL, HWND, RECT};
 #[cfg(windows)]
 use windows_sys::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    CreateCompatibleDC, DeleteDC, GetDC, GetDIBits, GetMonitorInfoW, GetObjectW,
+    MonitorFromWindow, ReleaseDC, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
+    DIB_RGB_COLORS, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+};
+#[cfg(windows)]
+use windows_sys::Win32::System::DataExchange::{
+    CloseClipboard, GetClipboardData, GetClipboardSequenceNumber, IsClipboardFormatAvailable,
+    OpenClipboard,
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RIGHT, VK_RWIN,
+    GetAsyncKeyState, VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RIGHT, VK_RWIN, VK_SHIFT,
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -58,12 +65,21 @@ pub struct WorkspaceActivityPayload {
     pub tab_title: String,         // Cleaned tab or document title
     pub direction: Option<String>, // "left" | "right" for desktop-switch
     pub accent_color: String,      // Color token
+    pub recent_apps: Option<Vec<crate::taskbar::RunningAppInfo>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HudChangePayload {
     pub kind: String,              // "volume" | "brightness" | "mute"
     pub delta: i32,                // step delta e.g. +4, -4, +5, -5
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ScreenshotCapturedPayload {
+    pub data_url: String,
+    pub filename: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 pub static WORKSPACE_LISTENER_STARTED: AtomicBool = AtomicBool::new(false);
@@ -205,11 +221,15 @@ pub fn start_workspace_activity_listener(window: Window) {
             let mut last_left_down = false;
             let mut last_right_down = false;
             let mut last_alt_s_down = false;
+            let mut last_capture_down = false;
+            let mut last_alt_tab_down = false;
+            let mut last_ctrl_tab_down = false;
             let mut last_vol_up = false;
             let mut last_vol_down = false;
             let mut last_mute = false;
             let mut last_bright_up = false;
             let mut last_bright_down = false;
+            let mut last_clipboard_seq: u32 = GetClipboardSequenceNumber();
             let mut tick_count: u32 = 0;
 
             loop {
@@ -235,6 +255,82 @@ pub fn start_workspace_activity_listener(window: Window) {
                     }
                 } else {
                     last_alt_s_down = false;
+                }
+
+                // -----------------------------------------------------------
+                // Global Hotkey: Snapshot / PrtScn (0x2C), Alt + C, Win + Shift + S
+                // -----------------------------------------------------------
+                let prtscn_down = is_key_down(0x2C); // VK_SNAPSHOT
+                let c_down = is_key_down(0x43); // 'C'
+                let shift_down = is_key_down(VK_SHIFT as i32);
+                let win_down_any = is_key_down(VK_LWIN as i32) || is_key_down(VK_RWIN as i32);
+                let capture_combo = prtscn_down || (alt_down && c_down) || (win_down_any && shift_down && s_down);
+
+                if capture_combo {
+                    if !last_capture_down {
+                        last_capture_down = true;
+                        let _ = app_handle.emit("open-capture-bar", ());
+                    }
+                } else {
+                    last_capture_down = false;
+                }
+
+                // -----------------------------------------------------------
+                // 40MB Edition - Stage 3: VisionOS 3D Alt+Tab & Ctrl+Tab Interceptor
+                // -----------------------------------------------------------
+                let tab_down = is_key_down(0x09); // VK_TAB
+
+                if alt_down && tab_down {
+                    if !last_alt_tab_down {
+                        last_alt_tab_down = true;
+                        let running_apps = crate::taskbar::get_running_apps();
+                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
+                        let (app_name, tab_title, accent_color) = if let Some(first) = top5.first() {
+                            parse_window_activity(&first.title)
+                        } else {
+                            ("Application".to_string(), "Window Switcher".to_string(), "#38bdf8".to_string())
+                        };
+
+                        let payload = WorkspaceActivityPayload {
+                            kind: "app-switch".to_string(),
+                            app_name,
+                            tab_title,
+                            direction: None,
+                            accent_color,
+                            recent_apps: Some(top5),
+                        };
+                        let _ = app_handle.emit("workspace-activity", payload);
+                    }
+                } else {
+                    last_alt_tab_down = false;
+                }
+
+                let ctrl_down = is_key_down(VK_CONTROL as i32);
+                let win_down = is_key_down(VK_LWIN as i32) || is_key_down(VK_RWIN as i32);
+
+                if ctrl_down && tab_down && !alt_down && !win_down {
+                    if !last_ctrl_tab_down {
+                        last_ctrl_tab_down = true;
+                        let running_apps = crate::taskbar::get_running_apps();
+                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
+                        let (app_name, tab_title, accent_color) = if let Some(first) = top5.first() {
+                            parse_window_activity(&first.title)
+                        } else {
+                            ("Active Tab".to_string(), "Tab Switcher".to_string(), "#38bdf8".to_string())
+                        };
+
+                        let payload = WorkspaceActivityPayload {
+                            kind: "tab-switch".to_string(),
+                            app_name,
+                            tab_title,
+                            direction: None,
+                            accent_color,
+                            recent_apps: Some(top5),
+                        };
+                        let _ = app_handle.emit("workspace-activity", payload);
+                    }
+                } else {
+                    last_ctrl_tab_down = false;
                 }
 
                 // -----------------------------------------------------------
@@ -327,28 +423,115 @@ pub fn start_workspace_activity_listener(window: Window) {
 
                 if ctrl_down && win_down {
                     if left_down && !last_left_down {
+                        let running_apps = crate::taskbar::get_running_apps();
+                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
                         let payload = WorkspaceActivityPayload {
                             kind: "desktop-switch".to_string(),
                             app_name: "Virtual Desktop".to_string(),
                             tab_title: "Desktop ←".to_string(),
                             direction: Some("left".to_string()),
                             accent_color: "#38bdf8".to_string(),
+                            recent_apps: Some(top5),
                         };
                         let _ = app_handle.emit("workspace-activity", payload);
                     }
                     if right_down && !last_right_down {
+                        let running_apps = crate::taskbar::get_running_apps();
+                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
                         let payload = WorkspaceActivityPayload {
                             kind: "desktop-switch".to_string(),
                             app_name: "Virtual Desktop".to_string(),
                             tab_title: "Desktop →".to_string(),
                             direction: Some("right".to_string()),
                             accent_color: "#38bdf8".to_string(),
+                            recent_apps: Some(top5),
                         };
                         let _ = app_handle.emit("workspace-activity", payload);
                     }
                 }
                 last_left_down = left_down;
                 last_right_down = right_down;
+
+                // -----------------------------------------------------------
+                // Windows Clipboard Bitmap Interceptor (40MB Edition - Stage 1)
+                // -----------------------------------------------------------
+                if tick_count % 4 == 0 {
+                    let current_seq = GetClipboardSequenceNumber();
+                    if current_seq != last_clipboard_seq {
+                        last_clipboard_seq = current_seq;
+                        if IsClipboardFormatAvailable(crate::screen_capture::CF_BITMAP) != 0 {
+                            if OpenClipboard(std::ptr::null_mut()) != 0 {
+                                let hbitmap = GetClipboardData(crate::screen_capture::CF_BITMAP);
+                                if !hbitmap.is_null() {
+                                    let mut bmp: BITMAP = std::mem::zeroed();
+                                    if GetObjectW(
+                                        hbitmap as _,
+                                        std::mem::size_of::<BITMAP>() as i32,
+                                        &mut bmp as *mut _ as *mut _,
+                                    ) != 0 && bmp.bmWidth > 0 && bmp.bmHeight != 0 {
+                                        let width = bmp.bmWidth as u32;
+                                        let height = (bmp.bmHeight.abs()) as u32;
+
+                                        let screen_dc = GetDC(std::ptr::null_mut());
+                                        let mem_dc = CreateCompatibleDC(screen_dc);
+
+                                        let mut bmi: BITMAPINFO = std::mem::zeroed();
+                                        bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+                                        bmi.bmiHeader.biWidth = width as i32;
+                                        bmi.bmiHeader.biHeight = -(height as i32);
+                                        bmi.bmiHeader.biPlanes = 1;
+                                        bmi.bmiHeader.biBitCount = 32;
+                                        bmi.bmiHeader.biCompression = BI_RGB as u32;
+
+                                        let total_pixels = (width * height) as usize;
+                                        let mut bgra_pixels = vec![0u8; total_pixels * 4];
+
+                                        let lines = GetDIBits(
+                                            mem_dc,
+                                            hbitmap as _,
+                                            0,
+                                            height,
+                                            bgra_pixels.as_mut_ptr() as *mut _,
+                                            &mut bmi,
+                                            DIB_RGB_COLORS,
+                                        );
+
+                                        DeleteDC(mem_dc);
+                                        ReleaseDC(std::ptr::null_mut(), screen_dc);
+
+                                        if lines > 0 {
+                                            let mut rgba_pixels = vec![0u8; total_pixels * 4];
+                                            for i in 0..total_pixels {
+                                                rgba_pixels[i * 4] = bgra_pixels[i * 4 + 2];
+                                                rgba_pixels[i * 4 + 1] = bgra_pixels[i * 4 + 1];
+                                                rgba_pixels[i * 4 + 2] = bgra_pixels[i * 4];
+                                                rgba_pixels[i * 4 + 3] = 255;
+                                            }
+
+                                            if let Ok(data_url) = crate::screen_capture::encode_rgba_to_png_data_url(
+                                                &rgba_pixels,
+                                                width,
+                                                height,
+                                            ) {
+                                                let filename = crate::screen_capture::generate_screenshot_filename();
+                                                let _ = app_handle.emit(
+                                                    "screenshot-captured",
+                                                    ScreenshotCapturedPayload {
+                                                        data_url,
+                                                        filename,
+                                                        width,
+                                                        height,
+                                                    },
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                                CloseClipboard();
+                            }
+                        }
+                    }
+                }
 
                 // Only check foreground window every 8 ticks (~200ms at 25ms loop) to conserve CPU
                 if tick_count % 8 != 0 {
@@ -395,23 +578,29 @@ pub fn start_workspace_activity_listener(window: Window) {
                     if hwnd == last_hwnd && current_title != last_title {
                         // Case 1: Tab Switch inside the same application
                         let (app_name, tab_title, accent_color) = parse_window_activity(&current_title);
+                        let running_apps = crate::taskbar::get_running_apps();
+                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
                         let payload = WorkspaceActivityPayload {
                             kind: "tab-switch".to_string(),
                             app_name,
                             tab_title,
                             direction: None,
                             accent_color,
+                            recent_apps: Some(top5),
                         };
                         let _ = app_handle.emit("workspace-activity", payload);
                     } else if hwnd != last_hwnd && current_title != last_title {
                         // Case 2: App Switch to a different foreground application
                         let (app_name, tab_title, accent_color) = parse_window_activity(&current_title);
+                        let running_apps = crate::taskbar::get_running_apps();
+                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
                         let payload = WorkspaceActivityPayload {
                             kind: "app-switch".to_string(),
                             app_name,
                             tab_title,
                             direction: None,
                             accent_color,
+                            recent_apps: Some(top5),
                         };
                         let _ = app_handle.emit("workspace-activity", payload);
                     }

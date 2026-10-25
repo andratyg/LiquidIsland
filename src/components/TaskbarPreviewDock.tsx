@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import {
@@ -9,8 +9,6 @@ import {
 import {
   Search,
   ChevronUp,
-  ChevronLeft,
-  ChevronRight,
   Wifi,
   Volume2,
   VolumeX,
@@ -29,14 +27,14 @@ import {
   Pin,
   Bluetooth,
   Plane,
-  CheckCircle2,
-  Circle,
   ExternalLink,
   Shield,
   Headphones,
   Speaker,
+  Camera,
 } from 'lucide-react';
 import { RunningAppInfo, CompanionMode } from '../types/liquid';
+import { NotificationCalendarHub } from './NotificationCalendarHub';
 
 interface TaskbarPreviewDockProps {
   onOpenSettings?: () => void;
@@ -269,26 +267,6 @@ const DefaultAppLogo = () => (
   </svg>
 );
 
-function getCalendarMatrix(year: number, month: number) {
-  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 = Sun
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
-
-  const days: { day: number; isCurrentMonth: boolean; key: string }[] = [];
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    days.push({ day: daysInPrevMonth - i, isCurrentMonth: false, key: `prev-${i}` });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    days.push({ day: d, isCurrentMonth: true, key: `cur-${d}` });
-  }
-  const totalCells = days.length > 35 ? 42 : 35;
-  const remaining = totalCells - days.length;
-  for (let d = 1; d <= remaining; d++) {
-    days.push({ day: d, isCurrentMonth: false, key: `next-${d}` });
-  }
-  return days;
-}
-
 type TrayFlyoutType = 'tray' | 'network' | 'audio' | 'battery' | 'calendar' | null;
 
 /* ==========================================================================
@@ -321,17 +299,15 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   const isAirplaneMode = useSystemStore((s) => s.isAirplaneMode ?? false);
   const powerMode = useSystemStore((s) => s.powerMode ?? 'balanced');
   const batteryHealth = useSystemStore((s) => s.batteryHealth ?? 98);
-  const todoTasks = useSystemStore((s) => s.todoTasks ?? []);
 
   const [activeFlyout, setActiveFlyout] = useState<TrayFlyoutType>(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
-  const [isDockHovered, setIsDockHovered] = useState(true);
-  const [isDockVisible, setIsDockVisible] = useState(true);
+  const [isDockHovered, setIsDockHovered] = useState(false);
+  const [isDockVisible, setIsDockVisible] = useState(false);
   const [runningApps, setRunningApps] = useState<RunningAppInfo[]>([]);
   const [selectedAudioOutput, setSelectedAudioOutput] = useState<'speakers' | 'airbuds'>('airbuds');
-  const [calendarMonthOffset, setCalendarMonthOffset] = useState<number>(0);
 
   const flyoutRef = useRef<HTMLDivElement>(null);
 
@@ -341,8 +317,8 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     isLaunchpadOpen ||
     activeFlyout !== null ||
     showContextMenu ||
-    isDockHovered ||
-    isDockVisible;
+    isDockVisible ||
+    isDockHovered;
 
   // Sync dock pinned state with Rust
   useEffect(() => {
@@ -447,6 +423,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   }, []);
 
   const handleDockMouseLeave = useCallback(() => {
+    setIsDockHovered(false);
     if (activeFlyout === null && !showContextMenu) {
       safeInvoke('set_dock_click_through', { ignore: true });
     }
@@ -499,25 +476,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     document.addEventListener('pointerdown', handleGlobalPointerDown);
     return () => document.removeEventListener('pointerdown', handleGlobalPointerDown);
   }, [activeFlyout, closeAllFlyouts]);
-
-  // Calendar matrix calculation
-  const displayedDate = useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + calendarMonthOffset);
-    return d;
-  }, [calendarMonthOffset]);
-
-  const currentYear = displayedDate.getFullYear();
-  const currentMonth = displayedDate.getMonth();
-  const monthName = displayedDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
-  const todayDate = new Date();
-  const isViewingCurrentMonth =
-    todayDate.getFullYear() === currentYear && todayDate.getMonth() === currentMonth;
-  const todayDay = todayDate.getDate();
-
-  const calendarMatrix = useMemo(() => {
-    return getCalendarMatrix(currentYear, currentMonth);
-  }, [currentYear, currentMonth]);
 
   // Quick Action Handler for Tray Flyout
   const handleAction = (actionKey: string) => {
@@ -702,6 +660,28 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         >
           Alt+S
         </span>
+      </button>
+
+      {/* 2b. Screenshot & Screen Recording Pop-up Bar (PrtScn / Alt+C) */}
+      <button
+        type="button"
+        className="dock-app-icon"
+        onClick={() => {
+          playGlassPop();
+          safeEmit('open-capture-bar');
+          systemStore.setCaptureBarOpen(true);
+        }}
+        title="Screen Capture Bar (PrtScn / Alt+C / Win+Shift+S)"
+        style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Camera size={17} style={{ color: '#38bdf8' }} />
       </button>
 
       {/* 3. Subtle Vertical Divider */}
@@ -1086,10 +1066,29 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     </div>
   );
 
-  // Master Flyouts Renderer for all 5 Supercharged Tray Components
+  // Master Flyouts Renderer for all Supercharged Tray Components & Dual-Card Notification Calendar Hub
   const renderAllFlyouts = () => (
     <AnimatePresence>
-      {activeFlyout && (
+      {activeFlyout === 'calendar' && (
+        <div
+          key="flyout-calendar-hub"
+          ref={flyoutRef}
+          style={{
+            position: 'absolute',
+            bottom: '72px',
+            right: 0,
+            zIndex: 99999,
+            pointerEvents: 'auto',
+          }}
+        >
+          <NotificationCalendarHub
+            onClose={closeAllFlyouts}
+            onOpenSettings={onOpenSettings}
+          />
+        </div>
+      )}
+
+      {activeFlyout && activeFlyout !== 'calendar' && (
         <motion.div
           key={`flyout-${activeFlyout}`}
           ref={flyoutRef}
@@ -1102,7 +1101,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             position: 'absolute',
             bottom: '72px',
             right: 0,
-            width: activeFlyout === 'calendar' ? '340px' : activeFlyout === 'tray' ? '340px' : activeFlyout === 'network' ? '360px' : '320px',
+            width: activeFlyout === 'tray' ? '340px' : activeFlyout === 'network' ? '360px' : '320px',
             backgroundColor: activeFlyout === 'network'
               ? 'rgba(18, 18, 22, 0.94)'
               : theme === 'light'
@@ -1804,148 +1803,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               </button>
             </>
           )}
-
-          {/* FLYOUT 5: Monthly Calendar & Today's Agenda */}
-          {activeFlyout === 'calendar' && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#ffffff' }}>{timeStr}</span>
-                  <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 600 }}>{dateStr}</span>
-                </div>
-                <button type="button" onClick={closeAllFlyouts} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px' }} title="Close">
-                  <X size={13} />
-                </button>
-              </div>
-
-              {/* Month Navigator Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
-                <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#ffffff' }}>{monthName}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  {calendarMonthOffset !== 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setCalendarMonthOffset(0)}
-                      style={{ background: 'rgba(56, 189, 248, 0.15)', border: 'none', borderRadius: '4px', color: '#38bdf8', fontSize: '9px', fontWeight: 700, padding: '2px 5px', cursor: 'pointer' }}
-                    >
-                      Today
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCalendarMonthOffset((c) => c - 1)}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCalendarMonthOffset((c) => c + 1)}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Day-of-week headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', fontSize: '9.5px', fontWeight: 600, color: '#64748b' }}>
-                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
-              </div>
-
-              {/* Calendar Days Matrix */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', textAlign: 'center' }}>
-                {calendarMatrix.map((item) => {
-                  const isToday = isViewingCurrentMonth && item.isCurrentMonth && item.day === todayDay;
-                  return (
-                    <div
-                      key={item.key}
-                      style={{
-                        padding: '4px 0',
-                        fontSize: '10.5px',
-                        fontWeight: isToday ? 700 : 500,
-                        borderRadius: '6px',
-                        color: isToday ? '#ffffff' : item.isCurrentMonth ? '#f1f5f9' : 'rgba(255,255,255,0.2)',
-                        backgroundColor: isToday ? '#0284c7' : 'transparent',
-                        boxShadow: isToday ? '0 0 10px rgba(56, 189, 248, 0.6)' : 'none',
-                      }}
-                    >
-                      {item.day}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Today's Agenda & Quick Tasks */}
-              <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#ffffff' }}>Today's Tasks</span>
-                  <span style={{ fontSize: '9.5px', color: '#94a3b8' }}>
-                    {todoTasks.filter((t) => !t.completed).length} pending
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {todoTasks.slice(0, 3).map((task) => (
-                    <div
-                      key={task.id}
-                      onClick={() => systemStore.toggleTodoTask(task.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '4px 6px',
-                        borderRadius: '6px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {task.completed ? (
-                        <CheckCircle2 size={13} style={{ color: '#22c55e', flexShrink: 0 }} />
-                      ) : (
-                        <Circle size={13} style={{ color: '#64748b', flexShrink: 0 }} />
-                      )}
-                      <span
-                        style={{
-                          fontSize: '10.5px',
-                          color: task.completed ? '#64748b' : '#ffffff',
-                          textDecoration: task.completed ? 'line-through' : 'none',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {task.text}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Date & Time Settings shortcut */}
-              <button
-                type="button"
-                onClick={() => safeInvoke('launch_system_action', { action: 'datetime_settings' })}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '7px',
-                  borderRadius: '8px',
-                  background: 'rgba(56, 189, 248, 0.1)',
-                  border: '1px solid rgba(56, 189, 248, 0.25)',
-                  color: '#38bdf8',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  width: '100%',
-                }}
-              >
-                <ExternalLink size={12} />
-                <span>Date & Time Settings</span>
-              </button>
-            </>
-          )}
         </motion.div>
       )}
     </AnimatePresence>
@@ -2040,22 +1897,28 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               flexShrink: 1,
             }}
           >
-            {/* Traveling Specular Rim Sweep on Tab/App Switch */}
+            {/* Traveling Specular Rim Sweep & Aurora Wave across Taskbar Dock */}
             <AnimatePresence>
-              {(workspaceActivity?.kind === 'tab-switch' || workspaceActivity?.kind === 'app-switch') && (
+              {workspaceActivity && (
                 <motion.div
                   key={`dock-sweep-${workspaceActivity.timestamp}`}
                   className="liquid-rim-sweep"
                   initial={{ x: '-100%', opacity: 0 }}
-                  animate={{ x: '250%', opacity: [0, 1, 0.8, 0] }}
+                  animate={{ x: '250%', opacity: [0, 1, 0.85, 0] }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     width: '100%',
-                    height: '100%',
+                    height: '2px',
+                    background:
+                      workspaceActivity.kind === 'desktop-switch'
+                        ? 'linear-gradient(90deg, transparent 0%, #38bdf8 30%, #a855f7 70%, transparent 100%)'
+                        : `linear-gradient(90deg, transparent 0%, ${
+                            workspaceActivity.accent_color || '#38bdf8'
+                          } 50%, transparent 100%)`,
                     pointerEvents: 'none',
                     zIndex: 10,
                   }}
@@ -2134,6 +1997,32 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               <span>Quit LiquidIsland</span>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 40MB Edition - Stage 1: Ultra-Sleek Hidden Dock Indicator Strip */}
+      <AnimatePresence>
+        {!effectiveDockVisible && (
+          <motion.div
+            key="dock-hidden-indicator"
+            initial={{ opacity: 0, scaleX: 0.6 }}
+            animate={{ opacity: 1, scaleX: 1 }}
+            exit={{ opacity: 0, scaleX: 0.6 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              position: 'fixed',
+              bottom: '4px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '96px',
+              height: '3px',
+              borderRadius: '2px',
+              background: 'rgba(255, 255, 255, 0.45)',
+              boxShadow: '0 0 10px rgba(255, 255, 255, 0.35)',
+              pointerEvents: 'none',
+              zIndex: 9990,
+            }}
+          />
         )}
       </AnimatePresence>
     </div>

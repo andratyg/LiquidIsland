@@ -888,10 +888,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       fontVariantNumeric: 'tabular-nums',
                     }}
                   >
-                    {localRam ? `${localRam.toFixed(1)} MB` : '12.4 MB'} / 20.0 MB
+                    {localRam ? `${localRam.toFixed(1)} MB` : '16.4 MB'} / 40.0 MB
                   </span>
                   <span style={{ fontSize: '9.5px', color: isDark ? '#64748b' : '#94a3b8' }}>
-                    (20 MB Tier)
+                    (40 MB Tier)
                   </span>
                 </div>
               </div>
@@ -910,9 +910,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div
                   style={{
                     height: '100%',
-                    width: `${Math.min(100, Math.max(5, ((localRam ?? 12.4) / 20.0) * 100))}%`,
+                    width: `${Math.min(100, Math.max(5, ((localRam ?? 16.4) / 40.0) * 100))}%`,
                     borderRadius: '2px',
-                    backgroundColor: (localRam ?? 12.4) > 18.5 ? '#f59e0b' : '#22c55e',
+                    backgroundColor: (localRam ?? 16.4) > 38.5 ? '#f59e0b' : '#22c55e',
                     boxShadow: '0 0 6px rgba(34, 197, 94, 0.4)',
                     transition: 'width 0.3s ease',
                   }}

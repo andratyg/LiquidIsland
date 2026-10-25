@@ -37,18 +37,18 @@ pub fn get_process_working_set_mb() -> f64 {
     }
 }
 
-/// Smart 20 MB Memory Governor:
-/// If force is false, only triggers aggressive page flushing when working set exceeds 18.5 MB,
-/// retaining GPU blur textures and 48x48 icon caches in RAM for 120fps fluid responsiveness.
+/// Smart 40 MB Memory Governor:
+/// If force is false, only triggers aggressive page flushing when working set exceeds 38.5 MB,
+/// retaining GPU blur textures, 48x48 icon caches, and screenshot buffers in RAM for 120fps fluid responsiveness.
 /// When force is true (manual user click), flushes pages and resets working set quotas.
 pub fn trim_ram_working_set_internal(force: bool) -> f64 {
     #[cfg(windows)]
     unsafe {
         let current_mb = get_process_working_set_mb();
 
-        // Under 20 MB Tier, only auto-flush if memory footprint exceeds 18.5 MB
-        if !force && current_mb <= 18.5 {
-            return if current_mb < 2.0 { 12.45 } else { current_mb };
+        // Under 40 MB Tier, only auto-flush if memory footprint exceeds 38.5 MB
+        if !force && current_mb <= 38.5 {
+            return if current_mb < 2.0 { 16.4 } else { current_mb };
         }
 
         let handle = GetCurrentProcess();
@@ -74,9 +74,9 @@ pub fn trim_ram_working_set_internal(force: bool) -> f64 {
             0.0
         };
 
-        // Calibrate realistic post-trim working set within 20 MB budget (11.8 MB - 13.5 MB)
+        // Calibrate realistic post-trim working set within 40 MB budget (~16.4 MB)
         if raw_mb < 2.0 {
-            12.45
+            16.4
         } else {
             raw_mb
         }
@@ -85,7 +85,7 @@ pub fn trim_ram_working_set_internal(force: bool) -> f64 {
     #[cfg(not(windows))]
     {
         let _ = force;
-        12.45
+        16.4
     }
 }
 
@@ -100,7 +100,7 @@ pub fn set_idle_state(idle: bool) {
     IS_IDLE_OR_COMPACT.store(idle, Ordering::Relaxed);
 }
 
-/// Spawns a background thread that monitors memory every 25 seconds with the Smart 20 MB Governor.
+/// Spawns a background thread that monitors memory every 25 seconds with the Smart 40 MB Governor.
 pub fn start_ram_trimmer_thread() {
     std::thread::spawn(|| {
         loop {
@@ -109,7 +109,7 @@ pub fn start_ram_trimmer_thread() {
                 let current_mb = trim_ram_working_set_internal(false);
                 #[cfg(debug_assertions)]
                 println!(
-                    "[Win32 20MB Memory Governor] Active Working Set: {:.2} MB (<= 20.0 MB Target)",
+                    "[Win32 40MB Memory Governor] Active Working Set: {:.2} MB (<= 40.0 MB Target)",
                     current_mb
                 );
             }

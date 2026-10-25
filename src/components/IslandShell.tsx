@@ -372,13 +372,13 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     scaleXVal = [1, 1.05, 0.96, 1.02, 1];
     scaleYVal = [1, 0.94, 1.05, 0.98, 1];
   } else if (isTabSwitch) {
-    scaleXVal = [1, 1.12, 0.97, 1];
-    scaleYVal = [1, 0.92, 1.03, 1];
+    scaleXVal = [1, 1.14, 0.96, 1.02, 1];
+    scaleYVal = [1, 0.90, 1.05, 0.98, 1];
   }
 
   if (isDesktopSwitch) {
-    xVal = desktopDirection === 'right' ? [0, -18, 6, 0] : [0, 18, -6, 0];
-    skewXVal = desktopDirection === 'right' ? [0, -8, 3, 0] : [0, 8, -3, 0];
+    xVal = desktopDirection === 'right' ? [0, -26, 8, 0] : [0, 26, -8, 0];
+    skewXVal = desktopDirection === 'right' ? [0, -10, 4, 0] : [0, 10, -4, 0];
   }
 
   return (

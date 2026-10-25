@@ -2,12 +2,14 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore } from '../store/useSystemStore';
 import { RunningAppInfo } from '../types/liquid';
-import { Monitor } from 'lucide-react';
+import { Monitor, Layers } from 'lucide-react';
 
-interface StripAppItem {
+interface DisplayAppCard {
   id: string;
   name: string;
+  title: string;
   iconData?: string;
+  iconHint?: string;
   active: boolean;
 }
 
@@ -26,10 +28,10 @@ async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
 }
 
 /* ==========================================================================
-   Vector Brand Logos for Instant Crisp HUD Display
+   Vector Brand Logos for Instant Crisp HUD Display Fallback
    ========================================================================== */
 
-const ChromeLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const ChromeLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <circle cx="24" cy="24" r="20" fill="#ffffff" />
     <path d="M24 14a10 10 0 1 0 10 10A10 10 0 0 0 24 14z" fill="#ffffff" />
@@ -41,7 +43,7 @@ const ChromeLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
   </svg>
 );
 
-const EdgeLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const EdgeLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <circle cx="24" cy="24" r="20" fill="#0078d7" opacity="0.15" />
     <path
@@ -55,7 +57,7 @@ const EdgeLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
   </svg>
 );
 
-const VSCodeLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const VSCodeLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <path d="M35 5l8 4v30l-8 4-22-19z" fill="#0065a9" />
     <path d="M35 5L15 22l6 5 14-22z" fill="#007acc" />
@@ -64,7 +66,7 @@ const VSCodeLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
   </svg>
 );
 
-const TerminalLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const TerminalLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <rect x="4" y="6" width="40" height="36" rx="8" fill="#0c0c0c" stroke="#4ade80" strokeWidth="2" />
     <path d="M12 17l8 7-8 7" stroke="#4ade80" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
@@ -72,7 +74,7 @@ const TerminalLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
   </svg>
 );
 
-const SpotifyLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const SpotifyLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <circle cx="24" cy="24" r="20" fill="#1db954" />
     <path d="M15 19.5c6.5-1.5 13.5-.8 19 2.5" stroke="#ffffff" strokeWidth="3.2" strokeLinecap="round" />
@@ -81,7 +83,7 @@ const SpotifyLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
   </svg>
 );
 
-const DiscordLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const DiscordLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <rect x="4" y="4" width="40" height="40" rx="10" fill="#5865f2" />
     <path
@@ -91,7 +93,7 @@ const DiscordLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
   </svg>
 );
 
-const ExplorerLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const ExplorerLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <rect x="4" y="8" width="40" height="32" rx="7" fill="#0284c7" />
     <path d="M4 14h18l4 5h18v21H4V14z" fill="#f59e0b" />
@@ -99,7 +101,7 @@ const ExplorerLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
   </svg>
 );
 
-const DefaultAppLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
+const DefaultAppLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
     <rect x="4" y="8" width="40" height="32" rx="7" fill="#1e222a" stroke="rgba(255,255,255,0.25)" strokeWidth="2" />
     <path d="M4 17h40" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
@@ -111,7 +113,7 @@ const DefaultAppLogo: React.FC<{ size?: number }> = ({ size = 26 }) => (
 );
 
 /* ==========================================================================
-   Master WorkspaceSwitcherOverlay Component
+   Master WorkspaceSwitcherOverlay Component (Stage 3 - 40MB Edition)
    ========================================================================== */
 
 export const WorkspaceSwitcherOverlay: React.FC = () => {
@@ -119,10 +121,10 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
   const [runningApps, setRunningApps] = useState<RunningAppInfo[]>([]);
   const [activeDesktopIndex, setActiveDesktopIndex] = useState<number>(1);
 
-  // Poll real running apps whenever workspace activity triggers
+  // Poll real running apps if workspace activity payload did not already contain recent_apps
   useEffect(() => {
     let isMounted = true;
-    if (workspaceActivity) {
+    if (workspaceActivity && (!workspaceActivity.recent_apps || workspaceActivity.recent_apps.length === 0)) {
       safeInvoke<RunningAppInfo[]>('get_running_apps').then((apps) => {
         if (isMounted && apps && Array.isArray(apps)) {
           setRunningApps(apps);
@@ -155,31 +157,106 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
     workspaceActivity?.kind === 'tab-switch' || workspaceActivity?.kind === 'app-switch';
   const accentColor = workspaceActivity?.accent_color || '#38bdf8';
 
-  // Find active app match from running apps list for real base64 icon
-  const matchedRunningApp = useMemo(() => {
-    if (!workspaceActivity) return null;
-    const name = workspaceActivity.app_name.toLowerCase();
-    return runningApps.find(
-      (a) =>
-        a.title.toLowerCase().includes(name) ||
-        a.process_name.toLowerCase().includes(name) ||
-        a.is_focused
-    );
+  // 1. Resolve Available Apps Pool from Payload or Fallback
+  const availableApps = useMemo<RunningAppInfo[]>(() => {
+    if (workspaceActivity?.recent_apps && workspaceActivity.recent_apps.length > 0) {
+      return workspaceActivity.recent_apps;
+    }
+    if (runningApps.length > 0) {
+      return runningApps;
+    }
+    return [];
   }, [workspaceActivity, runningApps]);
 
-  // Render app logo helper (real base64 icon or vector fallback)
-  const renderLogo = (size: number = 28) => {
-    if (matchedRunningApp?.icon_data && matchedRunningApp.icon_data.startsWith('data:image/')) {
+  // 2. Build 3 to 5 Card 3D CoverFlow List with the Active Window in Center Slot
+  const coverFlowCards = useMemo<DisplayAppCard[]>(() => {
+    const activeAppName = workspaceActivity?.app_name || 'Active App';
+    const activeTabTitle = workspaceActivity?.tab_title || 'Focused Window';
+
+    if (availableApps.length === 0) {
+      // High-fluidity default fallback items
+      return [
+        { id: 'app-left', name: 'Google Chrome', title: 'Chrome — Search', active: false },
+        { id: 'app-center', name: activeAppName, title: activeTabTitle, active: true },
+        { id: 'app-right', name: 'Terminal', title: 'PowerShell 7.4', active: false },
+      ];
+    }
+
+    // Identify index of focused or matching app
+    const activeIdx = availableApps.findIndex(
+      (a) =>
+        a.is_focused ||
+        a.title.toLowerCase().includes(activeAppName.toLowerCase()) ||
+        a.process_name.toLowerCase().includes(activeAppName.toLowerCase())
+    );
+
+    const safeActiveIdx = activeIdx >= 0 ? activeIdx : 0;
+    const centerApp = availableApps[safeActiveIdx];
+
+    // Rearrange apps into 3-slot arc [Left, Center, Right]
+    const leftApp =
+      safeActiveIdx > 0
+        ? availableApps[safeActiveIdx - 1]
+        : availableApps.length > 1
+        ? availableApps[availableApps.length - 1]
+        : null;
+
+    const rightApp =
+      safeActiveIdx < availableApps.length - 1
+        ? availableApps[safeActiveIdx + 1]
+        : availableApps.length > 2
+        ? availableApps[0]
+        : null;
+
+    const cards: DisplayAppCard[] = [];
+
+    if (leftApp) {
+      cards.push({
+        id: `left-${leftApp.hwnd}`,
+        name: leftApp.process_name.replace('.exe', '') || 'Application',
+        title: leftApp.title,
+        iconData: leftApp.icon_data,
+        iconHint: leftApp.icon_hint,
+        active: false,
+      });
+    }
+
+    cards.push({
+      id: `center-${centerApp.hwnd}`,
+      name: activeAppName,
+      title: activeTabTitle,
+      iconData: centerApp.icon_data,
+      iconHint: centerApp.icon_hint,
+      active: true,
+    });
+
+    if (rightApp && rightApp.hwnd !== leftApp?.hwnd) {
+      cards.push({
+        id: `right-${rightApp.hwnd}`,
+        name: rightApp.process_name.replace('.exe', '') || 'Application',
+        title: rightApp.title,
+        iconData: rightApp.icon_data,
+        iconHint: rightApp.icon_hint,
+        active: false,
+      });
+    }
+
+    return cards;
+  }, [availableApps, workspaceActivity]);
+
+  // Render app logo helper (real 48x48 base64 PNG icon or vector logo fallback)
+  const renderAppLogo = (app: DisplayAppCard, size: number = 38) => {
+    if (app.iconData && app.iconData.startsWith('data:image/')) {
       return (
         <img
-          src={matchedRunningApp.icon_data}
-          alt={workspaceActivity?.app_name || 'App'}
+          src={app.iconData}
+          alt={app.name}
           style={{
             width: `${size}px`,
             height: `${size}px`,
             objectFit: 'contain',
-            borderRadius: '6px',
-            filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))',
+            borderRadius: '10px',
+            filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))',
           }}
           onError={(e) => {
             e.currentTarget.style.display = 'none';
@@ -188,63 +265,45 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
       );
     }
 
-    const appName = (workspaceActivity?.app_name || '').toLowerCase();
-    if (appName.includes('chrome')) return <ChromeLogo size={size} />;
-    if (appName.includes('edge')) return <EdgeLogo size={size} />;
-    if (appName.includes('code') || appName.includes('visual studio')) return <VSCodeLogo size={size} />;
-    if (appName.includes('terminal')) return <TerminalLogo size={size} />;
-    if (appName.includes('spotify')) return <SpotifyLogo size={size} />;
-    if (appName.includes('discord')) return <DiscordLogo size={size} />;
-    if (appName.includes('explorer') || appName.includes('file')) return <ExplorerLogo size={size} />;
+    const n = (app.name || app.iconHint || '').toLowerCase();
+    if (n.includes('chrome')) return <ChromeLogo size={size} />;
+    if (n.includes('edge')) return <EdgeLogo size={size} />;
+    if (n.includes('code') || n.includes('visual studio')) return <VSCodeLogo size={size} />;
+    if (n.includes('terminal')) return <TerminalLogo size={size} />;
+    if (n.includes('spotify')) return <SpotifyLogo size={size} />;
+    if (n.includes('discord')) return <DiscordLogo size={size} />;
+    if (n.includes('explorer') || n.includes('file')) return <ExplorerLogo size={size} />;
 
     return <DefaultAppLogo size={size} />;
   };
-
-  // Mini Command+Tab recent apps list (max 4 apps)
-  const recentStripApps = useMemo<StripAppItem[]>(() => {
-    if (runningApps.length === 0) {
-      return [
-        { id: '1', name: workspaceActivity?.app_name || 'App', active: true },
-        { id: '2', name: 'Terminal', active: false },
-        { id: '3', name: 'Chrome', active: false },
-      ];
-    }
-    return runningApps.slice(0, 4).map((a) => ({
-      id: `${a.hwnd}`,
-      name: a.title,
-      iconData: a.icon_data,
-      active:
-        a.is_focused ||
-        a.title.toLowerCase().includes((workspaceActivity?.app_name || '').toLowerCase()),
-    }));
-  }, [runningApps, workspaceActivity]);
 
   return (
     <AnimatePresence>
       {isVisible && workspaceActivity && (
         <motion.div
           key={`stage-hud-${workspaceActivity.timestamp}`}
-          className="stage-hud-overlay"
-          initial={{ opacity: 0, y: -16, scale: 0.94 }}
+          className="stage-deck-3d"
+          initial={{ opacity: 0, y: -20, scale: 0.92 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -12, scale: 0.94 }}
-          transition={{ type: 'spring', stiffness: 480, damping: 28 }}
+          exit={{ opacity: 0, y: -16, scale: 0.94 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 28 }}
           style={{
             position: 'fixed',
             top: '76px',
             left: '50%',
             transform: 'translateX(-50%)',
-            width: '460px',
-            height: '84px',
-            borderRadius: '26px',
-            backgroundColor: 'rgba(12, 14, 22, 0.92)',
-            backgroundImage: `radial-gradient(circle at 50% 0%, ${accentColor}22, transparent 80%)`,
-            backdropFilter: 'blur(36px) saturate(200%)',
-            border: `1px solid ${accentColor}44`,
-            boxShadow: `0 24px 64px rgba(0, 0, 0, 0.75), 0 0 28px ${accentColor}28, inset 0 1px 0 rgba(255, 255, 255, 0.2)`,
+            width: '540px',
+            height: '148px',
+            borderRadius: '32px',
+            backgroundColor: 'rgba(10, 12, 20, 0.94)',
+            backgroundImage: `radial-gradient(ellipse at 50% 0%, ${accentColor}28 0%, rgba(10, 12, 20, 0.96) 80%)`,
+            backdropFilter: 'blur(42px) saturate(210%)',
+            WebkitBackdropFilter: 'blur(42px) saturate(210%)',
+            border: `1px solid rgba(255, 255, 255, 0.14)`,
+            boxShadow: `0 32px 80px rgba(0, 0, 0, 0.85), 0 0 36px ${accentColor}25, inset 0 1px 0 rgba(255, 255, 255, 0.28)`,
             display: 'flex',
-            alignItems: 'center',
-            padding: '12px 20px',
+            flexDirection: 'column',
+            padding: '12px 18px',
             boxSizing: 'border-box',
             pointerEvents: 'none',
             userSelect: 'none',
@@ -252,195 +311,251 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Specular Rim Light Sweep */}
+          {/* Animated Specular Rim Light Sweep */}
           <motion.div
             className="liquid-rim-sweep"
             initial={{ x: '-100%', opacity: 0 }}
             animate={{ x: '250%', opacity: [0, 1, 0.8, 0] }}
-            transition={{ duration: 1.1, ease: 'easeInOut' }}
+            transition={{ duration: 1.2, ease: 'easeInOut' }}
             style={{
               position: 'absolute',
-              inset: 0,
-              background: `linear-gradient(90deg, transparent 0%, ${accentColor}55 50%, transparent 100%)`,
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '2px',
+              background: `linear-gradient(90deg, transparent 0%, ${accentColor} 50%, transparent 100%)`,
               pointerEvents: 'none',
             }}
           />
 
+          {/* Top HUD Header Info Bar */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              paddingBottom: '8px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              position: 'relative',
+              zIndex: 3,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  backgroundColor: accentColor,
+                  boxShadow: `0 0 10px ${accentColor}`,
+                  display: 'inline-block',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 750,
+                  letterSpacing: '0.08em',
+                  color: accentColor,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {workspaceActivity.kind === 'tab-switch'
+                  ? 'Active Tab Switched'
+                  : workspaceActivity.kind === 'desktop-switch'
+                  ? 'Spatial Virtual Desktop'
+                  : '3D Application Switcher'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Layers size={11} style={{ color: '#94a3b8' }} />
+              <span
+                style={{
+                  fontSize: '9.5px',
+                  fontWeight: 600,
+                  color: '#94a3b8',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {isDesktopSwitch ? 'Ctrl + Win + ◄/►' : 'Alt + Tab / Ctrl + Tab'}
+              </span>
+            </div>
+          </div>
+
           {/* ================================================================ */}
-          {/* VIEW A: APP SWITCH & TAB SWITCH HUD                              */}
+          {/* VIEW A: VISIONOS 3D COVERFLOW APP & TAB SWITCHER                 */}
           {/* ================================================================ */}
           {isTabOrAppSwitch && (
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 width: '100%',
-                gap: '14px',
+                flex: 1,
+                perspective: '1200px',
+                transformStyle: 'preserve-3d',
                 position: 'relative',
                 zIndex: 2,
+                marginTop: '4px',
               }}
             >
-              {/* Left: 52x52 Squircle App Icon Container */}
-              <div
-                style={{
-                  width: '52px',
-                  height: '52px',
-                  borderRadius: '16px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  backgroundImage: `radial-gradient(circle, ${accentColor}35 0%, transparent 70%)`,
-                  border: '1px solid rgba(255, 255, 255, 0.14)',
-                  boxShadow: `0 6px 16px rgba(0,0,0,0.4), 0 0 18px ${accentColor}35`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                {renderLogo(32)}
-              </div>
+              {coverFlowCards.map((card, idx) => {
+                const isCenter = card.active;
+                const isLeft = !isCenter && idx === 0;
 
-              {/* Center: Badge, Sliding Title & Subtitle */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  minWidth: 0,
-                  flex: 1,
-                  gap: '3px',
-                }}
-              >
-                {/* Category Tracking Badge with Pulsing Dot */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span
+                // 3D Arc Transformation Matrix
+                const cardTransform = isCenter
+                  ? 'translateZ(36px) scale(1.08)'
+                  : isLeft
+                  ? 'rotateY(24deg) translateX(-18px) scale(0.84)'
+                  : 'rotateY(-24deg) translateX(18px) scale(0.84)';
+
+                const cardOpacity = isCenter ? 1 : 0.55;
+
+                return (
+                  <motion.div
+                    key={card.id}
+                    className="stage-coverflow-card"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: cardOpacity, scale: 1 }}
+                    transition={{ duration: 0.25 }}
                     style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: accentColor,
-                      boxShadow: `0 0 8px ${accentColor}`,
-                      display: 'inline-block',
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: '9.5px',
-                      fontWeight: 700,
-                      letterSpacing: '0.08em',
-                      color: accentColor,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {workspaceActivity.kind === 'tab-switch'
-                      ? 'Active Tab Switched'
-                      : 'Window Focused'}
-                  </span>
-                </div>
-
-                {/* Main Clean Tab / Window Title */}
-                <span
-                  title={workspaceActivity.tab_title}
-                  style={{
-                    fontSize: '13.5px',
-                    fontWeight: 650,
-                    color: '#ffffff',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    lineHeight: 1.25,
-                    letterSpacing: '-0.1px',
-                  }}
-                >
-                  {workspaceActivity.tab_title}
-                </span>
-
-                {/* Subtitle: App Name + Workspace Index */}
-                <span
-                  style={{
-                    fontSize: '10px',
-                    color: '#94a3b8',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {workspaceActivity.app_name} &bull; Workspace {activeDesktopIndex}
-                </span>
-              </div>
-
-              {/* Right: Mini Command+Tab Strip Capsule */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '4px 7px',
-                  borderRadius: '9999px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  flexShrink: 0,
-                }}
-                title="Recent Windows"
-              >
-                {recentStripApps.map((item, idx) => (
-                  <div
-                    key={`mini-app-${item.id}-${idx}`}
-                    style={{
-                      width: '22px',
-                      height: '22px',
-                      borderRadius: '6px',
+                      transform: cardTransform,
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: item.active
-                        ? `${accentColor}33`
-                        : 'rgba(255, 255, 255, 0.05)',
-                      border: item.active
-                        ? `1.5px solid ${accentColor}`
-                        : '1px solid rgba(255, 255, 255, 0.08)',
-                      boxShadow: item.active ? `0 0 8px ${accentColor}` : 'none',
+                      gap: isCenter ? '14px' : '8px',
+                      padding: isCenter ? '10px 16px' : '8px 12px',
+                      borderRadius: isCenter ? '20px' : '16px',
+                      backgroundColor: isCenter
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(255, 255, 255, 0.03)',
+                      backgroundImage: isCenter
+                        ? `radial-gradient(circle at 50% 50%, ${accentColor}30 0%, transparent 80%)`
+                        : 'none',
+                      border: isCenter
+                        ? `1.5px solid ${accentColor}66`
+                        : '1px solid rgba(255, 255, 255, 0.09)',
+                      boxShadow: isCenter
+                        ? `0 16px 36px rgba(0,0,0,0.6), 0 0 28px ${accentColor}35, inset 0 1px 0 rgba(255,255,255,0.2)`
+                        : 'none',
+                      maxWidth: isCenter ? '320px' : '100px',
+                      flexShrink: 0,
                     }}
                   >
-                    {item.iconData && item.iconData.startsWith('data:image/') ? (
-                      <img
-                        src={item.iconData}
-                        alt="app"
-                        style={{ width: '15px', height: '15px', objectFit: 'contain' }}
-                      />
-                    ) : (
-                      <span
+                    {/* App Icon Slot */}
+                    <div
+                      style={{
+                        width: isCenter ? '48px' : '36px',
+                        height: isCenter ? '48px' : '36px',
+                        borderRadius: isCenter ? '14px' : '10px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        boxShadow: isCenter ? `0 0 18px ${accentColor}40` : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {renderAppLogo(card, isCenter ? 34 : 24)}
+                    </div>
+
+                    {/* Center Card Slot-Machine Vertical Text Transition */}
+                    {isCenter && (
+                      <div
                         style={{
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          color: item.active ? '#ffffff' : '#94a3b8',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          minWidth: 0,
+                          flex: 1,
+                          gap: '2px',
                         }}
                       >
-                        {item.name ? item.name.trim().charAt(0).toUpperCase() : 'A'}
-                      </span>
+                        <motion.span
+                          key={`tab-title-${card.title}`}
+                          initial={{ y: 8, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          exit={{ y: -8, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            color: '#ffffff',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            lineHeight: 1.25,
+                            letterSpacing: '-0.1px',
+                          }}
+                        >
+                          {card.title}
+                        </motion.span>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              color: '#94a3b8',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {card.name}
+                          </span>
+                          <span style={{ fontSize: '9px', color: '#64748b' }}>&bull;</span>
+                          <span
+                            style={{
+                              fontSize: '9.5px',
+                              color: accentColor,
+                              fontWeight: 650,
+                            }}
+                          >
+                            Focused
+                          </span>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                ))}
-              </div>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
 
           {/* ================================================================ */}
-          {/* VIEW B: VIRTUAL DESKTOP SWITCH HUD (Ctrl + Win + Left/Right)     */}
+          {/* VIEW B: SPATIAL 3D VIRTUAL DESKTOP PANORAMA                      */}
           {/* ================================================================ */}
           {isDesktopSwitch && (
             <motion.div
+              key={`panorama-${workspaceActivity.timestamp}`}
               initial={{
-                x: workspaceActivity.direction === 'right' ? 35 : -35,
+                x: workspaceActivity.direction === 'right' ? 80 : -80,
+                rotateY: workspaceActivity.direction === 'right' ? 14 : -14,
+                opacity: 0,
+                scale: 0.92,
+              }}
+              animate={{ x: 0, rotateY: 0, opacity: 1, scale: 1 }}
+              exit={{
+                x: workspaceActivity.direction === 'right' ? -60 : 60,
+                rotateY: workspaceActivity.direction === 'right' ? -10 : 10,
                 opacity: 0,
                 scale: 0.94,
               }}
-              animate={{ x: 0, opacity: 1, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 24 }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                justifyContent: 'center',
+                gap: '12px',
                 width: '100%',
+                flex: 1,
+                transformStyle: 'preserve-3d',
+                perspective: '1200px',
+                marginTop: '4px',
                 position: 'relative',
                 zIndex: 2,
               }}
@@ -452,42 +567,84 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
                     key={`desk-card-${deskNum}`}
                     style={{
                       flex: 1,
-                      height: '56px',
-                      margin: '0 4px',
-                      borderRadius: '12px',
+                      height: '76px',
+                      borderRadius: '16px',
                       backgroundColor: isActive
                         ? 'rgba(56, 189, 248, 0.16)'
                         : 'rgba(255, 255, 255, 0.04)',
                       backgroundImage: isActive
-                        ? 'radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.25), transparent 80%)'
+                        ? 'radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.32) 0%, rgba(14, 18, 30, 0.9) 80%)'
                         : 'none',
                       border: isActive
                         ? '1.5px solid #38bdf8'
-                        : '1px solid rgba(255, 255, 255, 0.08)',
+                        : '1px solid rgba(255, 255, 255, 0.09)',
                       boxShadow: isActive
-                        ? '0 0 16px rgba(56, 189, 248, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)'
+                        ? '0 0 24px rgba(56, 189, 248, 0.45), inset 0 1px 0 rgba(255,255,255,0.3)'
                         : 'none',
+                      transform: isActive ? 'translateZ(20px) scale(1.04)' : 'scale(0.96)',
+                      transition: 'all 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '4px',
-                      transition: 'all 0.2s ease',
+                      gap: '5px',
+                      padding: '6px',
+                      boxSizing: 'border-box',
                     }}
                   >
+                    {/* Miniature Desktop Wireframe */}
+                    <div
+                      style={{
+                        width: '42px',
+                        height: '24px',
+                        borderRadius: '4px',
+                        backgroundColor: isActive
+                          ? 'rgba(56, 189, 248, 0.22)'
+                          : 'rgba(255, 255, 255, 0.06)',
+                        border: isActive
+                          ? '1px solid rgba(56, 189, 248, 0.6)'
+                          : '1px solid rgba(255, 255, 255, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '2px',
+                        boxShadow: isActive ? '0 0 10px rgba(56, 189, 248, 0.35)' : 'none',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: '2px',
+                          backgroundColor: isActive ? '#38bdf8' : 'rgba(255,255,255,0.2)',
+                          opacity: 0.8,
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: '2px',
+                          backgroundColor: isActive ? '#818cf8' : 'rgba(255,255,255,0.15)',
+                          opacity: 0.6,
+                        }}
+                      />
+                    </div>
+
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                       <Monitor
-                        size={14}
+                        size={12}
                         style={{ color: isActive ? '#38bdf8' : '#64748b' }}
                       />
                       <span
                         style={{
                           fontSize: '11px',
-                          fontWeight: isActive ? 700 : 500,
+                          fontWeight: isActive ? 750 : 500,
                           color: isActive ? '#ffffff' : '#94a3b8',
+                          letterSpacing: '-0.2px',
                         }}
                       >
-                        Desktop {deskNum}
+                        Workspace {deskNum}
                       </span>
                     </div>
 
@@ -497,18 +654,19 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
                           width: '5px',
                           height: '5px',
                           borderRadius: '50%',
-                          backgroundColor: isActive ? '#38bdf8' : 'rgba(255,255,255,0.2)',
-                          boxShadow: isActive ? '0 0 6px #38bdf8' : 'none',
+                          backgroundColor: isActive ? '#38bdf8' : 'rgba(255,255,255,0.25)',
+                          boxShadow: isActive ? '0 0 8px #38bdf8' : 'none',
                         }}
                       />
                       <span
                         style={{
-                          fontSize: '9px',
+                          fontSize: '8.5px',
                           color: isActive ? '#38bdf8' : '#64748b',
-                          fontWeight: 600,
+                          fontWeight: 700,
+                          letterSpacing: '0.04em',
                         }}
                       >
-                        {isActive ? 'ACTIVE' : 'READY'}
+                        {isActive ? 'ACTIVE STAGE' : 'READY'}
                       </span>
                     </div>
                   </div>

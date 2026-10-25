@@ -66,6 +66,19 @@ export interface TodoTaskItem {
   timestamp?: string;
 }
 
+export interface SystemNotificationItem {
+  id: string;
+  appName: string;
+  title: string;
+  subtitle: string;
+  timestamp: string; // e.g. "16:35" or "Just now"
+  icon?: 'snipping-tool' | 'system' | 'airbuds' | 'battery' | 'screenshot';
+  thumbnail?: string;
+  unread: boolean;
+  actionType?: 'shelf' | 'settings' | 'slide';
+  slideIndex?: number;
+}
+
 export type ToastType =
   | 'airbuds'
   | 'battery'
@@ -76,7 +89,8 @@ export type ToastType =
   | 'window-pin'
   | 'workspace'
   | 'wifi'
-  | 'bluetooth';
+  | 'bluetooth'
+  | 'screenshot';
 
 export type BatteryStatus = 'charging' | 'unplugged' | 'low' | 'guard' | 'normal';
 
@@ -86,7 +100,7 @@ export interface ToastPayload {
   subtitle: string;
   value?: number;               // 0–100 or metric
   percent?: number;             // Battery / Device %
-  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin' | 'workspace' | 'wifi' | 'bluetooth';
+  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin' | 'workspace' | 'wifi' | 'bluetooth' | 'screenshot';
   hudType?: 'volume' | 'brightness' | 'mic';
   hudValue?: number;            // 0–100
   isMicMuted?: boolean;
@@ -100,6 +114,10 @@ export interface ToastPayload {
   tabTitle?: string;
   accentColor?: string;
   workspaceActivity?: WorkspaceActivityPayload;
+  thumbnail?: string;
+  filename?: string;
+  dataUrl?: string;
+  recordingTime?: number;
 }
 
 export interface HardwareToastPayload {
@@ -194,6 +212,15 @@ export interface SystemSettings {
 
   // Fix Stage 3 Extensions (Liquid Launchpad & Installed App Search)
   launchpadOpen?: boolean;
+
+  // 40MB Edition - Stage 1 Extensions (Custom Capture Bar & Screen Recording)
+  captureBarOpen?: boolean;
+  isScreenRecording?: boolean;
+  recordingSeconds?: number;
+
+  // 40MB Edition - Stage 2 Extensions (Notification Center & DND)
+  doNotDisturb?: boolean;
+  notifications?: SystemNotificationItem[];
 }
 
 export interface InstalledAppEntry {
@@ -213,6 +240,7 @@ export interface WorkspaceActivityPayload {
   desktop_index?: number;
   accent_color: string;
   timestamp?: number;
+  recent_apps?: RunningAppInfo[];
 }
 
 export interface RunningAppInfo {

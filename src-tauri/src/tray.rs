@@ -12,7 +12,7 @@ pub struct TrayActionPayload {
 }
 
 pub const TRAY_ID: &str = "main-tray";
-pub const DEFAULT_TOOLTIP: &str = "LiquidIsland OS - Active (<= 20.0 MB RAM Tier)";
+pub const DEFAULT_TOOLTIP: &str = "LiquidIsland OS - Active (<= 40.0 MB RAM Tier)";
 
 /// Builds the native Windows System Tray icon, menu, and event handlers
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -35,7 +35,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let toggle_dev = MenuItemBuilder::with_id("toggle_dev_controls", "Developer Controls Toolbar (Ctrl+Shift+D)")
         .build(app)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let trim_ram = MenuItemBuilder::with_id("trim_ram", "Optimize RAM Now (Smart 20 MB Governor)")
+    let trim_ram = MenuItemBuilder::with_id("trim_ram", "Optimize RAM Now (Smart 40 MB Governor)")
         .build(app)?;
     let quit_app = MenuItemBuilder::with_id("quit_app", "Quit LiquidIsland OS")
         .build(app)?;

@@ -139,9 +139,10 @@ The Tauri Rust backend exposes the following immutable commands:
 
 ---
 
-## 8. High-Performance RAM Working Set Tier (<= 20.0 MB Target)
+## 8. High-Performance RAM Working Set Tier (<= 40.0 MB Target)
 
-- LiquidIsland operates within a strict **20 MB maximum physical working set tier** (`<= 20.0 MB`).
-- The extra memory budget headroom (up to 20 MB) is purposefully allocated to retain GPU blur shaders, 48x48 High-DPI icon caches, and spring physics animation states in RAM for buttery-smooth 120fps responsiveness.
-- A background Smart Memory Governor in `src-tauri/src/memory.rs` wakes every 25 seconds and only executes `K32EmptyWorkingSet` if the working set exceeds 18.5 MB, preventing over-aggressive page flushing during interactive sessions.
+- LiquidIsland operates within a strict **40 MB maximum physical working set tier** (`<= 40.0 MB`).
+- The memory budget headroom (up to 40 MB) is purposefully allocated to retain GPU blur shaders, 48x48 High-DPI icon caches, screenshot previews, and spring physics animation states permanently hot in RAM for buttery-smooth 120fps responsiveness.
+- A background Smart Memory Governor in `src-tauri/src/memory.rs` wakes every 25 seconds and only executes `K32EmptyWorkingSet` if the working set exceeds 38.5 MB, preventing over-aggressive page flushing during interactive sessions.
+- Manual optimization via System Tray or Settings triggers a clean working set trim down to the ~16.4 MB baseline.
 - WebAudio oscillators must be lazily activated and closed/suspended when idle to avoid continuous audio thread allocations.

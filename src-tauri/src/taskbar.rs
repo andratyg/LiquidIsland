@@ -24,10 +24,10 @@ use windows_sys::Win32::System::Threading::{
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, EnumWindows, FindWindowW, GetCursorPos, GetDesktopWindow,
-    GetForegroundWindow, GetShellWindow, GetWindowLongW, GetWindowRect,
+    GetForegroundWindow, GetShellWindow, GetSystemMetrics, GetWindowLongW, GetWindowRect,
     GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
-    ShowWindow, GWL_EXSTYLE, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
-    WS_EX_TOOLWINDOW,
+    ShowWindow, GWL_EXSTYLE, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_MINIMIZE, SW_RESTORE,
+    SW_SHOW, WS_EX_TOOLWINDOW,
 };
 
 pub static TASKBAR_MODIFIED: AtomicBool = AtomicBool::new(false);
@@ -794,7 +794,7 @@ pub fn spawn_or_update_taskbar_window(app: &AppHandle) -> Result<(), Box<dyn std
         let pos = monitor.position();
         let size = monitor.size();
         let scale = monitor.scale_factor();
-        let height_px = (520.0 * scale).round() as u32;
+        let height_px = (700.0 * scale).round() as u32;
 
         let win_x = pos.x;
         let win_y = pos.y + size.height as i32 - height_px as i32;
@@ -825,10 +825,12 @@ pub fn start_dock_hit_test_loop(window: Window) {
         #[cfg(windows)]
         let mut pt: POINT = unsafe { std::mem::zeroed() };
         let mut prev_inside = false;
-        let mut dock_visible = true;
+        let mut dock_visible = false;
+        let mut tick_counter: u32 = 0;
 
         loop {
-            std::thread::sleep(Duration::from_millis(35));
+            std::thread::sleep(Duration::from_millis(30));
+            tick_counter = tick_counter.wrapping_add(1);
 
             let hover_forced = DOCK_HOVERED.load(Ordering::Relaxed);
 
@@ -848,60 +850,91 @@ pub fn start_dock_hit_test_loop(window: Window) {
                     }
                 }
 
-                // 2. Cursor proximity hit-test and smart auto-hide
+                // 2. High-precision physical coordinate cursor proximity hit-test and smart auto-hide
                 let success = unsafe { GetCursorPos(&mut pt) };
                 if success != 0 {
-                    if let Ok(pos) = window.outer_position() {
-                        if let Ok(size) = window.outer_size() {
-                            let monitor_bottom = pos.y + size.height as i32;
-                            let is_flyout = FLYOUT_OPEN.load(Ordering::Relaxed);
-                            let is_pinned = DOCK_PINNED.load(Ordering::Relaxed);
-                            let scale = window.scale_factor().unwrap_or(1.0);
+                    let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+                    let screen_h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+                    let screen_center_x = screen_w / 2;
 
-                            // Smart auto-hide choreography:
-                            // When pinned or flyout is open: always visible & clickable
-                            // Reveal trigger: bottom 16px boundary edge of the screen
-                            // Stay visible: within 78px dock area while revealed
-                            // Auto-hide: moved above dock into active apps
-                            let trigger_edge = (16.0 * scale).round() as i32;
-                            let dock_height_zone = (78.0 * scale).round() as i32;
+                    let is_flyout = FLYOUT_OPEN.load(Ordering::Relaxed);
+                    let is_pinned = DOCK_PINNED.load(Ordering::Relaxed);
 
-                            let next_visible = if is_pinned || is_flyout || hover_forced {
-                                true
-                            } else if pt.y >= (monitor_bottom - trigger_edge) && pt.y <= (monitor_bottom + 10) {
-                                true
-                            } else if dock_visible
-                                && pt.y >= (monitor_bottom - dock_height_zone)
-                                && pt.y <= (monitor_bottom + 10)
-                            {
-                                true
-                            } else {
-                                false
-                            };
+                    // Physical Hit-Test Choreography (40MB Edition - Stage 1):
+                    // - If pinned, flyout open, or hover forced: always visible
+                    // - Wake trigger: cursor touching the bottom 8px boundary (pt.y >= screen_h - 8)
+                    // - Stay visible: cursor inside dock zone (pt.y >= screen_h - 74) AND |pt.x - center| <= 460
+                    // - Auto-hide: cursor moves up into apps (pt.y < screen_h - 76) or moves away horizontally
+                    let next_visible = if is_pinned || is_flyout || hover_forced {
+                        true
+                    } else if pt.y >= (screen_h - 8) && pt.y <= (screen_h + 20) {
+                        true
+                    } else if dock_visible
+                        && pt.y >= (screen_h - 74)
+                        && pt.y <= (screen_h + 20)
+                        && (pt.x - screen_center_x).abs() <= 460
+                    {
+                        true
+                    } else {
+                        false
+                    };
 
-                            let inside = if is_flyout {
-                                let flyout_top = monitor_bottom - (510.0 * scale).round() as i32;
-                                pt.y >= flyout_top && pt.y <= (monitor_bottom + 10)
-                            } else {
-                                next_visible
-                            };
+                    let inside = if is_flyout {
+                        pt.y >= (screen_h - 700) && pt.y <= (screen_h + 20)
+                    } else {
+                        next_visible
+                    };
 
-                            if next_visible != dock_visible {
-                                dock_visible = next_visible;
-                                let _ = window.emit("dock-visibility", dock_visible);
-                            }
+                    // State transition notification or 60ms periodic heartbeat sync
+                    let state_changed = next_visible != dock_visible;
+                    if state_changed || tick_counter % 2 == 0 {
+                        dock_visible = next_visible;
+                        let _ = window.emit("dock-visibility", dock_visible);
+                    }
 
-                            if inside != prev_inside {
-                                prev_inside = inside;
-                                let _ = window.set_ignore_cursor_events(!inside);
-                                let _ = window.emit("dock-hover-state", inside);
-                            }
-                        }
+                    if inside != prev_inside {
+                        prev_inside = inside;
+                        let _ = window.set_ignore_cursor_events(!inside);
+                        let _ = window.emit("dock-hover-state", inside);
                     }
                 }
             }
         }
     });
+}
+
+/// Instant query command for frontend to check dock autohide state
+#[tauri::command]
+pub fn poll_dock_autohide_state(flyout_open: bool, is_pinned: bool) -> bool {
+    #[cfg(windows)]
+    unsafe {
+        let mut pt: POINT = std::mem::zeroed();
+        if GetCursorPos(&mut pt) != 0 {
+            let screen_w = GetSystemMetrics(SM_CXSCREEN);
+            let screen_h = GetSystemMetrics(SM_CYSCREEN);
+            let screen_center_x = screen_w / 2;
+
+            if is_pinned || flyout_open {
+                return true;
+            }
+            if pt.y >= (screen_h - 8) && pt.y <= (screen_h + 20) {
+                return true;
+            }
+            if pt.y >= (screen_h - 74)
+                && pt.y <= (screen_h + 20)
+                && (pt.x - screen_center_x).abs() <= 460
+            {
+                return true;
+            }
+            return false;
+        }
+        false
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (flyout_open, is_pinned);
+        true
+    }
 }
 
 /// Tauri command to dynamically set click-through for taskbar-dock
