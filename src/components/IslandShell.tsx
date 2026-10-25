@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
-import { playScrollTick, playToggleClick, playGlassPop } from '../utils/sfx';
+import { playToggleClick, playGlassPop } from '../utils/sfx';
 import { Volume2, SunMedium } from 'lucide-react';
 import { IslandDimensions } from '../types/liquid';
 import { CatCompanion } from './companions/CatCompanion';
@@ -25,12 +25,14 @@ interface IslandShellProps {
   children?: React.ReactNode;
   activeDimensions: IslandDimensions;
   onHoverChange?: (hovered: boolean) => void;
+  isJellyBouncing?: boolean;
 }
 
 export const IslandShell: React.FC<IslandShellProps> = ({
   children,
   activeDimensions,
   onHoverChange,
+  isJellyBouncing = false,
 }) => {
   const islandState = useSystemStore((s) => s.islandState);
   const currentVolume = useSystemStore((s) => s.volume);
@@ -42,7 +44,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   const [isMagneticHover, setIsMagneticHover] = useState(false);
 
   // Transient Scroll HUD Pill state (Volume / Brightness)
-  const [hudState, setHudState] = useState<{
+  const [hudState] = useState<{
     visible: boolean;
     type: 'volume' | 'brightness';
     value: number;
@@ -87,7 +89,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     await safeInvoke('set_click_through', { ignore: true });
   }, [onHoverChange]);
 
-  // Mouse Wheel: Scroll gesture to adjust Volume or Brightness
+  // Mouse Wheel: Scroll gesture to adjust Volume or Brightness via Toast Mode C HUD
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
       // Prevent page/window scrolling
@@ -96,27 +98,29 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       const step = e.deltaY < 0 ? 4 : -4;
       const isBrightness = e.shiftKey || e.altKey;
 
-      playScrollTick();
-
       if (isBrightness) {
         systemStore.setBrightness((prev) => {
           const next = Math.max(0, Math.min(100, prev + step));
-          setHudState({ visible: true, type: 'brightness', value: next });
+          systemStore.triggerToast('hud', {
+            hudType: 'brightness',
+            hudValue: next,
+            title: 'Brightness',
+            subtitle: `${next}%`,
+          });
           return next;
         });
       } else {
         systemStore.setVolume((prev) => {
           const next = Math.max(0, Math.min(100, prev + step));
-          setHudState({ visible: true, type: 'volume', value: next });
+          systemStore.triggerToast('hud', {
+            hudType: 'volume',
+            hudValue: next,
+            title: 'Volume',
+            subtitle: `${next}%`,
+          });
           return next;
         });
       }
-
-      // Auto-dismiss HUD pill after 1.4 seconds of inactivity
-      if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
-      hudTimerRef.current = setTimeout(() => {
-        setHudState((prev) => ({ ...prev, visible: false }));
-      }, 1400);
     },
     []
   );
@@ -204,7 +208,8 @@ export const IslandShell: React.FC<IslandShellProps> = ({
         animate={{
           width: isBezelLine && isMagneticHover ? 144 : activeDimensions.width,
           height: isBezelLine && isMagneticHover ? 10 : activeDimensions.height,
-          scaleX: isBezelLine && isMagneticHover ? 1.06 : 1,
+          scaleX: isJellyBouncing ? [1, 1.05, 0.96, 1.02, 1] : (isBezelLine && isMagneticHover ? 1.06 : 1),
+          scaleY: isJellyBouncing ? [1, 0.94, 1.05, 0.98, 1] : 1,
         }}
         transition={{
           type: 'spring',
@@ -220,6 +225,8 @@ export const IslandShell: React.FC<IslandShellProps> = ({
         style={{
           pointerEvents: 'auto',
           position: 'relative',
+          borderBottomLeftRadius: islandState === 'toast' ? '32px' : undefined,
+          borderBottomRightRadius: islandState === 'toast' ? '32px' : undefined,
         }}
       >
         {/* State 0: Stealth Bezel Line with Magnetic Tension Wake */}

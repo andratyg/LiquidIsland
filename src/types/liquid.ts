@@ -43,6 +43,47 @@ export const ISLAND_DIMENSIONS: Record<IslandState, IslandDimensions> = {
   'expanded-lyrics': { width: 595, height: 174 },
 };
 
+export interface ShelfFileItem {
+  id: string;
+  name: string;
+  size: number | string;
+  formattedSize?: string;
+  type: string;
+  previewUrl?: string;
+  timestamp: string;
+  isCompressed?: boolean;
+  originalSize?: number;
+  originalFormattedSize?: string;
+  content?: string;
+}
+
+export interface TodoTaskItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  createdAt?: number;
+  timestamp?: string;
+}
+
+export type ToastType = 'airbuds' | 'battery' | 'hud' | 'desktop-switch' | 'window-pin';
+
+export type BatteryStatus = 'charging' | 'low' | 'guard' | 'normal';
+
+export interface ToastPayload {
+  type: ToastType;
+  title: string;
+  subtitle: string;
+  value?: number;               // 0–100 or metric
+  icon?: 'airbuds' | 'battery' | 'charging' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin';
+  hudType?: 'volume' | 'brightness' | 'mic';
+  hudValue?: number;            // 0–100
+  isMicMuted?: boolean;
+  direction?: 'left' | 'right';
+  batteryStatus?: BatteryStatus;
+  pinnedTitle?: string;
+  isPinned?: boolean;
+}
+
 export interface SystemSettings {
   islandEnabled: boolean;
   islandState: IslandState;
@@ -65,6 +106,40 @@ export interface SystemSettings {
 
   // Phase 4 Extensions (backward compatible)
   isPomodoroRunning: boolean;   // True when focus timer is active (triggers focus glasses)
+
+  // Phase 6 Extensions (backward compatible)
+  pomodoroActive?: boolean;     // Alias/sync with isPomodoroRunning
+  pomodoroMode?: 'focus' | 'break'; // 'focus' (25m) or 'break' (5m)
+  pomodoroSecondsLeft?: number; // Current remaining seconds
+  pomodoroTotalSeconds?: number;// Total cycle duration in seconds
+  lofiAmbientSound?: 'off' | 'rain' | 'lofi-pad' | 'white-noise';
+  waterIntakeLiters?: number;   // Daily water intake in Liters (e.g. 1.5)
+  waterGoalLiters?: number;     // Daily water goal in Liters (e.g. 1.5)
+  waterReminderActive?: boolean;// Hourly hydration notification toggle
+  waterHourlyBars?: number[];   // 8 hourly consumption values in ml
+
+  // Phase 7 Extensions (backward compatible)
+  shelfFiles?: ShelfFileItem[];
+  todoTasks?: TodoTaskItem[];
+
+  // Phase 8 Extensions (backward compatible)
+  toastPayload?: ToastPayload | null;
+  isMicMuted?: boolean;         // True when microphone is muted
+  batteryLevel?: number;        // 0–100 (Default: 70)
+  isCharging?: boolean;         // True when charging
+  batteryStatus?: BatteryStatus;// 'charging' | 'low' | 'guard' | 'normal'
+  autoFullscreenStealth?: boolean; // Auto-stealth to bezel-line in fullscreen apps
+
+  // Phase 9 Extensions (MacBook Spotlight & Port Watcher)
+  spotlightOpen?: boolean;
+  spotlightActiveTab?: 'omni' | 'clipboard' | 'ports' | 'scratchpad';
+
+  // Phase 10 Extensions (backward compatible)
+  privacyBlurEnabled?: boolean;          // Boss Key (Ctrl + Alt + B)
+  nightEyeCareEnabled?: boolean;         // Warm blue-light filter
+  companionSensitivity?: 'playful' | 'calm'; // Companion behavior sensitivity
+  showTaskbarDock?: boolean;             // Show/hide bottom liquid glass taskbar dock
+  isWindowMaximizedSimulated?: boolean;  // For Taskbar Option C adaptive morphing
 }
 
 export interface ClipboardSnippetItem {
@@ -73,4 +148,11 @@ export interface ClipboardSnippetItem {
   kind: 'text' | 'code' | 'color' | 'image';
   pinned: boolean;
   timestamp: string;
+}
+
+export interface DevPortInfo {
+  port: number;
+  pid: number;
+  process_name: string;
+  active: boolean;
 }

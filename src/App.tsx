@@ -5,31 +5,31 @@ import { playGlassPop, playWaterDrop, playToggleClick } from './utils/sfx';
 import { IslandShell } from './components/IslandShell';
 import { CompactView } from './components/CompactView';
 import { CompanionStage } from './components/companions/CompanionStage';
+import { ExpandedContainer } from './components/ExpandedContainer';
+import { ToastView } from './components/ToastView';
+import { SpotlightModal } from './components/SpotlightModal';
+import { TaskbarPreviewDock } from './components/TaskbarPreviewDock';
+import { SettingsModal } from './components/SettingsModal';
 import {
   Sun,
   Moon,
   Cpu,
-  Volume2,
-  VolumeX,
   Monitor,
   Activity,
-  Sparkles,
   ChevronUp,
   ChevronDown,
   Power,
   Eye,
-  Minimize2,
   Radio,
   Sliders,
   X,
   Wrench,
   Cat,
   Smile,
-  Headphones,
-  Glasses,
-  Upload,
-  Heart,
   Palette,
+  Shield,
+  SunMedium,
+  Layout,
 } from 'lucide-react';
 import { ISLAND_DIMENSIONS } from './types/liquid';
 
@@ -68,24 +68,37 @@ export const App: React.FC = () => {
   const theme = useSystemStore((s) => s.theme);
   const companionMode = useSystemStore((s) => s.companionMode);
   const companionColor = useSystemStore((s) => s.companionColor);
-  const autoAccessories = useSystemStore((s) => s.autoAccessories);
   const enableOptionalLofi = useSystemStore((s) => s.enableOptionalLofi);
   const taskbarMode = useSystemStore((s) => s.taskbarMode);
-  const enableSfx = useSystemStore((s) => s.enableSfx);
   const selectedMonitor = useSystemStore((s) => s.selectedMonitor);
+  const spotlightOpen = useSystemStore((s) => s.spotlightOpen ?? false);
+  const autoFullscreenStealth = useSystemStore((s) => s.autoFullscreenStealth ?? false);
+  const toastPayload = useSystemStore((s) => s.toastPayload);
+  const privacyBlurEnabled = useSystemStore((s) => s.privacyBlurEnabled);
+  const nightEyeCareEnabled = useSystemStore((s) => s.nightEyeCareEnabled);
+  const showTaskbarDock = useSystemStore((s) => s.showTaskbarDock);
 
   const [ramWorkingSet, setRamWorkingSet] = useState<number | null>(null);
   const [monitors, setMonitors] = useState<string[]>([]);
-  const [statusMsg, setStatusMsg] = useState<string>('Phase 4 Companions Active');
+  const [statusMsg, setStatusMsg] = useState<string>('Phase 10 Liquid Glass Final Active');
   const [isTrimming, setIsTrimming] = useState(false);
   const [showTraySim, setShowTraySim] = useState(false);
   const [showDevToolbar, setShowDevToolbar] = useState(false);
-
-  // Companion Phase 4 Test Toggles
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [wallpaperPreview, setWallpaperPreview] = useState<'none' | 'dark' | 'light' | 'vibrant'>('none');
   const [testHeadphones, setTestHeadphones] = useState(false);
   const [testGlasses, setTestGlasses] = useState(false);
-  const [testFileDrag, setTestFileDrag] = useState(false);
   const [testPetting, setTestPetting] = useState(false);
+
+  // Companion drag anticipation
+  const [testFileDrag, setTestFileDrag] = useState(false);
+
+  // Jelly Drop Bounce State
+  const [isJellyBouncing, setIsJellyBouncing] = useState(false);
+  const triggerJellyBounce = useCallback(() => {
+    setIsJellyBouncing(true);
+    setTimeout(() => setIsJellyBouncing(false), 650);
+  }, []);
 
   // Update native tray tooltip via Tauri command
   const syncTrayTooltip = useCallback(async (mb: number) => {
@@ -147,7 +160,13 @@ export const App: React.FC = () => {
           playToggleClick();
           systemStore.cycleTaskbarMode();
           const currentTaskbar = systemStore.getState().taskbarMode;
-          setStatusMsg(`Taskbar Mode: Opsi ${currentTaskbar}`);
+          setStatusMsg(`Taskbar Mode: Option ${currentTaskbar}`);
+          break;
+        }
+
+        case 'open_settings': {
+          playGlassPop();
+          setShowSettingsModal(true);
           break;
         }
 
@@ -186,6 +205,7 @@ export const App: React.FC = () => {
         case 'quit_app': {
           playToggleClick();
           setStatusMsg('Exiting LiquidIsland...');
+          safeInvoke('restore_default_taskbar');
           break;
         }
 
@@ -195,6 +215,11 @@ export const App: React.FC = () => {
     },
     [syncTrayTooltip]
   );
+
+  // Synchronize Taskbar Mode with native Win32 backend via Tauri IPC
+  useEffect(() => {
+    safeInvoke('apply_taskbar_mode', { mode: taskbarMode, theme });
+  }, [taskbarMode, theme]);
 
   // Subscribe to native Windows Tray events via Tauri IPC
   useEffect(() => {
@@ -255,6 +280,139 @@ export const App: React.FC = () => {
     };
   }, [syncTrayTooltip]);
 
+  // Global Drag Auto-Wake Listeners
+  useEffect(() => {
+    let dragCounter = 0;
+
+    function handleGlobalDragEnter(e: DragEvent) {
+      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+        dragCounter += 1;
+        setTestFileDrag(true);
+      }
+    }
+
+    function handleGlobalDragLeave(_e: DragEvent) {
+      dragCounter -= 1;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        setTestFileDrag(false);
+      }
+    }
+
+    function handleGlobalDragOver(e: DragEvent) {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+        setTestFileDrag(true);
+        if (e.clientY < 190) {
+          const current = systemStore.getState();
+          if (current.islandState !== 'expanded' || current.activeSlide !== 3) {
+            systemStore.wakeShelfForDrop();
+          }
+        }
+      }
+    }
+
+    function handleGlobalDrop(e: DragEvent) {
+      e.preventDefault();
+      dragCounter = 0;
+      setTestFileDrag(false);
+    }
+
+    window.addEventListener('dragenter', handleGlobalDragEnter);
+    window.addEventListener('dragleave', handleGlobalDragLeave);
+    window.addEventListener('dragover', handleGlobalDragOver);
+    window.addEventListener('drop', handleGlobalDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleGlobalDragEnter);
+      window.removeEventListener('dragleave', handleGlobalDragLeave);
+      window.removeEventListener('dragover', handleGlobalDragOver);
+      window.removeEventListener('drop', handleGlobalDrop);
+    };
+  }, []);
+
+  // Global Hotkey Listener: Alt + Space (Spotlight), Ctrl + Alt + B (Boss Key Privacy Blur), Esc
+  useEffect(() => {
+    async function handleKeyDown(e: KeyboardEvent) {
+      // 1. Alt + Space: Toggle Spotlight Search & Command Launcher
+      if (e.altKey && (e.code === 'Space' || e.key === ' ')) {
+        e.preventDefault();
+        playGlassPop();
+        systemStore.toggleSpotlight();
+        return;
+      }
+
+      // 2. Ctrl + Alt + B: Toggle Screen Privacy Blur ("Boss Key")
+      if (e.ctrlKey && e.altKey && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        systemStore.togglePrivacyBlur();
+        return;
+      }
+
+      // 3. Escape: Close Modals or Unlock Privacy
+      if (e.key === 'Escape') {
+        if (privacyBlurEnabled) {
+          e.preventDefault();
+          systemStore.setPrivacyBlurEnabled(false);
+          return;
+        }
+        if (showSettingsModal) {
+          e.preventDefault();
+          setShowSettingsModal(false);
+          return;
+        }
+        if (systemStore.getState().spotlightOpen) {
+          e.preventDefault();
+          playToggleClick();
+          systemStore.setSpotlightOpen(false);
+          return;
+        }
+      }
+
+      // 4. Ctrl + Alt + T: Toggle Pin Active Window
+      if (e.ctrlKey && e.altKey && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        const res = await safeInvoke<string>('toggle_pin_active_window');
+        const msg = res || '📌 Window Pinned Always-on-Top';
+        systemStore.triggerToast('window-pin', {
+          title: msg.includes('Unpinned') ? 'Window Unpinned' : 'Window Pinned',
+          subtitle: msg,
+          isPinned: !msg.includes('Unpinned'),
+        });
+        return;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [privacyBlurEnabled, showSettingsModal]);
+
+  // Automatic Fullscreen Gaming / Video Stealth Detection
+  useEffect(() => {
+    if (!autoFullscreenStealth) return;
+    const fsTimer = setInterval(async () => {
+      const isFullscreen = await safeInvoke<boolean>('check_fullscreen_state');
+      if (isFullscreen && systemStore.getState().islandState !== 'bezel-line') {
+        systemStore.setIslandState('bezel-line');
+      }
+    }, 2500);
+
+    return () => clearInterval(fsTimer);
+  }, [autoFullscreenStealth]);
+
+  // Dynamic Window Resizing for Spotlight & Overlays
+  useEffect(() => {
+    async function updateWindowSize() {
+      if (spotlightOpen || showSettingsModal) {
+        await safeInvoke('set_window_size', { width: 640, height: 600 });
+        await safeInvoke('set_click_through', { ignore: false });
+      } else {
+        await safeInvoke('set_window_size', { width: 640, height: 220 });
+      }
+    }
+    updateWindowSize();
+  }, [spotlightOpen, showSettingsModal]);
+
   // Click-Through handling for floating Dev Toolbar
   const handleToolbarMouseEnter = useCallback(async () => {
     await safeInvoke('set_click_through', { ignore: false });
@@ -274,7 +432,7 @@ export const App: React.FC = () => {
       {/* ==================================================================== */}
       {/* Master 1:1 Dynamic Island Shell                                      */}
       {/* ==================================================================== */}
-      <IslandShell activeDimensions={activeDimensions}>
+      <IslandShell activeDimensions={activeDimensions} isJellyBouncing={isJellyBouncing}>
         <AnimatePresence mode="wait">
           {!islandEnabled ? (
             /* Standby / Disabled Pill */
@@ -300,6 +458,18 @@ export const App: React.FC = () => {
               <Power size={11} style={{ color: '#ef4444' }} />
               <span>Standby (Tray ^)</span>
             </motion.div>
+          ) : islandState === 'toast' && toastPayload ? (
+            /* Phase 8 Transient Notification Toast */
+            <motion.div
+              key="toast-view-container"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.16 }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <ToastView />
+            </motion.div>
           ) : islandState === 'eyes' ? (
             /* Phase 4 Custom Interactive Companion Stage (168px × 40px) */
             <motion.div
@@ -310,12 +480,7 @@ export const App: React.FC = () => {
               transition={{ duration: 0.15 }}
               style={{ width: '100%', height: '100%' }}
             >
-              <CompanionStage
-                testHeadphones={testHeadphones}
-                testGlasses={testGlasses}
-                testFileDrag={testFileDrag}
-                testPetting={testPetting}
-              />
+              <CompanionStage testFileDrag={testFileDrag} />
             </motion.div>
           ) : islandState === 'compact' ? (
             /* Phase 3 Feature-Complete Compact View (184px × 40px) */
@@ -329,8 +494,20 @@ export const App: React.FC = () => {
             >
               <CompactView />
             </motion.div>
+          ) : islandState === 'expanded' || islandState === 'expanded-lyrics' ? (
+            /* Phase 5 Expanded Carousel Container */
+            <motion.div
+              key="expanded-container"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <ExpandedContainer onDropJellyBounce={triggerJellyBounce} />
+            </motion.div>
           ) : (
-            /* Fallback / Future Phase Placeholder */
+            /* Fallback State */
             <motion.div
               key="fallback-state"
               initial={{ opacity: 0 }}
@@ -355,22 +532,171 @@ export const App: React.FC = () => {
       </IslandShell>
 
       {/* ==================================================================== */}
-      {/* Collapsible Floating Dev Toolbar (Bottom of Viewport)                */}
+      {/* Spotlight Command Launcher (Alt + Space)                             */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {spotlightOpen && (
+          <SpotlightModal
+            onClose={() => systemStore.setSpotlightOpen(false)}
+            onOpenSettings={() => {
+              systemStore.setSpotlightOpen(false);
+              setShowSettingsModal(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================================== */}
+      {/* Bottom Liquid Glass Taskbar & System Tray (Options A / B / C)        */}
+      {/* ==================================================================== */}
+      {showTaskbarDock && (
+        <TaskbarPreviewDock
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onOpenSpotlight={() => systemStore.setSpotlightOpen(true)}
+          onTrayAction={(act) => handleTrayAction({ action: act })}
+        />
+      )}
+
+      {/* ==================================================================== */}
+      {/* Full Settings Dashboard & Companion Character Studio                 */}
+      {/* ==================================================================== */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        ramWorkingSet={ramWorkingSet}
+        onTrimRam={async () => {
+          setIsTrimming(true);
+          const res = await safeInvoke<number>('trim_ram_working_set');
+          const newRam = res ?? 9.2;
+          setIsTrimming(false);
+          setRamWorkingSet(newRam);
+          syncTrayTooltip(newRam);
+          return newRam;
+        }}
+        monitors={monitors}
+        onSelectMonitor={(idx) => {
+          systemStore.setSelectedMonitor(idx);
+          safeInvoke('center_on_monitor', { monitorIndex: idx });
+        }}
+      />
+
+      {/* ==================================================================== */}
+      {/* Screen Privacy Blur Overlay ("Boss Key" Ctrl + Alt + B)              */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {privacyBlurEnabled && (
+          <motion.div
+            key="privacy-blur-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="privacy-blur-overlay"
+            onClick={() => systemStore.setPrivacyBlurEnabled(false)}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '14px',
+                padding: '24px 32px',
+                borderRadius: '20px',
+                background: 'var(--island-bg)',
+                backgroundImage: 'var(--glass-surface)',
+                border: '1px solid var(--glass-border)',
+                boxShadow: 'var(--glass-shadow)',
+                maxWidth: '380px',
+                textAlign: 'center',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  border: '1px solid #3b82f6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 20px rgba(59, 130, 246, 0.5)',
+                }}
+              >
+                <Shield size={24} style={{ color: '#60a5fa' }} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px' }}>
+                  Privacy Shield Active
+                </h3>
+                <p
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--text-secondary)',
+                    margin: 0,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Desktop frosted privacy veil engaged. Press{' '}
+                  <kbd
+                    style={{
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: 'var(--pill-bg)',
+                      border: '1px solid var(--glass-border)',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Ctrl + Alt + B
+                  </kbd>{' '}
+                  or click below to restore.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-pill"
+                onClick={() => systemStore.setPrivacyBlurEnabled(false)}
+                style={{
+                  fontSize: '11px',
+                  padding: '5px 16px',
+                  background: '#3b82f6',
+                  color: '#ffffff',
+                  borderColor: '#60a5fa',
+                  fontWeight: 600,
+                }}
+              >
+                Unlock Screen
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================================== */}
+      {/* Night Eye Care Warm Filter Overlay                                   */}
+      {/* ==================================================================== */}
+      {nightEyeCareEnabled && <div className="night-eyecare-overlay" />}
+
+      {/* ==================================================================== */}
+      {/* Collapsible Floating Dev Toolbar (Diagnostic & Production Toggle)    */}
       {/* ==================================================================== */}
       <div
         onMouseEnter={handleToolbarMouseEnter}
         onMouseLeave={handleToolbarMouseLeave}
         style={{
           position: 'fixed',
-          bottom: '8px',
+          bottom: showTaskbarDock ? '54px' : '8px',
           left: '50%',
           transform: 'translateX(-50%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           gap: '6px',
-          zIndex: 100,
+          zIndex: 85,
           pointerEvents: 'auto',
+          transition: 'bottom 0.25s ease',
         }}
       >
         {/* Toggle Pill Button */}
@@ -381,7 +707,7 @@ export const App: React.FC = () => {
             playToggleClick();
             setShowDevToolbar((prev) => !prev);
           }}
-          title="Toggle Phase 3 Developer & Diagnostics Toolbar"
+          title="Toggle Developer & Diagnostics Toolbar"
           style={{
             fontSize: '10px',
             padding: '3px 9px',
@@ -390,7 +716,7 @@ export const App: React.FC = () => {
           }}
         >
           <Wrench size={11} style={{ color: '#3b82f6' }} />
-          <span>Dev Toolbar</span>
+          <span>{showDevToolbar ? 'Hide Dev Controls' : 'Dev Controls'}</span>
           {showDevToolbar ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
         </button>
 
@@ -415,7 +741,7 @@ export const App: React.FC = () => {
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
                 boxShadow: 'var(--glass-shadow)',
-                maxWidth: '600px',
+                maxWidth: '640px',
               }}
             >
               {/* Header */}
@@ -434,31 +760,32 @@ export const App: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <Activity size={11} style={{ color: '#10b981' }} />
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Phase 4 Companion Controls
+                    Phase 10 Liquid Glass Final
                   </span>
                   <span>({statusMsg})</span>
                 </div>
                 <span>RAM: {ramWorkingSet ? `${ramWorkingSet.toFixed(1)} MB` : '~9.2 MB'}</span>
               </div>
 
-              {/* Row 1: Island State & Theme Switching */}
+              {/* Row 1: Quick Actions & Settings Trigger */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="btn-pill"
                   onClick={() => {
-                    playToggleClick();
-                    systemStore.setIslandState('bezel-line');
-                    setStatusMsg('State: Bezel-Line (136x6)');
+                    playGlassPop();
+                    setShowSettingsModal(true);
                   }}
                   style={{
-                    borderColor: islandState === 'bezel-line' ? '#38bdf8' : 'var(--glass-border)',
+                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(59, 130, 246, 0.3))',
+                    borderColor: '#a855f7',
+                    fontWeight: 600,
                     fontSize: '10px',
-                    padding: '3px 7px',
+                    padding: '3px 8px',
                   }}
                 >
-                  <Minimize2 size={11} style={{ color: '#38bdf8' }} />
-                  <span>Bezel-Line</span>
+                  <Sliders size={11} style={{ color: '#c084fc' }} />
+                  <span>Open Settings Dashboard</span>
                 </button>
 
                 <button
@@ -466,16 +793,16 @@ export const App: React.FC = () => {
                   className="btn-pill"
                   onClick={() => {
                     playToggleClick();
-                    systemStore.setIslandState('compact');
-                    setStatusMsg('State: Compact (184x40)');
+                    systemStore.togglePrivacyBlur();
                   }}
                   style={{
-                    borderColor: islandState === 'compact' ? '#10b981' : 'var(--glass-border)',
+                    borderColor: privacyBlurEnabled ? '#3b82f6' : 'var(--glass-border)',
                     fontSize: '10px',
                     padding: '3px 7px',
                   }}
                 >
-                  <span>Compact</span>
+                  <Shield size={11} style={{ color: '#3b82f6' }} />
+                  <span>Boss Key (Blur)</span>
                 </button>
 
                 <button
@@ -483,17 +810,45 @@ export const App: React.FC = () => {
                   className="btn-pill"
                   onClick={() => {
                     playToggleClick();
-                    systemStore.setIslandState('eyes');
-                    setStatusMsg('State: Eyes (168x40 Companion)');
+                    systemStore.toggleNightEyeCare();
                   }}
                   style={{
-                    borderColor: islandState === 'eyes' ? '#ec4899' : 'var(--glass-border)',
+                    borderColor: nightEyeCareEnabled ? '#f59e0b' : 'var(--glass-border)',
                     fontSize: '10px',
                     padding: '3px 7px',
                   }}
                 >
-                  <Eye size={11} style={{ color: '#ec4899' }} />
-                  <span>Eyes (Pet)</span>
+                  <SunMedium size={11} style={{ color: '#f59e0b' }} />
+                  <span>Night Eye Care</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.toggleTaskbarDock();
+                  }}
+                  style={{
+                    borderColor: showTaskbarDock ? '#10b981' : 'var(--glass-border)',
+                    fontSize: '10px',
+                    padding: '3px 7px',
+                  }}
+                >
+                  <Layout size={11} style={{ color: '#10b981' }} />
+                  <span>Dock: {showTaskbarDock ? 'SHOW' : 'HIDE'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.cycleTaskbarMode();
+                  }}
+                  style={{ fontSize: '10px', padding: '3px 7px' }}
+                >
+                  <span>Taskbar: {taskbarMode}</span>
                 </button>
 
                 <button
@@ -523,54 +878,9 @@ export const App: React.FC = () => {
                   <Cpu size={11} className={isTrimming ? 'animate-spin' : ''} style={{ color: '#3b82f6' }} />
                   <span>Trim RAM</span>
                 </button>
-
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={() => {
-                    playGlassPop();
-                    setStatusMsg('Glass Pop SFX');
-                  }}
-                  style={{ fontSize: '10px', padding: '3px 7px' }}
-                >
-                  <Sparkles size={11} style={{ color: '#ec4899' }} />
-                  <span>SFX</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={() => {
-                    const next = !enableSfx;
-                    systemStore.setEnableSfx(next);
-                    if (next) playGlassPop();
-                  }}
-                  style={{ fontSize: '10px', padding: '3px 6px' }}
-                  title="Toggle SFX Mute/Unmute"
-                >
-                  {enableSfx ? (
-                    <Volume2 size={11} style={{ color: '#10b981' }} />
-                  ) : (
-                    <VolumeX size={11} style={{ color: '#ef4444' }} />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={() => setShowTraySim((prev) => !prev)}
-                  style={{
-                    fontSize: '10px',
-                    padding: '3px 7px',
-                    backgroundColor: showTraySim ? 'rgba(59, 130, 246, 0.25)' : 'var(--pill-bg)',
-                  }}
-                >
-                  <ChevronUp size={11} style={{ color: '#60a5fa' }} />
-                  <span>Tray Sim</span>
-                </button>
               </div>
 
-              {/* Row 2: Companion Characters & Tint Color Swatches */}
+              {/* Row 2: Character Switcher & Test Triggers */}
               <div
                 style={{
                   display: 'flex',
@@ -685,39 +995,40 @@ export const App: React.FC = () => {
                         height: '13px',
                         borderRadius: '50%',
                         backgroundColor: swatch.color,
-                        border: companionColor === swatch.color ? '2px solid #ffffff' : '1px solid rgba(0,0,0,0.3)',
+                        border:
+                          companionColor === swatch.color ? '2px solid #ffffff' : '1px solid rgba(0,0,0,0.3)',
                         cursor: 'pointer',
                         padding: 0,
                       }}
                     />
                   ))}
                 </div>
-              </div>
 
-              {/* Row 3: Test Accessories & Reaction Triggers */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  flexWrap: 'wrap',
-                  paddingTop: '3px',
-                }}
-              >
-                <span style={{ fontSize: '9.5px', color: 'var(--text-secondary)', marginRight: '2px' }}>
-                  Test Triggers:
-                </span>
-
+                {/* Wallpaper Contrast Preview Switcher */}
                 <button
                   type="button"
                   className="btn-pill"
                   onClick={() => {
                     playToggleClick();
-                    setTestHeadphones((prev) => {
-                      const next = !prev;
-                      setStatusMsg(`Test Headphones: ${next ? 'ON' : 'OFF'}`);
+                    setWallpaperPreview((prev) => {
+                      const modes: ('none' | 'dark' | 'light' | 'vibrant')[] = ['none', 'dark', 'light', 'vibrant'];
+                      const next = modes[(modes.indexOf(prev) + 1) % modes.length];
+                      setStatusMsg(`Wallpaper: ${next}`);
                       return next;
                     });
+                  }}
+                  style={{ fontSize: '9.5px', padding: '2px 6px' }}
+                >
+                  <span>Wallpaper: {wallpaperPreview}</span>
+                </button>
+
+                {/* Accessory Test Triggers */}
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    setTestHeadphones((p) => !p);
                   }}
                   style={{
                     fontSize: '9.5px',
@@ -725,7 +1036,6 @@ export const App: React.FC = () => {
                     borderColor: testHeadphones ? '#3b82f6' : 'var(--glass-border)',
                   }}
                 >
-                  <Headphones size={10} style={{ color: '#3b82f6' }} />
                   <span>Headphones</span>
                 </button>
 
@@ -734,11 +1044,7 @@ export const App: React.FC = () => {
                   className="btn-pill"
                   onClick={() => {
                     playToggleClick();
-                    setTestGlasses((prev) => {
-                      const next = !prev;
-                      setStatusMsg(`Test Glasses: ${next ? 'ON' : 'OFF'}`);
-                      return next;
-                    });
+                    setTestGlasses((p) => !p);
                   }}
                   style={{
                     fontSize: '9.5px',
@@ -746,7 +1052,6 @@ export const App: React.FC = () => {
                     borderColor: testGlasses ? '#f59e0b' : 'var(--glass-border)',
                   }}
                 >
-                  <Glasses size={10} style={{ color: '#f59e0b' }} />
                   <span>Glasses</span>
                 </button>
 
@@ -755,32 +1060,7 @@ export const App: React.FC = () => {
                   className="btn-pill"
                   onClick={() => {
                     playToggleClick();
-                    setTestFileDrag((prev) => {
-                      const next = !prev;
-                      setStatusMsg(`File Drag Anticipation: ${next ? 'ALERT' : 'IDLE'}`);
-                      return next;
-                    });
-                  }}
-                  style={{
-                    fontSize: '9.5px',
-                    padding: '2px 6px',
-                    borderColor: testFileDrag ? '#ec4899' : 'var(--glass-border)',
-                  }}
-                >
-                  <Upload size={10} style={{ color: '#ec4899' }} />
-                  <span>File Catch</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={() => {
-                    playToggleClick();
-                    setTestPetting((prev) => {
-                      const next = !prev;
-                      setStatusMsg(`Petting Reaction: ${next ? 'ACTIVE (^ ^)' : 'IDLE'}`);
-                      return next;
-                    });
+                    setTestPetting((p) => !p);
                   }}
                   style={{
                     fontSize: '9.5px',
@@ -788,26 +1068,21 @@ export const App: React.FC = () => {
                     borderColor: testPetting ? '#f43f5e' : 'var(--glass-border)',
                   }}
                 >
-                  <Heart size={10} style={{ color: '#f43f5e' }} />
-                  <span>Pet (^ ^)</span>
+                  <span>Pet</span>
                 </button>
 
                 <button
                   type="button"
                   className="btn-pill"
-                  onClick={() => {
-                    playToggleClick();
-                    const next = !autoAccessories;
-                    systemStore.setAutoAccessories(next);
-                    setStatusMsg(`Auto-Accessories: ${next ? 'ON' : 'OFF'}`);
-                  }}
+                  onClick={() => setShowTraySim((prev) => !prev)}
                   style={{
                     fontSize: '9.5px',
                     padding: '2px 6px',
-                    borderColor: autoAccessories ? '#10b981' : 'var(--glass-border)',
+                    marginLeft: 'auto',
+                    backgroundColor: showTraySim ? 'rgba(59, 130, 246, 0.25)' : 'var(--pill-bg)',
                   }}
                 >
-                  <span>Auto-Acc: {autoAccessories ? 'ON' : 'OFF'}</span>
+                  <span>Tray Sim</span>
                 </button>
               </div>
 

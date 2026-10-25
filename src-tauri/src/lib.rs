@@ -1,6 +1,9 @@
 pub mod memory;
+pub mod taskbar;
 pub mod tray;
 pub mod window_manager;
+pub mod window_hooks;
+pub mod clipboard_ports;
 
 use tauri::Manager;
 
@@ -31,9 +34,22 @@ pub fn run() {
             window_manager::set_click_through,
             window_manager::center_on_monitor,
             window_manager::get_monitors_list,
+            window_manager::set_window_size,
             tray::update_tray_tooltip,
             tray::update_tray_status,
+            window_hooks::toggle_pin_active_window,
+            window_hooks::check_fullscreen_state,
+            taskbar::apply_taskbar_mode,
+            taskbar::restore_default_taskbar,
+            clipboard_ports::scan_active_dev_ports,
+            clipboard_ports::kill_dev_port,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running LiquidIsland application");
+        .build(tauri::generate_context!())
+        .expect("error while building LiquidIsland application")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                // Restore Windows default taskbar on clean application shutdown
+                taskbar::restore_default_taskbar();
+            }
+        });
 }

@@ -8,6 +8,8 @@ export interface CompanionSharedProps {
   companionColor: string;
   theme: 'dark' | 'light';
   onPet?: () => void;
+  isCharging?: boolean;
+  isLowBattery?: boolean;
 }
 
 export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
@@ -16,6 +18,8 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
   isDraggingFile,
   companionColor,
   theme,
+  isCharging = false,
+  isLowBattery = false,
 }) => {
   // Blinking cycle: random blink every 3.5 - 5.5 seconds
   const [isBlinking, setIsBlinking] = useState(false);
@@ -71,6 +75,16 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
     slimeScaleX = 1.14;
     slimeScaleY = 0.86;
     slimeY = 1.8;
+  } else if (isLowBattery) {
+    // Low battery: sleepy squish
+    slimeScaleX = 1.06;
+    slimeScaleY = 0.92;
+    slimeY = 1.5;
+  } else if (isCharging) {
+    // Energized buoyant stretch
+    slimeScaleX = 1.04;
+    slimeScaleY = 1.02;
+    slimeY = -0.5;
   }
 
   const isDark = theme === 'dark';
@@ -306,7 +320,7 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
               transform="translate(74, 21)"
               style={{
                 transformOrigin: '0 0',
-                transform: `scaleY(${isBlinking ? 0.10 : 1})`,
+                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.38 : 1})`,
                 transition: 'transform 0.08s ease-out',
               }}
             >
@@ -349,7 +363,7 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
               transform="translate(94, 21)"
               style={{
                 transformOrigin: '0 0',
-                transform: `scaleY(${isBlinking ? 0.10 : 1})`,
+                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.38 : 1})`,
                 transition: 'transform 0.08s ease-out',
               }}
             >
@@ -389,6 +403,71 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
 
             {/* Cute Cheek Blush Spots */}
             <ellipse cx="66" cy="25.5" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.4" />
+            <ellipse cx="102" cy="25.5" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.4" />
+
+            {/* Energized Smile when Charging */}
+            {isCharging && (
+              <path
+                d="M 81 24 Q 84 27.5 87 24"
+                stroke={eyeSocketWhite}
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                fill="none"
+              />
+            )}
+
+            {/* Low Battery Floating Sleepy Zs */}
+            {isLowBattery && (
+              <>
+                <motion.text
+                  x="98"
+                  y="14"
+                  fill="#94a3b8"
+                  fontSize="9"
+                  fontWeight="700"
+                  animate={{ y: [14, 6], opacity: [0, 0.9, 0], x: [98, 102] }}
+                  transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+                >
+                  z
+                </motion.text>
+                <motion.text
+                  x="105"
+                  y="10"
+                  fill="#94a3b8"
+                  fontSize="11"
+                  fontWeight="700"
+                  animate={{ y: [10, 0], opacity: [0, 0.9, 0], x: [105, 110] }}
+                  transition={{ duration: 1.8, delay: 0.6, repeat: Infinity, ease: 'easeOut' }}
+                >
+                  Z
+                </motion.text>
+              </>
+            )}
+
+            {/* Charging Electric Sparkle Particles */}
+            {isCharging && (
+              <>
+                <motion.polygon
+                  points="84,2 85.5,5.5 89,6 86.5,8.5 87,12 84,10 81,12 81.5,8.5 79,6 82.5,5.5"
+                  fill="#fde047"
+                  animate={{ y: [-1, -4, -1], rotate: [0, 20, -20, 0], scale: [0.8, 1.15, 0.8] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                  style={{ transformOrigin: '84px 7px' }}
+                />
+                <motion.polygon
+                  points="65,9 66,11.5 68.5,12 66.8,13.8 67.2,16 65,14.6 62.8,16 63.2,13.8 61.5,12 64,11.5"
+                  fill="#4ade80"
+                  animate={{ y: [0, -3, 0], scale: [0.7, 1.05, 0.7] }}
+                  transition={{ duration: 1.4, delay: 0.3, repeat: Infinity }}
+                />
+                <motion.polygon
+                  points="103,9 104,11.5 106.5,12 104.8,13.8 105.2,16 103,14.6 100.8,16 101.2,13.8 99.5,12 102,11.5"
+                  fill="#38bdf8"
+                  animate={{ y: [0, -3, 0], scale: [0.7, 1.05, 0.7] }}
+                  transition={{ duration: 1.4, delay: 0.6, repeat: Infinity }}
+                />
+              </>
+            )}
             <ellipse cx="102" cy="25.5" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.4" />
 
             {/* Dynamic Mouth */}

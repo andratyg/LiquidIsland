@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import { playToggleClick, playGlassPop } from '../utils/sfx';
-import { Calendar, Clock, ArrowDown, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Calendar, Clock, ArrowDown, Sparkles, CheckCircle2, Search } from 'lucide-react';
 
 export const CompactView: React.FC = () => {
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
@@ -72,13 +72,21 @@ export const CompactView: React.FC = () => {
     systemStore.toggleAudioPlaying();
   }, []);
 
-  // Ring progress offset calculation: circumference = 2 * PI * 6.5 ≈ 40.84
+  // Progress offset calculation: circumference = 2 * PI * 6.5 ≈ 40.84
   const circumference = 40.84;
   const progressPercent = Math.max(0.15, Math.min(1, volume / 100));
   const strokeDashoffset = circumference - circumference * progressPercent;
 
+  // Expand into ExpandedContainer on background pill click
+  const handleExpandIsland = useCallback(() => {
+    playGlassPop();
+    systemStore.expandIsland();
+  }, []);
+
   return (
     <div
+      onClick={handleExpandIsland}
+      title="Compact Island View - Click background to Expand Dashboard"
       style={{
         position: 'relative',
         display: 'flex',
@@ -88,6 +96,7 @@ export const CompactView: React.FC = () => {
         height: '100%',
         padding: '0 13px',
         userSelect: 'none',
+        cursor: 'pointer',
       }}
     >
       {/* ==================================================================== */}
@@ -211,38 +220,67 @@ export const CompactView: React.FC = () => {
         </AnimatePresence>
       </motion.button>
 
-      {/* ==================================================================== */}
-      {/* 3. Right Audio Visualizer: 5 Rounded Waveform Bars                   */}
-      {/* ==================================================================== */}
-      <div
-        title={`Audio Visualizer (${isAudioPlaying ? 'Playing' : 'Paused'}) - Click to Toggle`}
-        onClick={handleToggleAudio}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '2px',
-          height: '18px',
-          width: '20px',
-          cursor: 'pointer',
-          padding: '0 2px',
-        }}
-      >
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
-        <span
-          className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
-        />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* Spotlight Search Trigger (Alt + Space) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            playGlassPop();
+            systemStore.toggleSpotlight();
+          }}
+          title="Spotlight Search & Clipboard (Alt + Space)"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1px',
+            opacity: 0.7,
+            transition: 'opacity 0.15s ease',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+        >
+          <Search size={11} />
+        </button>
+
+        {/* ==================================================================== */}
+        {/* 3. Right Audio Visualizer: 5 Rounded Waveform Bars                   */}
+        {/* ==================================================================== */}
+        <div
+          title={`Audio Visualizer (${isAudioPlaying ? 'Playing' : 'Paused'}) - Click to Toggle`}
+          onClick={handleToggleAudio}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '2px',
+            height: '18px',
+            width: '20px',
+            cursor: 'pointer',
+            padding: '0 2px',
+          }}
+        >
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+          <span
+            className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`}
+          />
+        </div>
       </div>
 
       {/* ==================================================================== */}

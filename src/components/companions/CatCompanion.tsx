@@ -13,6 +13,8 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
   companionColor,
   theme,
   isBezelLine = false,
+  isCharging = false,
+  isLowBattery = false,
 }) => {
   // Blinking loop: random blink every 3.6s - 5.4s
   const [isBlinking, setIsBlinking] = useState(false);
@@ -362,7 +364,7 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
               transform="translate(74, 21)"
               style={{
                 transformOrigin: '0 0',
-                transform: `scaleY(${isBlinking ? 0.10 : 1})`,
+                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.28 : 1})`,
                 transition: 'transform 0.07s ease-out',
               }}
             >
@@ -416,7 +418,7 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
               transform="translate(94, 21)"
               style={{
                 transformOrigin: '0 0',
-                transform: `scaleY(${isBlinking ? 0.10 : 1})`,
+                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.28 : 1})`,
                 transition: 'transform 0.07s ease-out',
               }}
             >
@@ -479,6 +481,49 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
           strokeLinecap="round"
           fill="none"
         />
+
+        {/* Low Battery Floating Sleepy Zs */}
+        {isLowBattery && (
+          <>
+            <motion.text
+              x="100"
+              y="14"
+              fill="#94a3b8"
+              fontSize="9"
+              fontWeight="700"
+              animate={{ y: [14, 6], opacity: [0, 0.9, 0], x: [100, 105] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+            >
+              z
+            </motion.text>
+            <motion.text
+              x="108"
+              y="10"
+              fill="#94a3b8"
+              fontSize="11"
+              fontWeight="700"
+              animate={{ y: [10, 0], opacity: [0, 0.9, 0], x: [108, 114] }}
+              transition={{ duration: 1.8, delay: 0.6, repeat: Infinity, ease: 'easeOut' }}
+            >
+              Z
+            </motion.text>
+          </>
+        )}
+
+        {/* Charging Electric Sparkle Cheeks & Crown */}
+        {isCharging && (
+          <>
+            <motion.polygon
+              points="84,2 85.5,5.5 89,6 86.5,8.5 87,12 84,10 81,12 81.5,8.5 79,6 82.5,5.5"
+              fill="#fde047"
+              animate={{ y: [-1, -4, -1], rotate: [0, 20, -20, 0], scale: [0.8, 1.15, 0.8] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+              style={{ transformOrigin: '84px 7px' }}
+            />
+            <circle cx="60" cy="24" r="2" fill="#fde047" className="sparkle-particle" />
+            <circle cx="108" cy="24" r="2" fill="#fde047" className="sparkle-particle" />
+          </>
+        )}
 
         {/* ================================================================= */}
         {/* 5. Marshmallow Paws Resting on Bottom Rim & Swat Reaction        */}

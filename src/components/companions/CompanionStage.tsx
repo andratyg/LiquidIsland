@@ -27,6 +27,8 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
   const autoAccessories = useSystemStore((s) => s.autoAccessories);
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
   const isPomodoroRunning = useSystemStore((s) => s.isPomodoroRunning);
+  const isCharging = useSystemStore((s) => s.isCharging);
+  const batteryStatus = useSystemStore((s) => s.batteryStatus);
 
   // If companionMode is 'off', automatically fallback idle state to 'compact'
   useEffect(() => {
@@ -188,16 +190,30 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
     isDraggingFile: effectiveFileDrag,
     companionColor,
     theme,
+    isCharging: isCharging || false,
+    isLowBattery: batteryStatus === 'low',
   };
+
+  const handleStageClick = useCallback(
+    (_e: React.MouseEvent) => {
+      if (effectivePetting || effectiveFileDrag) return;
+      playGlassPop();
+      systemStore.expandIsland();
+    },
+    [effectivePetting, effectiveFileDrag]
+  );
 
   return (
     <div
       className="relative w-full h-full flex items-center justify-center select-none"
       onMouseMove={handleNotchMouseMove}
+      onClick={handleStageClick}
+      title="Companion Idle - Click to Expand Dashboard"
       style={{
         width: '168px',
         height: '40px',
         overflow: 'visible',
+        cursor: 'pointer',
       }}
     >
       {/* ==================================================================== */}
