@@ -72,9 +72,16 @@ export const MusicLyricsSlide: React.FC = () => {
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isSeeking, setIsSeeking] = useState<boolean>(false);
 
-  // Active lyric item scroll ref
+  // Active lyric item scroll ref & forward hysteresis guards
   const activeLineRef = useRef<HTMLDivElement>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const lastActiveIndexRef = useRef<number>(0);
+  const lastTrackRef = useRef<string>(mediaTitle);
+
+  if (lastTrackRef.current !== mediaTitle) {
+    lastTrackRef.current = mediaTitle;
+    lastActiveIndexRef.current = 0;
+  }
 
   // Automatically fetch synchronized lyrics whenever song changes
   useEffect(() => {
@@ -102,14 +109,33 @@ export const MusicLyricsSlide: React.FC = () => {
     };
   }, [mediaTitle, mediaArtist]);
 
-  // Determine current active lyric index based on timestamp
+  // Determine current active lyric index based on timestamp with forward hysteresis
   const activeLyricIndex = (() => {
+    if (lyricsLines.length === 0) return 0;
+
+    let rawIdx = 0;
     for (let i = lyricsLines.length - 1; i >= 0; i--) {
       if (currentTime >= lyricsLines[i].time) {
-        return i;
+        rawIdx = i;
+        break;
       }
     }
-    return 0;
+
+    const prevIdx = lastActiveIndexRef.current;
+    if (rawIdx > prevIdx) {
+      // Normal forward progression
+      lastActiveIndexRef.current = rawIdx;
+      return rawIdx;
+    } else if (rawIdx < prevIdx) {
+      // If candidate is before current line, only jump backward if user explicitly seeked back (> 1.5s)
+      const currentLineTime = lyricsLines[prevIdx]?.time ?? 0;
+      if (currentTime < currentLineTime - 1.5) {
+        lastActiveIndexRef.current = rawIdx;
+        return rawIdx;
+      }
+      return prevIdx;
+    }
+    return rawIdx;
   })();
 
   // Smooth auto-scroll active lyric into center view

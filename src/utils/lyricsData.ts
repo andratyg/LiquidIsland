@@ -97,34 +97,37 @@ export const PAPER_SKY_LYRICS: LyricLine[] = [
 /**
  * Returns the currently active lyric line for a given playback timestamp in seconds.
  * Supports custom live lyrics from LRCLib (Spotify / YouTube sync) or falls back to Paper Sky.
+ * Includes a 300ms (0.3s) forward hysteresis to prevent back-and-forth lyric oscillation.
  */
 export function getCurrentLyricLine(
   currentTime: number,
-  customLyrics?: { time: number; text: string; textId?: string }[]
+  customLyrics?: { time: number; text: string; textId?: string }[],
+  previousLineTime?: number
 ): { textEn: string; textId?: string; time: number } {
-  if (customLyrics && customLyrics.length > 0) {
-    for (let i = customLyrics.length - 1; i >= 0; i--) {
-      if (currentTime >= customLyrics[i].time) {
-        return {
-          time: customLyrics[i].time,
-          textEn: customLyrics[i].text,
-          textId: customLyrics[i].textId,
-        };
-      }
+  const lines =
+    customLyrics && customLyrics.length > 0
+      ? customLyrics.map((l) => ({ time: l.time, textEn: l.text, textId: l.textId }))
+      : PAPER_SKY_LYRICS;
+
+  let candidateIdx = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (currentTime >= lines[i].time) {
+      candidateIdx = i;
+      break;
     }
-    return {
-      time: customLyrics[0].time,
-      textEn: customLyrics[0].text,
-      textId: customLyrics[0].textId,
-    };
   }
 
-  for (let i = PAPER_SKY_LYRICS.length - 1; i >= 0; i--) {
-    if (currentTime >= PAPER_SKY_LYRICS[i].time) {
-      return PAPER_SKY_LYRICS[i];
+  // 300ms forward hysteresis:
+  // If a line was previously active, do not flicker back to the prior line
+  // if currentTime is within 300ms (0.3s) before the previous line's start time!
+  if (previousLineTime !== undefined) {
+    const prevIdx = lines.findIndex((l) => Math.abs(l.time - previousLineTime) < 0.05);
+    if (prevIdx > 0 && candidateIdx < prevIdx && currentTime >= lines[prevIdx].time - 0.3) {
+      return lines[prevIdx];
     }
   }
-  return PAPER_SKY_LYRICS[0];
+
+  return lines[candidateIdx];
 }
 
 /**

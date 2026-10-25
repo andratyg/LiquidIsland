@@ -10,6 +10,7 @@ import { ToastView } from './components/ToastView';
 import { SpotlightModal } from './components/SpotlightModal';
 import { SettingsModal } from './components/SettingsModal';
 import { TaskbarPreviewDock } from './components/TaskbarPreviewDock';
+import { LaunchpadModal } from './components/LaunchpadModal';
 import {
   Sun,
   Moon,
@@ -31,6 +32,7 @@ import {
   SunMedium,
   Layout,
   Zap,
+  Bluetooth,
 } from 'lucide-react';
 import { ISLAND_DIMENSIONS, type SystemMediaPayload, type HardwareToastPayload, type WorkspaceActivityPayload } from './types/liquid';
 import { fetchLiveLyrics } from './utils/liveLyricsFetcher';
@@ -74,6 +76,7 @@ export const App: React.FC = () => {
   const taskbarMode = useSystemStore((s) => s.taskbarMode);
   const selectedMonitor = useSystemStore((s) => s.selectedMonitor);
   const spotlightOpen = useSystemStore((s) => s.spotlightOpen ?? false);
+  const launchpadOpen = useSystemStore((s) => s.launchpadOpen ?? false);
   const autoFullscreenStealth = useSystemStore((s) => s.autoFullscreenStealth ?? false);
   const toastPayload = useSystemStore((s) => s.toastPayload);
   const privacyBlurEnabled = useSystemStore((s) => s.privacyBlurEnabled);
@@ -86,12 +89,12 @@ export const App: React.FC = () => {
     (window.location.search.includes('window=taskbar') ||
       window.location.hash.includes('window=taskbar'));
 
-  // Global 1s audio playback ticker so lyrics advance seamlessly in all views
+  // High-precision 200ms audio playback ticker (+0.2s) so lyrics advance smoothly with zero jitter
   useEffect(() => {
     if (!isAudioPlaying) return;
     const ticker = setInterval(() => {
-      systemStore.tickPlaybackTime();
-    }, 1000);
+      systemStore.tickPlaybackTime(0.2);
+    }, 200);
     return () => clearInterval(ticker);
   }, [isAudioPlaying]);
 
@@ -276,6 +279,7 @@ export const App: React.FC = () => {
     let unlistenStoreSync: (() => void) | null = null;
     let unlistenSettingsUpdated: (() => void) | null = null;
     let unlistenSpotlight: (() => void) | null = null;
+    let unlistenLaunchpad: (() => void) | null = null;
     let unlistenSettings: (() => void) | null = null;
     let unlistenSlide: (() => void) | null = null;
     let unlistenWorkspace: (() => void) | null = null;
@@ -321,10 +325,11 @@ export const App: React.FC = () => {
           } else if (p.kind === 'unplugged') {
             systemStore.showUnpluggedToast(p.percent);
           } else if (p.kind === 'bluetooth') {
+            playGlassPop();
             systemStore.triggerToast('airbuds', {
-              title: p.title || p.device_name || 'AirBuds Pro',
-              subtitle: p.subtitle || `Connected - ${p.percent}%`,
-              value: p.percent,
+              title: p.title || 'Bluetooth Connected',
+              subtitle: p.subtitle || p.device_name || 'AirBuds Pro Connected',
+              value: p.percent || 85,
             });
           }
         });
@@ -348,6 +353,11 @@ export const App: React.FC = () => {
           systemStore.toggleSpotlight();
         });
         unlistenSpotlight = sub6;
+
+        const sub6b = await listen('open-launchpad', () => {
+          systemStore.toggleLaunchpad();
+        });
+        unlistenLaunchpad = sub6b;
 
         const sub7 = await listen('open-settings', () => {
           setShowSettingsModal(true);
@@ -396,6 +406,7 @@ export const App: React.FC = () => {
       if (unlistenStoreSync) unlistenStoreSync();
       if (unlistenSettingsUpdated) unlistenSettingsUpdated();
       if (unlistenSpotlight) unlistenSpotlight();
+      if (unlistenLaunchpad) unlistenLaunchpad();
       if (unlistenSettings) unlistenSettings();
       if (unlistenSlide) unlistenSlide();
       if (unlistenWorkspace) unlistenWorkspace();
@@ -610,8 +621,8 @@ export const App: React.FC = () => {
       width = 210;
       height = 56;
     } else if (islandState === 'toast') {
-      width = 350;
-      height = 80;
+      width = toastPayload?.type === 'hud' ? 320 : 350;
+      height = toastPayload?.type === 'hud' ? 56 : 80;
     } else if (islandState === 'expanded') {
       width = 460;
       height = 195;
@@ -621,7 +632,7 @@ export const App: React.FC = () => {
     }
 
     const modalOpen = Boolean(
-      spotlightOpen || showSettingsModal || showDevControls
+      spotlightOpen || launchpadOpen || showSettingsModal || showDevControls
     );
 
     safeInvoke('update_hit_box', {
@@ -629,7 +640,7 @@ export const App: React.FC = () => {
       height,
       modalOpen,
     });
-  }, [islandState, isAudioPlaying, spotlightOpen, showSettingsModal, showDevControls, isTaskbarWindow]);
+  }, [islandState, isAudioPlaying, spotlightOpen, launchpadOpen, showSettingsModal, showDevControls, isTaskbarWindow]);
 
   // Collapse Island when clicking outside #liquid-island-root
   useEffect(() => {
@@ -648,18 +659,18 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('pointerdown', handlePointerDown);
   }, [isTaskbarWindow]);
 
-  // Dynamic Window Resizing for Spotlight & Settings Modals (960px when open, 210px when closed)
+  // Dynamic Window Resizing for Spotlight, Launchpad & Settings Modals (960px when open, 210px when closed)
   useEffect(() => {
     if (isTaskbarWindow) return;
     async function updateWindowSize() {
-      if (spotlightOpen || showSettingsModal) {
+      if (spotlightOpen || launchpadOpen || showSettingsModal) {
         await safeInvoke('set_window_size', { width: 720, height: 960 });
       } else {
-        await safeInvoke('set_window_size', { width: 640, height: 210 });
+        await safeInvoke('set_window_size', { width: 640, height: 240 });
       }
     }
     updateWindowSize();
-  }, [spotlightOpen, showSettingsModal, isTaskbarWindow]);
+  }, [spotlightOpen, launchpadOpen, showSettingsModal, isTaskbarWindow]);
 
   // Click-Through handling for floating Dev Toolbar
   const handleToolbarMouseEnter = useCallback(async () => {
@@ -670,13 +681,20 @@ export const App: React.FC = () => {
     await safeInvoke('set_click_through', { ignore: true });
   }, []);
 
-  // Determine active dimensions: widen to 360x44 in Companion mode when music is playing, or 360x62 for HUD
+  // Determine active dimensions: Unified Dynamic Island morphing
+  const isWorkspaceToast = islandState === 'toast' && toastPayload?.type === 'workspace';
+  const isHudToast = islandState === 'toast' && toastPayload?.type === 'hud';
+
   const activeDimensions = !islandEnabled
     ? { width: 140, height: 26 }
     : islandState === 'eyes' && isAudioPlaying
     ? { width: 360, height: 44 }
-    : islandState === 'toast' && toastPayload?.type === 'hud'
-    ? { width: 360, height: 62 }
+    : isWorkspaceToast
+    ? { width: 380, height: 64 }
+    : isHudToast
+    ? { width: 340, height: 56 }
+    : islandState === 'toast'
+    ? { width: 340, height: 64 }
     : ISLAND_DIMENSIONS[islandState] || ISLAND_DIMENSIONS['compact'];
 
   // Bottom Window Render Branch: Dedicated Taskbar Window
@@ -686,7 +704,7 @@ export const App: React.FC = () => {
         className={`liquidisland-app theme-${theme}`}
         style={{
           width: '100vw',
-          height: '360px',
+          height: '520px',
           background: 'transparent',
           position: 'fixed',
           bottom: 0,
@@ -714,6 +732,15 @@ export const App: React.FC = () => {
           }}
         >
           <TaskbarPreviewDock
+            onOpenLaunchpad={async () => {
+              playGlassPop();
+              try {
+                const { emit } = await import('@tauri-apps/api/event');
+                await emit('open-launchpad');
+              } catch (e) {
+                console.error(e);
+              }
+            }}
             onOpenSettings={async () => {
               playGlassPop();
               try {
@@ -858,6 +885,21 @@ export const App: React.FC = () => {
             onClose={() => systemStore.setSpotlightOpen(false)}
             onOpenSettings={() => {
               systemStore.setSpotlightOpen(false);
+              setShowSettingsModal(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================================== */}
+      {/* MacBook-Style Liquid Launchpad (Start Menu replacement)              */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {launchpadOpen && (
+          <LaunchpadModal
+            onClose={() => systemStore.setLaunchpadOpen(false)}
+            onOpenSettings={() => {
+              systemStore.setLaunchpadOpen(false);
               setShowSettingsModal(true);
             }}
           />
@@ -1188,6 +1230,20 @@ export const App: React.FC = () => {
                   <Cpu size={11} className={isTrimming ? 'animate-spin' : ''} style={{ color: '#3b82f6' }} />
                   <span>Trim RAM</span>
                 </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.toggleLaunchpad();
+                  }}
+                  style={{ fontSize: '10px', padding: '3px 7px', borderColor: launchpadOpen ? '#38bdf8' : 'var(--glass-border)' }}
+                  title="Toggle Liquid Launchpad (Start Menu)"
+                >
+                  <Layout size={11} style={{ color: '#38bdf8' }} />
+                  <span>Launchpad</span>
+                </button>
               </div>
 
               {/* Row 2: Character Switcher & Test Triggers */}
@@ -1417,6 +1473,99 @@ export const App: React.FC = () => {
                 >
                   <Zap size={9} style={{ color: '#f59e0b' }} />
                   <span>Unplugged (84%)</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playGlassPop();
+                    systemStore.triggerToast('airbuds', {
+                      title: 'Bluetooth Connected',
+                      subtitle: 'AirBuds Pro Connected',
+                      value: 85,
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: '#38bdf8',
+                    color: '#38bdf8',
+                  }}
+                  title="Simulate Bluetooth Connected Toast"
+                >
+                  <Bluetooth size={9} style={{ color: '#38bdf8' }} />
+                  <span>Bluetooth</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.triggerWorkspaceActivity({
+                      kind: 'tab-switch',
+                      app_name: 'Google Chrome',
+                      tab_title: 'Gemini - Dynamic Island Assistant',
+                      accent_color: '#4285f4',
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: '#4285f4',
+                    color: '#4285f4',
+                  }}
+                  title="Simulate Tab Switch (Google Chrome)"
+                >
+                  <span>Tab Switch</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.triggerWorkspaceActivity({
+                      kind: 'app-switch',
+                      app_name: 'Visual Studio Code',
+                      tab_title: 'WorkspaceSwitcherOverlay.tsx - LiquidIsland',
+                      accent_color: '#007acc',
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: '#007acc',
+                    color: '#007acc',
+                  }}
+                  title="Simulate App Switch (VS Code)"
+                >
+                  <span>App Switch</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.triggerWorkspaceActivity({
+                      kind: 'desktop-switch',
+                      app_name: 'Virtual Desktop',
+                      tab_title: 'Desktop ➔',
+                      direction: 'right',
+                      accent_color: '#38bdf8',
+                    });
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: '#38bdf8',
+                    color: '#38bdf8',
+                  }}
+                  title="Simulate Virtual Desktop Switch (Ctrl + Win + Right)"
+                >
+                  <span>Desk Switch</span>
                 </button>
 
                 <button

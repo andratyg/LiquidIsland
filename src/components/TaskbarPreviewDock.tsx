@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import {
@@ -9,6 +9,8 @@ import {
 import {
   Search,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Wifi,
   Volume2,
   VolumeX,
@@ -24,12 +26,22 @@ import {
   Maximize2,
   Minimize2,
   X,
+  Pin,
+  Bluetooth,
+  Plane,
+  CheckCircle2,
+  Circle,
+  ExternalLink,
+  Shield,
+  Headphones,
+  Speaker,
 } from 'lucide-react';
 import { RunningAppInfo, CompanionMode } from '../types/liquid';
 
 interface TaskbarPreviewDockProps {
   onOpenSettings?: () => void;
   onOpenSpotlight?: () => void;
+  onOpenLaunchpad?: () => void;
   onTrayAction?: (action: string) => void;
 }
 
@@ -191,16 +203,37 @@ const TerminalLogo = () => (
   </svg>
 );
 
-const SettingsLogo = () => (
+const SettingsControlCenterIcon = () => (
   <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
-    <circle cx="24" cy="24" r="19" fill="#1e293b" stroke="#a855f7" strokeWidth="2" />
-    <circle cx="24" cy="24" r="6" fill="#a855f7" />
-    <path
-      d="M24 9v4M24 35v4M9 24h4M35 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8"
-      stroke="#a855f7"
-      strokeWidth="3"
-      strokeLinecap="round"
-    />
+    <defs>
+      <linearGradient id="ctrl-bg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.25" />
+        <stop offset="100%" stopColor="#818cf8" stopOpacity="0.12" />
+      </linearGradient>
+      <linearGradient id="ctrl-slider-top" x1="10" y1="0" x2="38" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#38bdf8" />
+        <stop offset="100%" stopColor="#0284c7" />
+      </linearGradient>
+      <linearGradient id="ctrl-slider-bot" x1="10" y1="0" x2="38" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#c084fc" />
+        <stop offset="100%" stopColor="#818cf8" />
+      </linearGradient>
+    </defs>
+    {/* Sleek Control Center Frosted Glass Squircle */}
+    <rect x="3" y="3" width="42" height="42" rx="10" fill="#131720" stroke="rgba(255, 255, 255, 0.18)" strokeWidth="1.5" />
+    <rect x="4" y="4" width="40" height="40" rx="9" fill="url(#ctrl-bg)" />
+
+    {/* Top Slider Track */}
+    <rect x="10" y="14" width="28" height="8" rx="4" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+    <rect x="10" y="14" width="19" height="8" rx="4" fill="url(#ctrl-slider-top)" />
+    <circle cx="29" cy="18" r="5.5" fill="#ffffff" />
+    <circle cx="29" cy="18" r="2.2" fill="#0284c7" />
+
+    {/* Bottom Slider Track */}
+    <rect x="10" y="26" width="28" height="8" rx="4" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+    <rect x="10" y="26" width="12" height="8" rx="4" fill="url(#ctrl-slider-bot)" />
+    <circle cx="22" cy="30" r="5.5" fill="#ffffff" />
+    <circle cx="22" cy="30" r="2.2" fill="#7c3aed" />
   </svg>
 );
 
@@ -236,6 +269,28 @@ const DefaultAppLogo = () => (
   </svg>
 );
 
+function getCalendarMatrix(year: number, month: number) {
+  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 = Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const days: { day: number; isCurrentMonth: boolean; key: string }[] = [];
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    days.push({ day: daysInPrevMonth - i, isCurrentMonth: false, key: `prev-${i}` });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push({ day: d, isCurrentMonth: true, key: `cur-${d}` });
+  }
+  const totalCells = days.length > 35 ? 42 : 35;
+  const remaining = totalCells - days.length;
+  for (let d = 1; d <= remaining; d++) {
+    days.push({ day: d, isCurrentMonth: false, key: `next-${d}` });
+  }
+  return days;
+}
+
+type TrayFlyoutType = 'tray' | 'network' | 'audio' | 'battery' | 'calendar' | null;
+
 /* ==========================================================================
    Master TaskbarPreviewDock Component
    ========================================================================== */
@@ -243,6 +298,7 @@ const DefaultAppLogo = () => (
 export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   onOpenSettings,
   onOpenSpotlight,
+  onOpenLaunchpad,
   onTrayAction,
 }) => {
   const taskbarMode = useSystemStore((s) => s.taskbarMode);
@@ -256,15 +312,40 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   const batteryLevel = useSystemStore((s) => s.batteryLevel ?? 84);
   const isCharging = useSystemStore((s) => s.isCharging ?? true);
 
-  const [showTrayFlyout, setShowTrayFlyout] = useState(false);
-  const [showControlCenter, setShowControlCenter] = useState(false);
+  // Fix Stage 2: Supercharged System Tray & Smart Dock Auto-Hide
+  const isDockPinned = useSystemStore((s) => s.dockPinned ?? false);
+  const networkSsid = useSystemStore((s) => s.networkSsid ?? 'Home-WiFi-5G');
+  const isWifiEnabled = useSystemStore((s) => s.isWifiEnabled ?? true);
+  const isBluetoothEnabled = useSystemStore((s) => s.isBluetoothEnabled ?? true);
+  const isAirplaneMode = useSystemStore((s) => s.isAirplaneMode ?? false);
+  const powerMode = useSystemStore((s) => s.powerMode ?? 'balanced');
+  const batteryHealth = useSystemStore((s) => s.batteryHealth ?? 98);
+  const todoTasks = useSystemStore((s) => s.todoTasks ?? []);
+
+  const [activeFlyout, setActiveFlyout] = useState<TrayFlyoutType>(null);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
   const [isDockHovered, setIsDockHovered] = useState(true);
+  const [isDockVisible, setIsDockVisible] = useState(true);
   const [runningApps, setRunningApps] = useState<RunningAppInfo[]>([]);
+  const [selectedAudioOutput, setSelectedAudioOutput] = useState<'speakers' | 'airbuds'>('airbuds');
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState<number>(0);
 
   const flyoutRef = useRef<HTMLDivElement>(null);
+
+  // Effective Dock Visibility for Spring Auto-Hide
+  const effectiveDockVisible =
+    isDockPinned ||
+    activeFlyout !== null ||
+    showContextMenu ||
+    isDockHovered ||
+    isDockVisible;
+
+  // Sync dock pinned state with Rust
+  useEffect(() => {
+    safeInvoke('set_dock_pinned', { pinned: isDockPinned });
+  }, [isDockPinned]);
 
   // 1. Hide Native Windows Taskbar on mount, restore on unmount
   useEffect(() => {
@@ -276,7 +357,8 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
   // 2. Listen to background cursor proximity auto-hide events from taskbar.rs
   useEffect(() => {
-    let unlisten: (() => void) | null = null;
+    let unlistenHover: (() => void) | null = null;
+    let unlistenVis: (() => void) | null = null;
     let isMounted = true;
 
     async function initDockListener() {
@@ -288,10 +370,12 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       try {
         const { listen } = await import('@tauri-apps/api/event');
         if (!isMounted) return;
-        const sub = await listen<boolean>('dock-hover-state', (event) => {
+        unlistenHover = await listen<boolean>('dock-hover-state', (event) => {
           setIsDockHovered(event.payload);
         });
-        unlisten = sub;
+        unlistenVis = await listen<boolean>('dock-visibility', (event) => {
+          setIsDockVisible(event.payload);
+        });
       } catch (err) {
         console.warn('[Dock Proximity] Listener error:', err);
       }
@@ -301,7 +385,8 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
     return () => {
       isMounted = false;
-      if (unlisten) unlisten();
+      if (unlistenHover) unlistenHover();
+      if (unlistenVis) unlistenVis();
     };
   }, []);
 
@@ -333,25 +418,25 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   }, []);
 
   const handleDockMouseLeave = useCallback(() => {
-    if (!showTrayFlyout && !showControlCenter && !showContextMenu) {
+    if (activeFlyout === null && !showContextMenu) {
       safeInvoke('set_dock_click_through', { ignore: true });
     }
-  }, [showTrayFlyout, showControlCenter, showContextMenu]);
+  }, [activeFlyout, showContextMenu]);
 
   // Synchronized Win32 Digital Clock & Date
   useEffect(() => {
     function updateClock() {
       const now = new Date();
-      setTimeStr(
-        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-      );
-      setDateStr(
-        now.toLocaleDateString([], {
-          weekday: 'short',
-          day: 'numeric',
-          month: 'short',
-        })
-      );
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      setTimeStr(`${hours}:${minutes}`);
+
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      setDateStr(`${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`);
     }
     updateClock();
     const timer = setInterval(updateClock, 1000);
@@ -359,30 +444,51 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   }, []);
 
   // Flyout Open/Close Helpers with Hit-Box Synchronization
-  const toggleTrayFlyout = useCallback(() => {
+  const openFlyout = useCallback((flyout: TrayFlyoutType) => {
     playToggleClick();
-    const next = !showTrayFlyout;
-    setShowTrayFlyout(next);
-    setShowControlCenter(false);
+    setActiveFlyout((prev) => {
+      const next = prev === flyout ? null : flyout;
+      safeInvoke('set_taskbar_flyout_open', { open: next !== null });
+      return next;
+    });
     setShowContextMenu(false);
-    safeInvoke('set_taskbar_flyout_open', { open: next });
-  }, [showTrayFlyout]);
-
-  const toggleControlCenter = useCallback(() => {
-    playGlassPop();
-    const next = !showControlCenter;
-    setShowControlCenter(next);
-    setShowTrayFlyout(false);
-    setShowContextMenu(false);
-    safeInvoke('set_taskbar_flyout_open', { open: next });
-  }, [showControlCenter]);
+  }, []);
 
   const closeAllFlyouts = useCallback(() => {
-    setShowTrayFlyout(false);
-    setShowControlCenter(false);
+    setActiveFlyout(null);
     setShowContextMenu(false);
     safeInvoke('set_taskbar_flyout_open', { open: false });
   }, []);
+
+  // Close active flyouts on outside pointerdown
+  useEffect(() => {
+    function handleGlobalPointerDown(e: MouseEvent) {
+      if (activeFlyout && flyoutRef.current && !flyoutRef.current.contains(e.target as Node)) {
+        closeAllFlyouts();
+      }
+    }
+    document.addEventListener('pointerdown', handleGlobalPointerDown);
+    return () => document.removeEventListener('pointerdown', handleGlobalPointerDown);
+  }, [activeFlyout, closeAllFlyouts]);
+
+  // Calendar matrix calculation
+  const displayedDate = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + calendarMonthOffset);
+    return d;
+  }, [calendarMonthOffset]);
+
+  const currentYear = displayedDate.getFullYear();
+  const currentMonth = displayedDate.getMonth();
+  const monthName = displayedDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  const todayDate = new Date();
+  const isViewingCurrentMonth =
+    todayDate.getFullYear() === currentYear && todayDate.getMonth() === currentMonth;
+  const todayDay = todayDate.getDate();
+
+  const calendarMatrix = useMemo(() => {
+    return getCalendarMatrix(currentYear, currentMonth);
+  }, [currentYear, currentMonth]);
 
   // Quick Action Handler for Tray Flyout
   const handleAction = (actionKey: string) => {
@@ -448,6 +554,14 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     safeEmit('open-spotlight');
   };
 
+  const triggerOpenLaunchpad = () => {
+    playGlassPop();
+    closeAllFlyouts();
+    systemStore.toggleLaunchpad();
+    if (onOpenLaunchpad) onOpenLaunchpad();
+    safeEmit('open-launchpad');
+  };
+
   const triggerOpenSettings = () => {
     playGlassPop();
     closeAllFlyouts();
@@ -489,7 +603,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     if (h === 'spotify' || t.includes('spotify')) return <SpotifyLogo />;
     if (h === 'terminal' || t.includes('terminal') || t.includes('powershell')) return <TerminalLogo />;
     if (h === 'explorer' || t.includes('explorer')) return <ExplorerLogo />;
-    if (h === 'settings' || t.includes('settings')) return <SettingsLogo />;
+    if (h === 'settings' || t.includes('settings')) return <SettingsControlCenterIcon />;
     if (h === 'discord' || t.includes('discord')) return <DiscordLogo />;
     if (h === 'slack' || t.includes('slack')) return <SlackLogo />;
 
@@ -499,15 +613,12 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   // Main Dock Section: Windows 11 Start, Search Pill, Divider, Live Running Apps & Tools
   const renderMainDockCapsule = () => (
     <>
-      {/* 1. Real Windows 11 Start Button */}
+      {/* 1. Liquid Launchpad Launcher (Replaces Native Windows 11 Start Menu) */}
       <button
         type="button"
         className="dock-app-icon"
-        onClick={() => {
-          playToggleClick();
-          safeInvoke('launch_system_action', { action: 'start_menu' });
-        }}
-        title="Windows 11 Start Menu"
+        onClick={triggerOpenLaunchpad}
+        title="Liquid Launchpad: Applications & System Controls"
         style={{ width: '40px', height: '40px', borderRadius: '10px' }}
       >
         <div
@@ -620,32 +731,33 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                     left: '50%',
                     transform: 'translateX(-50%)',
                     zIndex: 9999,
-                    padding: '3px 10px',
+                    padding: '4px 12px',
                     borderRadius: '9999px',
-                    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-                    backdropFilter: 'blur(16px)',
+                    backgroundColor: 'rgba(10, 14, 24, 0.94)',
+                    backdropFilter: 'blur(20px)',
                     border: `1px solid ${workspaceActivity.accent_color || '#38bdf8'}`,
-                    boxShadow: `0 8px 20px rgba(0, 0, 0, 0.5), 0 0 10px ${
+                    boxShadow: `0 10px 24px rgba(0, 0, 0, 0.65), 0 0 14px ${
                       workspaceActivity.accent_color || '#38bdf8'
-                    }40`,
+                    }44`,
                     color: '#ffffff',
-                    fontSize: '10px',
+                    fontSize: '11px',
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
                     pointerEvents: 'none',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    maxWidth: '220px',
-                    overflow: 'hidden',
+                    gap: '6px',
+                    maxWidth: '280px',
+                    overflow: 'visible',
                   }}
                 >
                   <span
                     style={{
-                      width: '5px',
-                      height: '5px',
+                      width: '6px',
+                      height: '6px',
                       borderRadius: '50%',
                       backgroundColor: workspaceActivity.accent_color || '#38bdf8',
+                      boxShadow: `0 0 6px ${workspaceActivity.accent_color || '#38bdf8'}`,
                       flexShrink: 0,
                     }}
                   />
@@ -654,10 +766,25 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
+                      maxWidth: '250px',
                     }}
                   >
                     {workspaceActivity.tab_title}
                   </span>
+                  {/* Downward Pointer Caret */}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: '-4px',
+                      left: '50%',
+                      transform: 'translateX(-50%) rotate(45deg)',
+                      width: '7px',
+                      height: '7px',
+                      backgroundColor: 'rgba(10, 14, 24, 0.94)',
+                      borderRight: `1px solid ${workspaceActivity.accent_color || '#38bdf8'}`,
+                      borderBottom: `1px solid ${workspaceActivity.accent_color || '#38bdf8'}`,
+                    }}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -713,72 +840,125 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         type="button"
         className="dock-app-icon"
         onClick={triggerOpenSettings}
-        title="Settings Dashboard & Character Studio"
+        title="LiquidIsland Settings & Character Studio"
+        aria-label="LiquidIsland Settings"
         style={{ width: '40px', height: '40px', borderRadius: '10px' }}
       >
-        <SettingsLogo />
+        <SettingsControlCenterIcon />
       </button>
     </>
   );
 
-  // Right System Tray Capsule: Flyout Chevron, Wi-Fi, Audio, Battery & Clock
+  // Right System Tray Capsule: Pin, Chevron (^), Wi-Fi, Audio, Battery & Clock
   const renderTrayCapsule = () => (
-    <>
-      {/* Hidden Icons (^) Chevron Button */}
+    <div
+      className="liquid-tray-capsule-wrapper"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        flexShrink: 0,
+        gap: '6px',
+        padding: '0 8px',
+        whiteSpace: 'nowrap',
+        userSelect: 'none',
+        height: '100%',
+      }}
+    >
+      {/* 1. Dock Pin / Auto-Hide Lock Button */}
       <button
         type="button"
         className="dock-app-icon"
-        style={{ width: '30px', height: '36px', borderRadius: '8px' }}
-        onClick={toggleTrayFlyout}
-        title="Show Hidden Icons & System Tray (^)"
+        style={{
+          width: '28px',
+          height: '34px',
+          borderRadius: '7px',
+          background: isDockPinned ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.04)',
+          border: isDockPinned ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+          flexShrink: 0,
+        }}
+        onClick={() => {
+          playToggleClick();
+          const next = !isDockPinned;
+          systemStore.setDockPinned(next);
+        }}
+        title={isDockPinned ? "Dock is Pinned (Always Visible) - Click to enable Auto-Hide" : "Dock Auto-Hide Active - Click to Pin Visible"}
       >
-        <ChevronUp
-          size={15}
+        <Pin
+          size={13}
           style={{
-            transform: showTrayFlyout ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s ease',
-            color: showTrayFlyout ? '#38bdf8' : 'var(--text-primary)',
+            color: isDockPinned ? '#38bdf8' : 'var(--text-secondary)',
+            transform: isDockPinned ? 'rotate(45deg)' : 'none',
+            transition: 'transform 0.2s ease, color 0.2s ease',
           }}
         />
       </button>
 
-      {/* Wi-Fi Icon (Click opens Control Center) */}
+      {/* 2. Hidden Icons (^) Chevron Button */}
       <button
         type="button"
+        className="dock-app-icon"
         style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: '5px',
-          color: 'var(--text-primary)',
-          display: 'flex',
-          alignItems: 'center',
+          width: '28px',
+          height: '34px',
+          borderRadius: '7px',
+          background: activeFlyout === 'tray' ? 'rgba(56, 189, 248, 0.2)' : undefined,
+          border: activeFlyout === 'tray' ? '1px solid rgba(56, 189, 248, 0.45)' : undefined,
+          flexShrink: 0,
         }}
-        onClick={toggleControlCenter}
-        title="Wi-Fi: Connected (Click for Control Center)"
+        onClick={() => openFlyout('tray')}
+        title="Active Background Apps & System Tray (^)"
       >
-        <Wifi size={14} style={{ color: '#38bdf8' }} />
+        <ChevronUp
+          size={14}
+          style={{
+            transform: activeFlyout === 'tray' ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s ease',
+            color: activeFlyout === 'tray' ? '#38bdf8' : 'var(--text-primary)',
+          }}
+        />
       </button>
 
-      {/* Volume Indicator (Click = Control Center, Wheel = Adjust Volume) */}
+      {/* 3. Wi-Fi Icon (Click opens Network & Bluetooth Control Center) */}
       <button
         type="button"
         style={{
-          background: 'none',
-          border: 'none',
+          background: activeFlyout === 'network' ? 'rgba(56, 189, 248, 0.2)' : 'none',
+          border: activeFlyout === 'network' ? '1px solid rgba(56, 189, 248, 0.45)' : 'none',
+          borderRadius: '6px',
           cursor: 'pointer',
-          padding: '5px',
+          padding: '4px',
           color: 'var(--text-primary)',
           display: 'flex',
           alignItems: 'center',
+          flexShrink: 0,
         }}
-        onClick={toggleControlCenter}
+        onClick={() => openFlyout('network')}
+        title={`Wi-Fi: ${isWifiEnabled ? networkSsid : 'Disabled'} (Click for Network Controls)`}
+      >
+        <Wifi size={14} style={{ color: isWifiEnabled ? '#38bdf8' : '#94a3b8' }} />
+      </button>
+
+      {/* 4. Volume Indicator (Click = Volume Center, Wheel = Adjust Volume) */}
+      <button
+        type="button"
+        style={{
+          background: activeFlyout === 'audio' ? 'rgba(56, 189, 248, 0.2)' : 'none',
+          border: activeFlyout === 'audio' ? '1px solid rgba(56, 189, 248, 0.45)' : 'none',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          padding: '4px',
+          color: 'var(--text-primary)',
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+        onClick={() => openFlyout('audio')}
         onWheel={(e) => {
           e.stopPropagation();
           const step = e.deltaY < 0 ? 4 : -4;
           systemStore.adjustVolume(step);
         }}
-        title={`Volume: ${volume}% (Scroll to adjust, click for Control Center)`}
+        title={`Volume: ${volume}% (Scroll to adjust, click for Volume Controls)`}
       >
         {volume === 0 ? (
           <VolumeX size={15} style={{ color: '#ef4444' }} />
@@ -787,7 +967,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         )}
       </button>
 
-      {/* Real Windows Battery Indicator (Click opens Control Center) */}
+      {/* 5. Real Windows Battery Indicator (Click opens Battery & Power Guard) */}
       <div
         style={{
           display: 'flex',
@@ -799,16 +979,18 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           cursor: 'pointer',
           padding: '3px 6px',
           borderRadius: '6px',
-          background: 'rgba(255, 255, 255, 0.06)',
+          background: activeFlyout === 'battery' ? 'rgba(56, 189, 248, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+          border: activeFlyout === 'battery' ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid transparent',
+          flexShrink: 0,
         }}
-        onClick={toggleControlCenter}
-        title={`Battery: ${batteryLevel}% (${isCharging ? 'Charging' : 'On Battery'})`}
+        onClick={() => openFlyout('battery')}
+        title={`Battery: ${batteryLevel}% (${isCharging ? 'Charging' : 'On Battery'}) - Click for Power Guard`}
       >
         <BatteryCharging size={13} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>{batteryLevel}%</span>
       </div>
 
-      {/* Digital Clock & Date: 100% Legible Bright White (#ffffff, 13px) */}
+      {/* 6. Compact Digital Clock & Date */}
       <div
         style={{
           display: 'flex',
@@ -816,37 +998,708 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           alignItems: 'flex-end',
           justifyContent: 'center',
           cursor: 'pointer',
-          padding: '2px 8px',
-          borderRadius: '8px',
-          lineHeight: 1.25,
+          padding: '2px 6px',
+          borderRadius: '6px',
+          lineHeight: 1.15,
           userSelect: 'none',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+          background: activeFlyout === 'calendar' ? 'rgba(56, 189, 248, 0.22)' : undefined,
+          border: activeFlyout === 'calendar' ? '1px solid rgba(56, 189, 248, 0.45)' : undefined,
         }}
-        onClick={toggleControlCenter}
-        title="Windows Notification & Control Center"
+        onClick={() => openFlyout('calendar')}
+        title="Calendar & Today's Agenda"
       >
         <span
           style={{
-            fontSize: '13px',
-            fontWeight: 600,
+            fontSize: '12.5px',
+            fontWeight: 650,
             color: '#ffffff',
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: '-0.2px',
           }}
         >
-          {timeStr || '13:00'}
+          {timeStr || '12:00'}
         </span>
         <span
           style={{
-            fontSize: '10px',
+            fontSize: '9.5px',
             fontWeight: 500,
-            color: '#a1a1aa',
+            color: '#94a3b8',
             letterSpacing: '0.1px',
           }}
         >
           {dateStr || 'Sun, 25 Oct'}
         </span>
       </div>
-    </>
+    </div>
+  );
+
+  // Master Flyouts Renderer for all 5 Supercharged Tray Components
+  const renderAllFlyouts = () => (
+    <AnimatePresence>
+      {activeFlyout && (
+        <motion.div
+          key={`flyout-${activeFlyout}`}
+          ref={flyoutRef}
+          initial={{ opacity: 0, scale: 0.94, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.94, y: 12 }}
+          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+          className="tray-flyout-panel"
+          style={{
+            position: 'absolute',
+            bottom: '72px',
+            right: 0,
+            width: activeFlyout === 'calendar' ? '340px' : activeFlyout === 'tray' ? '340px' : '320px',
+            backgroundColor: theme === 'light' ? 'rgba(255, 255, 255, 0.96)' : 'rgba(12, 16, 26, 0.95)',
+            backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.1), transparent 75%)',
+            backdropFilter: 'blur(36px) saturate(200%)',
+            border: '1px solid rgba(255, 255, 255, 0.14)',
+            borderRadius: '20px',
+            boxShadow: '0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            padding: '14px 16px',
+            boxSizing: 'border-box',
+            pointerEvents: 'auto',
+            zIndex: 99999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          {/* FLYOUT 1: Active Background Apps & System Tray Flyout (^) */}
+          {activeFlyout === 'tray' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '9px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', color: '#94a3b8', textTransform: 'uppercase' }}>Active Windows & Tray</span>
+                  <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '9999px', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.35)' }}>
+                    {runningApps.length}
+                  </span>
+                </div>
+                <button type="button" onClick={closeAllFlyouts} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '3px', borderRadius: '4px' }} title="Close">
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Running Apps List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '160px', overflowY: 'auto', paddingRight: '2px' }}>
+                {runningApps.length > 0 ? (
+                  runningApps.map((app) => (
+                    <div
+                      key={`tray-app-${app.hwnd}`}
+                      onClick={() => {
+                        safeInvoke('focus_or_toggle_app', { hwnd: app.hwnd });
+                        closeAllFlyouts();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        borderRadius: '10px',
+                        backgroundColor: app.is_focused ? 'rgba(56, 189, 248, 0.16)' : 'rgba(255, 255, 255, 0.04)',
+                        border: app.is_focused ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid rgba(255, 255, 255, 0.06)',
+                        boxShadow: app.is_focused ? '0 0 12px rgba(56, 189, 248, 0.2)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+                        <div style={{ width: '24px', height: '24px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {renderAppIconGraphic(app.icon_hint, app.title, app.icon_data)}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                          <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {app.title}
+                          </span>
+                          <span style={{ fontSize: '9.5px', color: '#94a3b8' }}>
+                            {app.process_name}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          backgroundColor: app.is_focused ? '#22c55e' : '#38bdf8',
+                          boxShadow: app.is_focused ? '0 0 8px #22c55e' : '0 0 6px #38bdf8',
+                          flexShrink: 0,
+                          marginLeft: '8px',
+                        }}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', padding: '14px 0' }}>
+                    No running user applications
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Actions 3x3 Control Center Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '7px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
+                <button type="button" onClick={() => handleAction('settings')} className="tray-grid-item" title="Open Settings Dashboard">
+                  <Sliders size={18} style={{ color: '#c084fc', filter: 'drop-shadow(0 0 6px rgba(192, 132, 252, 0.4))' }} />
+                  <span>Settings</span>
+                </button>
+                <button type="button" onClick={() => handleAction('spotlight')} className="tray-grid-item" title="Open Spotlight Search (Alt+S)">
+                  <Search size={18} style={{ color: '#38bdf8', filter: 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.4))' }} />
+                  <span>Spotlight</span>
+                </button>
+                <button type="button" onClick={() => handleAction('switch_companion')} className="tray-grid-item" title={`Switch Companion (${companionMode})`}>
+                  <Eye size={18} style={{ color: '#f472b6', filter: 'drop-shadow(0 0 6px rgba(244, 114, 182, 0.4))' }} />
+                  <span style={{ textTransform: 'capitalize' }}>{companionMode}</span>
+                </button>
+                <button type="button" onClick={() => handleAction('toggle_theme')} className="tray-grid-item" title={`Theme (${theme})`}>
+                  {theme === 'dark' ? (
+                    <Moon size={18} style={{ color: '#818cf8', filter: 'drop-shadow(0 0 6px rgba(129, 140, 248, 0.4))' }} />
+                  ) : (
+                    <Sun size={18} style={{ color: '#fbbf24', filter: 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.4))' }} />
+                  )}
+                  <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+                </button>
+                <button type="button" onClick={() => handleAction('toggle_stealth')} className="tray-grid-item" title="Stealth Bezel-line Mode">
+                  <Minimize2 size={18} style={{ color: '#34d399', filter: 'drop-shadow(0 0 6px rgba(52, 211, 153, 0.4))' }} />
+                  <span>Stealth</span>
+                </button>
+                <button type="button" onClick={() => handleAction('restore_taskbar')} className="tray-grid-item" title="Restore Native Windows Taskbar">
+                  <Maximize2 size={18} style={{ color: '#60a5fa', filter: 'drop-shadow(0 0 6px rgba(96, 165, 250, 0.4))' }} />
+                  <span>Taskbar</span>
+                </button>
+                <button type="button" onClick={() => handleAction('trim_ram')} className="tray-grid-item" title="Trim System RAM Working Set">
+                  <Cpu size={18} style={{ color: '#4ade80', filter: 'drop-shadow(0 0 6px rgba(74, 222, 128, 0.4))' }} />
+                  <span>Trim RAM</span>
+                </button>
+                <button type="button" onClick={() => handleAction('restart_explorer')} className="tray-grid-item" title="Restart Windows Explorer">
+                  <RefreshCw size={18} style={{ color: '#fbbf24', filter: 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.4))' }} />
+                  <span>Explorer</span>
+                </button>
+                <button type="button" onClick={() => handleAction('quit')} className="tray-grid-item" style={{ color: '#f87171' }} title="Quit LiquidIsland">
+                  <Power size={18} style={{ color: '#ef4444', filter: 'drop-shadow(0 0 6px rgba(239, 68, 68, 0.4))' }} />
+                  <span>Quit</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* FLYOUT 2: Network & Bluetooth Control Center */}
+          {activeFlyout === 'network' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff' }}>Network & Bluetooth</span>
+                <button type="button" onClick={closeAllFlyouts} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px' }} title="Close">
+                  <X size={13} />
+                </button>
+              </div>
+
+              {/* Wi-Fi Card */}
+              <div
+                onClick={() => systemStore.toggleWifi()}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '10px',
+                  padding: '9px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Wifi size={18} style={{ color: isWifiEnabled ? '#38bdf8' : '#64748b' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff' }}>
+                      {isWifiEnabled ? networkSsid : 'Wi-Fi Disabled'}
+                    </span>
+                    <span style={{ fontSize: '9.5px', color: isWifiEnabled ? '#38bdf8' : '#64748b' }}>
+                      {isWifiEnabled ? 'Wi-Fi 6 (802.11ax) • 5.0 GHz' : 'Tap to enable Wi-Fi'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ width: '36px', height: '20px', borderRadius: '10px', background: isWifiEnabled ? '#0284c7' : 'rgba(255,255,255,0.16)', position: 'relative', transition: 'background 0.2s ease' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#ffffff', position: 'absolute', top: '2px', left: isWifiEnabled ? '18px' : '2px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }} />
+                </div>
+              </div>
+
+              {/* Bluetooth Card */}
+              <div
+                onClick={() => systemStore.toggleBluetooth()}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '10px',
+                  padding: '9px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Bluetooth size={18} style={{ color: isBluetoothEnabled ? '#818cf8' : '#64748b' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff' }}>
+                      {isBluetoothEnabled ? 'Bluetooth On' : 'Bluetooth Off'}
+                    </span>
+                    <span style={{ fontSize: '9.5px', color: isBluetoothEnabled ? '#818cf8' : '#64748b' }}>
+                      {isBluetoothEnabled ? 'AirBuds Pro — Connected' : 'Tap to pair devices'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ width: '36px', height: '20px', borderRadius: '10px', background: isBluetoothEnabled ? '#6366f1' : 'rgba(255,255,255,0.16)', position: 'relative', transition: 'background 0.2s ease' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#ffffff', position: 'absolute', top: '2px', left: isBluetoothEnabled ? '18px' : '2px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }} />
+                </div>
+              </div>
+
+              {/* Airplane Mode Card */}
+              <div
+                onClick={() => systemStore.toggleAirplaneMode()}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '10px',
+                  padding: '9px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Plane size={18} style={{ color: isAirplaneMode ? '#f59e0b' : '#64748b' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff' }}>
+                      Airplane Mode
+                    </span>
+                    <span style={{ fontSize: '9.5px', color: isAirplaneMode ? '#f59e0b' : '#64748b' }}>
+                      {isAirplaneMode ? 'All wireless connections off' : 'Wi-Fi & Bluetooth active'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ width: '36px', height: '20px', borderRadius: '10px', background: isAirplaneMode ? '#f59e0b' : 'rgba(255,255,255,0.16)', position: 'relative', transition: 'background 0.2s ease' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#ffffff', position: 'absolute', top: '2px', left: isAirplaneMode ? '18px' : '2px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }} />
+                </div>
+              </div>
+
+              {/* Action shortcuts */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '2px' }}>
+                <button
+                  type="button"
+                  onClick={() => safeInvoke('launch_system_action', { action: 'wifi_networks' })}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    padding: '8px 6px',
+                    borderRadius: '8px',
+                    background: 'rgba(56, 189, 248, 0.12)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    color: '#38bdf8',
+                    fontSize: '10.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ExternalLink size={12} />
+                  <span>Wi-Fi Networks</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => safeInvoke('launch_system_action', { action: 'bluetooth_settings' })}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    padding: '8px 6px',
+                    borderRadius: '8px',
+                    background: 'rgba(129, 140, 248, 0.12)',
+                    border: '1px solid rgba(129, 140, 248, 0.25)',
+                    color: '#818cf8',
+                    fontSize: '10.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ExternalLink size={12} />
+                  <span>Bluetooth Settings</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* FLYOUT 3: Volume & Brightness Control Center */}
+          {activeFlyout === 'audio' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff' }}>Volume & Display</span>
+                <button type="button" onClick={closeAllFlyouts} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px' }} title="Close">
+                  <X size={13} />
+                </button>
+              </div>
+
+              {/* Master Volume Card */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {volume === 0 ? <VolumeX size={15} style={{ color: '#ef4444' }} /> : <Volume2 size={15} style={{ color: '#38bdf8' }} />}
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>Master Volume</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => systemStore.setVolume(volume === 0 ? 75 : 0)}
+                    style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {volume}%
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={(e) => systemStore.setVolume(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: '#38bdf8', cursor: 'pointer' }}
+                />
+              </div>
+
+              {/* Output Device Selector */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 600 }}>Audio Output Device</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAudioOutput('speakers')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      background: selectedAudioOutput === 'speakers' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.03)',
+                      border: selectedAudioOutput === 'speakers' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
+                      color: selectedAudioOutput === 'speakers' ? '#38bdf8' : '#94a3b8',
+                      fontSize: '10.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Speaker size={13} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Speakers</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAudioOutput('airbuds')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      background: selectedAudioOutput === 'airbuds' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.03)',
+                      border: selectedAudioOutput === 'airbuds' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
+                      color: selectedAudioOutput === 'airbuds' ? '#38bdf8' : '#94a3b8',
+                      fontSize: '10.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Headphones size={13} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>AirBuds Pro</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Display Brightness Card */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <SunMedium size={15} style={{ color: '#f59e0b' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>Display Brightness</span>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b' }}>{brightness}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={brightness}
+                  onChange={(e) => systemStore.setBrightness(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
+                />
+              </div>
+
+              {/* Sound Output Settings shortcut */}
+              <button
+                type="button"
+                onClick={() => safeInvoke('launch_system_action', { action: 'sound_settings' })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  color: '#38bdf8',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <ExternalLink size={12} />
+                <span>Sound Output Settings</span>
+              </button>
+            </>
+          )}
+
+          {/* FLYOUT 4: Battery & Power Health Guard */}
+          {activeFlyout === 'battery' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff' }}>Battery & Power Guard</span>
+                <button type="button" onClick={closeAllFlyouts} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px' }} title="Close">
+                  <X size={13} />
+                </button>
+              </div>
+
+              {/* Status Banner */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: isCharging ? 'rgba(34, 197, 94, 0.15)' : 'rgba(56, 189, 248, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <BatteryCharging size={24} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <span style={{ fontSize: '20px', fontWeight: 700, color: '#ffffff' }}>{batteryLevel}%</span>
+                    <span style={{ fontSize: '10.5px', color: isCharging ? '#22c55e' : '#38bdf8', fontWeight: 600 }}>
+                      {isCharging ? 'Plugged In, Fast Charging' : 'On Battery'}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                    {isCharging ? 'Full charge estimated in 32 mins' : 'Remaining runtime approx 4h 15m'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Power Mode 3-Segment Selector */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 600 }}>Power Performance Mode</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                  {(['balanced', 'performance', 'saver'] as const).map((mode) => {
+                    const isCur = powerMode === mode;
+                    const labels = { balanced: 'Balanced', performance: 'Performance', saver: 'Saver' };
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => systemStore.setPowerMode(mode)}
+                        style={{
+                          padding: '6px 4px',
+                          borderRadius: '6px',
+                          background: isCur ? 'rgba(56, 189, 248, 0.22)' : 'rgba(255, 255, 255, 0.03)',
+                          border: isCur ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid transparent',
+                          color: isCur ? '#38bdf8' : '#94a3b8',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {labels[mode]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Health Guard HUD */}
+              <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.06)', border: '1px solid rgba(34, 197, 94, 0.2)', borderRadius: '10px', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Shield size={16} style={{ color: '#22c55e', flexShrink: 0 }} />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#4ade80' }}>
+                    Battery Health: {batteryHealth}% Optimal
+                  </span>
+                  <span style={{ fontSize: '9.5px', color: '#86efac' }}>
+                    Smart Charge Guard Active • 80% Threshold Protection
+                  </span>
+                </div>
+              </div>
+
+              {/* Power & Sleep Settings shortcut */}
+              <button
+                type="button"
+                onClick={() => safeInvoke('launch_system_action', { action: 'power_settings' })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  color: '#38bdf8',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <ExternalLink size={12} />
+                <span>Power & Sleep Settings</span>
+              </button>
+            </>
+          )}
+
+          {/* FLYOUT 5: Monthly Calendar & Today's Agenda */}
+          {activeFlyout === 'calendar' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#ffffff' }}>{timeStr}</span>
+                  <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 600 }}>{dateStr}</span>
+                </div>
+                <button type="button" onClick={closeAllFlyouts} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px' }} title="Close">
+                  <X size={13} />
+                </button>
+              </div>
+
+              {/* Month Navigator Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+                <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#ffffff' }}>{monthName}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  {calendarMonthOffset !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonthOffset(0)}
+                      style={{ background: 'rgba(56, 189, 248, 0.15)', border: 'none', borderRadius: '4px', color: '#38bdf8', fontSize: '9px', fontWeight: 700, padding: '2px 5px', cursor: 'pointer' }}
+                    >
+                      Today
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCalendarMonthOffset((c) => c - 1)}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalendarMonthOffset((c) => c + 1)}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Day-of-week headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', fontSize: '9.5px', fontWeight: 600, color: '#64748b' }}>
+                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+              </div>
+
+              {/* Calendar Days Matrix */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', textAlign: 'center' }}>
+                {calendarMatrix.map((item) => {
+                  const isToday = isViewingCurrentMonth && item.isCurrentMonth && item.day === todayDay;
+                  return (
+                    <div
+                      key={item.key}
+                      style={{
+                        padding: '4px 0',
+                        fontSize: '10.5px',
+                        fontWeight: isToday ? 700 : 500,
+                        borderRadius: '6px',
+                        color: isToday ? '#ffffff' : item.isCurrentMonth ? '#f1f5f9' : 'rgba(255,255,255,0.2)',
+                        backgroundColor: isToday ? '#0284c7' : 'transparent',
+                        boxShadow: isToday ? '0 0 10px rgba(56, 189, 248, 0.6)' : 'none',
+                      }}
+                    >
+                      {item.day}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Today's Agenda & Quick Tasks */}
+              <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#ffffff' }}>Today's Tasks</span>
+                  <span style={{ fontSize: '9.5px', color: '#94a3b8' }}>
+                    {todoTasks.filter((t) => !t.completed).length} pending
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {todoTasks.slice(0, 3).map((task) => (
+                    <div
+                      key={task.id}
+                      onClick={() => systemStore.toggleTodoTask(task.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 6px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {task.completed ? (
+                        <CheckCircle2 size={13} style={{ color: '#22c55e', flexShrink: 0 }} />
+                      ) : (
+                        <Circle size={13} style={{ color: '#64748b', flexShrink: 0 }} />
+                      )}
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          color: task.completed ? '#64748b' : '#ffffff',
+                          textDecoration: task.completed ? 'line-through' : 'none',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {task.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date & Time Settings shortcut */}
+              <button
+                type="button"
+                onClick={() => safeInvoke('launch_system_action', { action: 'datetime_settings' })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '7px',
+                  borderRadius: '8px',
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  color: '#38bdf8',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <ExternalLink size={12} />
+                <span>Date & Time Settings</span>
+              </button>
+            </>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 
   return (
@@ -903,18 +1756,19 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           onMouseEnter={handleDockMouseEnter}
           onMouseLeave={handleDockMouseLeave}
           initial={{ y: 50, opacity: 0 }}
-          animate={{ y: isDockHovered ? 0 : 38, opacity: isDockHovered ? 1 : 0.85 }}
+          animate={{ y: effectiveDockVisible ? 0 : 72, opacity: effectiveDockVisible ? 1 : 0 }}
           exit={{ y: 50, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 32 }}
           className="liquid-taskbar-full"
-          style={{ pointerEvents: 'auto' }}
+          style={{ pointerEvents: effectiveDockVisible ? 'auto' : 'none' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1, overflowX: 'auto', scrollbarWidth: 'none' }}>
             {renderMainDockCapsule()}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             {renderTrayCapsule()}
+            {renderAllFlyouts()}
           </div>
         </motion.div>
       ) : (
@@ -922,16 +1776,21 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         <motion.div
           className="liquid-dock-container"
           initial={{ y: 30, opacity: 0 }}
-          animate={{ y: isDockHovered ? 0 : 38, opacity: isDockHovered ? 1 : 0.85 }}
-          transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-          style={{ pointerEvents: 'none', position: 'relative' }}
+          animate={{ y: effectiveDockVisible ? 0 : 72, opacity: effectiveDockVisible ? 1 : 0 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          style={{ pointerEvents: effectiveDockVisible ? 'auto' : 'none', position: 'relative' }}
         >
           {/* Main App Dock Capsule */}
           <div
             onMouseEnter={handleDockMouseEnter}
             onMouseLeave={handleDockMouseLeave}
             className="liquid-dock-capsule"
-            style={{ position: 'relative', overflow: 'hidden' }}
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              maxWidth: 'calc(100vw - 380px)',
+              flexShrink: 1,
+            }}
           >
             {/* Traveling Specular Rim Sweep on Tab/App Switch */}
             <AnimatePresence>
@@ -961,332 +1820,15 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
           {/* Adjacent System Tray Capsule */}
           <div
-            style={{ position: 'relative' }}
+            style={{ position: 'relative', flexShrink: 0 }}
             onMouseEnter={handleDockMouseEnter}
             onMouseLeave={handleDockMouseLeave}
           >
-            <div className="liquid-dock-capsule">
+            <div className="liquid-dock-capsule" style={{ padding: '0 2px', flexShrink: 0 }}>
               {renderTrayCapsule()}
             </div>
 
-            {/* ============================================================== */}
-            {/* 1. Interactive 3x3 Glass System Tray Flyout (^)                 */}
-            {/* ============================================================== */}
-            <AnimatePresence>
-              {showTrayFlyout && (
-                <motion.div
-                  key="tray-flyout"
-                  initial={{ opacity: 0, scale: 0.92, y: 12 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.92, y: 12 }}
-                  transition={{ duration: 0.16 }}
-                  className="tray-flyout-panel"
-                  style={{
-                    position: 'absolute',
-                    bottom: '72px',
-                    right: 0,
-                    width: '280px',
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255, 255, 255, 0.14)',
-                    borderRadius: '16px',
-                    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-                    padding: '12px',
-                    boxSizing: 'border-box',
-                    pointerEvents: 'auto',
-                    zIndex: 99999,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: 'var(--text-secondary)',
-                      marginBottom: '10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <span>System Tray & Quick Actions</span>
-                    <button
-                      type="button"
-                      onClick={closeAllFlyouts}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        padding: '2px',
-                      }}
-                      title="Close flyout"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-
-                  {/* 3x3 Working Actions Grid */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: '8px',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleAction('settings')}
-                      className="tray-grid-item"
-                      title="Open Settings Dashboard"
-                    >
-                      <Sliders size={18} style={{ color: '#a855f7' }} />
-                      <span>Settings</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('spotlight')}
-                      className="tray-grid-item"
-                      title="Open Spotlight Search (Alt+S)"
-                    >
-                      <Search size={18} style={{ color: '#38bdf8' }} />
-                      <span>Spotlight</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('switch_companion')}
-                      className="tray-grid-item"
-                      title={`Switch Companion (Current: ${companionMode.toUpperCase()})`}
-                    >
-                      <Eye size={18} style={{ color: '#ec4899' }} />
-                      <span style={{ textTransform: 'capitalize' }}>{companionMode}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('toggle_theme')}
-                      className="tray-grid-item"
-                      title={`Toggle Theme (Current: ${theme.toUpperCase()})`}
-                    >
-                      {theme === 'dark' ? (
-                        <Moon size={18} style={{ color: '#818cf8' }} />
-                      ) : (
-                        <Sun size={18} style={{ color: '#f59e0b' }} />
-                      )}
-                      <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('toggle_stealth')}
-                      className="tray-grid-item"
-                      title="Toggle Stealth Mode (Bezel-line)"
-                    >
-                      <Minimize2 size={18} style={{ color: '#10b981' }} />
-                      <span>Stealth</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('restore_taskbar')}
-                      className="tray-grid-item"
-                      title="Restore Native Windows Taskbar"
-                    >
-                      <Maximize2 size={18} style={{ color: '#60a5fa' }} />
-                      <span>Taskbar</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('trim_ram')}
-                      className="tray-grid-item"
-                      title="Trim System RAM Working Set"
-                    >
-                      <Cpu size={18} style={{ color: '#22c55e' }} />
-                      <span>Trim RAM</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('restart_explorer')}
-                      className="tray-grid-item"
-                      title="Restart Windows Explorer"
-                    >
-                      <RefreshCw size={18} style={{ color: '#f59e0b' }} />
-                      <span>Explorer</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAction('quit')}
-                      className="tray-grid-item"
-                      style={{ color: '#f87171' }}
-                      title="Quit LiquidIsland"
-                    >
-                      <Power size={18} style={{ color: '#ef4444' }} />
-                      <span>Quit</span>
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* ============================================================== */}
-            {/* 2. Interactive Quick Control Center Flyout                     */}
-            {/* ============================================================== */}
-            <AnimatePresence>
-              {showControlCenter && (
-                <motion.div
-                  key="control-center"
-                  initial={{ opacity: 0, scale: 0.92, y: 12 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.92, y: 12 }}
-                  transition={{ duration: 0.16 }}
-                  style={{
-                    position: 'absolute',
-                    bottom: '72px',
-                    right: 0,
-                    width: '300px',
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255, 255, 255, 0.14)',
-                    borderRadius: '16px',
-                    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-                    padding: '14px',
-                    boxSizing: 'border-box',
-                    pointerEvents: 'auto',
-                    zIndex: 99999,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '12px',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                      paddingBottom: '8px',
-                    }}
-                  >
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff' }}>
-                      Quick Control Center
-                    </span>
-                    <button
-                      type="button"
-                      onClick={closeAllFlyouts}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        padding: '2px',
-                      }}
-                      title="Close Control Center"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-
-                  {/* Volume Slider Card */}
-                  <div
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      padding: '8px 10px',
-                      borderRadius: '10px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Volume2 size={14} style={{ color: '#38bdf8' }} />
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>Volume</span>
-                      </div>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8' }}>
-                        {volume}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={volume}
-                      onChange={(e) => systemStore.setVolume(Number(e.target.value))}
-                      style={{ width: '100%', accentColor: '#38bdf8', cursor: 'pointer' }}
-                    />
-                  </div>
-
-                  {/* Brightness Slider Card */}
-                  <div
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      padding: '8px 10px',
-                      borderRadius: '10px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <SunMedium size={14} style={{ color: '#f59e0b' }} />
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>Brightness</span>
-                      </div>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b' }}>
-                        {brightness}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={brightness}
-                      onChange={(e) => systemStore.setBrightness(Number(e.target.value))}
-                      style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
-                    />
-                  </div>
-
-                  {/* Hardware Status Dual Badges */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div
-                      style={{
-                        padding: '6px 8px',
-                        borderRadius: '8px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '10px',
-                        color: '#94a3b8',
-                      }}
-                    >
-                      <BatteryCharging size={13} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
-                      <span>{isCharging ? 'Charging' : 'Battery'} ({batteryLevel}%)</span>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '6px 8px',
-                        borderRadius: '8px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '10px',
-                        color: '#94a3b8',
-                      }}
-                    >
-                      <Wifi size={13} style={{ color: '#38bdf8' }} />
-                      <span>5GHz Ultra</span>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {renderAllFlyouts()}
           </div>
         </motion.div>
       )}

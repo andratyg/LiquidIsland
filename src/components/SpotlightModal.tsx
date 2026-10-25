@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import { playGlassPop, playToggleClick, playWaterDrop } from '../utils/sfx';
 import { evaluateMathExpression, MathEvalResult } from '../utils/mathEvaluator';
-import { ClipboardSnippetItem, DevPortInfo, ShelfFileItem } from '../types/liquid';
+import { ClipboardSnippetItem, DevPortInfo, ShelfFileItem, InstalledAppEntry } from '../types/liquid';
 import {
   Search,
   Calculator,
@@ -230,6 +230,32 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
   const [query, setQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Installed Applications State
+  const [installedApps, setInstalledApps] = useState<InstalledAppEntry[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadApps() {
+      const res = await safeInvoke<InstalledAppEntry[]>('get_installed_apps');
+      if (isMounted && res && res.length > 0) {
+        setInstalledApps(res);
+      }
+    }
+    loadApps();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleLaunchApp = useCallback(
+    async (app: InstalledAppEntry) => {
+      playGlassPop();
+      onClose();
+      await safeInvoke('launch_installed_app', { path: app.path });
+    },
+    [onClose]
+  );
 
   // Tab 2: Clipboard & Snippets State
   const [snippets, setSnippets] = useState<ClipboardSnippetItem[]>(() => {
@@ -541,6 +567,20 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
     });
   }, [snippets, snippetFilter, query, activeTab]);
 
+  // Filter installed apps by query
+  const matchedApps = useMemo(() => {
+    if (activeTab !== 'omni' || !query.trim() || isAiQuery || mathResult) return [];
+    const q = query.trim().toLowerCase();
+    return installedApps
+      .filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          a.category.toLowerCase().includes(q) ||
+          a.path.toLowerCase().includes(q)
+      )
+      .slice(0, 4);
+  }, [activeTab, query, isAiQuery, mathResult, installedApps]);
+
   // Handle Enter key for instant execution & Escape/Alt+S for closing
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape' || (e.altKey && (e.code === 'KeyS' || e.key === 's' || e.key === 'S'))) {
@@ -554,6 +594,11 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
       if (mathResult) {
         e.preventDefault();
         handleCopyText(mathResult.result.toString(), 'math');
+        return;
+      }
+      if (activeTab === 'omni' && matchedApps.length > 0) {
+        e.preventDefault();
+        handleLaunchApp(matchedApps[0]);
         return;
       }
       if (activeTab === 'omni' && matchedCommands.length > 0) {
@@ -1035,7 +1080,78 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
               </motion.div>
             )}
 
-            {/* 1.3 Island Commands Header & List */}
+            {/* 1.3 Matched Installed Applications */}
+            {matchedApps.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <div style={{ fontSize: '10.5px', color: '#38bdf8', fontWeight: 700, letterSpacing: '0.5px' }}>
+                  APPLICATIONS ({matchedApps.length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {matchedApps.map((app, idx) => (
+                    <div
+                      key={app.id}
+                      onClick={() => handleLaunchApp(app)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '7px 12px',
+                        borderRadius: '10px',
+                        backgroundColor: idx === 0 ? 'rgba(56, 189, 248, 0.16)' : 'var(--pill-bg)',
+                        border: idx === 0 ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid var(--glass-border)',
+                        cursor: 'pointer',
+                        transition: 'all 0.12s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                        <div
+                          style={{
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '7px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {app.icon_data ? (
+                            <img src={app.icon_data} alt="" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
+                          ) : (
+                            <Sparkles size={14} style={{ color: '#38bdf8' }} />
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {app.name}
+                          </span>
+                          <span style={{ fontSize: '9.5px', color: 'var(--text-secondary)' }}>
+                            {app.category} • {app.is_running ? 'Running' : 'Application'}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '9.5px',
+                          fontWeight: 600,
+                          padding: '2px 7px',
+                          borderRadius: '4px',
+                          backgroundColor: app.is_running ? 'rgba(34, 197, 94, 0.2)' : 'rgba(56, 189, 248, 0.2)',
+                          color: app.is_running ? '#4ade80' : '#38bdf8',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {app.is_running ? 'Switch' : 'Press Enter to Open'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 1.4 Island Commands Header & List */}
             <div style={{ fontSize: '10.5px', color: 'var(--text-secondary)', fontWeight: 600, marginTop: '2px' }}>
               ISLAND COMMANDS ({matchedCommands.length})
             </div>

@@ -7,7 +7,7 @@ import {
   convertImageFormat,
   triggerFileDownload,
   formatFileSize,
-  DEFAULT_BEACH_SVG
+  DEFAULT_BEACH_SVG,
 } from '../../utils/imageConverter';
 import { ShelfFileItem } from '../../types/liquid';
 import {
@@ -19,11 +19,12 @@ import {
   Check,
   Sparkles,
   FileText,
-  Trash2,
   Copy,
   ExternalLink,
   Globe,
   FileCode,
+  FolderOpen,
+  Download,
 } from 'lucide-react';
 
 interface ShelfSlideProps {
@@ -48,7 +49,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
     }, 2200);
   }, []);
 
-  // Handle local File Object dropping
+  // Handle local File Object dropping / browsing
   const handleProcessFiles = useCallback(
     (files: FileList | File[]) => {
       if (!files || files.length === 0) return;
@@ -57,16 +58,60 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
       onDropJellyBounce?.();
 
       Array.from(files).forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const resultUrl = e.target?.result as string;
+        const isImage = file.type.startsWith('image/');
+        const isText =
+          file.type.startsWith('text/') ||
+          /\.(txt|md|json|js|ts|tsx|jsx|rs|py|html|css|xml|yaml|yml|sh|bat)$/i.test(file.name);
+
+        if (isImage) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const resultUrl = (e.target?.result as string) || DEFAULT_BEACH_SVG;
+            const newFile: ShelfFileItem = {
+              id: `shelf-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              name: file.name,
+              size: file.size,
+              formattedSize: formatFileSize(file.size),
+              type: file.type || 'image/png',
+              previewUrl: resultUrl,
+              timestamp: 'Just now',
+              isCompressed: false,
+              originalSize: file.size,
+              originalFormattedSize: formatFileSize(file.size),
+            };
+            systemStore.addShelfFile(newFile);
+            triggerCatchAlert(file.name);
+          };
+          reader.readAsDataURL(file);
+        } else if (isText && file.size < 500_000) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const textContent = (e.target?.result as string) || '';
+            const newFile: ShelfFileItem = {
+              id: `shelf-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              name: file.name,
+              size: file.size,
+              formattedSize: formatFileSize(file.size),
+              type: file.type || 'text/plain',
+              previewUrl: '',
+              content: textContent,
+              timestamp: 'Just now',
+              isCompressed: false,
+              originalSize: file.size,
+              originalFormattedSize: formatFileSize(file.size),
+            };
+            systemStore.addShelfFile(newFile);
+            triggerCatchAlert(file.name);
+          };
+          reader.readAsText(file);
+        } else {
           const newFile: ShelfFileItem = {
             id: `shelf-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
             name: file.name,
             size: file.size,
             formattedSize: formatFileSize(file.size),
             type: file.type || 'application/octet-stream',
-            previewUrl: resultUrl || DEFAULT_BEACH_SVG,
+            previewUrl: '',
             timestamp: 'Just now',
             isCompressed: false,
             originalSize: file.size,
@@ -74,8 +119,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
           };
           systemStore.addShelfFile(newFile);
           triggerCatchAlert(file.name);
-        };
-        reader.readAsDataURL(file);
+        }
       });
     },
     [onDropJellyBounce, triggerCatchAlert]
@@ -155,7 +199,9 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
       // 3. Dragged Link / URL (via text/uri-list or http plaintext)
       const uriList = e.dataTransfer.getData('text/uri-list');
       const plainText = e.dataTransfer.getData('text/plain')?.trim();
-      const targetUrl = (uriList && uriList.trim()) || (plainText && /^https?:\/\//i.test(plainText) ? plainText : null);
+      const targetUrl =
+        (uriList && uriList.trim()) ||
+        (plainText && /^https?:\/\//i.test(plainText) ? plainText : null);
 
       if (targetUrl) {
         playGlassPop();
@@ -164,7 +210,9 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
         let host = 'Web Link';
         try {
           const parsed = new URL(targetUrl);
-          host = parsed.hostname + (parsed.pathname.length > 1 ? parsed.pathname.slice(0, 22) : '');
+          host =
+            parsed.hostname +
+            (parsed.pathname.length > 1 ? parsed.pathname.slice(0, 22) : '');
         } catch {
           host = targetUrl.slice(0, 28);
         }
@@ -191,8 +239,13 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
         onDropJellyBounce?.();
 
         const firstLine = plainText.split('\n')[0].trim();
-        const title = firstLine.length > 28 ? `${firstLine.substring(0, 28)}...` : firstLine || 'Text Snippet';
-        const isCodeLike = /[{};=()=>]|const |let |function |def |import |class /.test(plainText);
+        const title =
+          firstLine.length > 28
+            ? `${firstLine.substring(0, 28)}...`
+            : firstLine || 'Text Snippet';
+        const isCodeLike = /[{};=()=>]|const |let |function |def |import |class /.test(
+          plainText
+        );
 
         const newFile: ShelfFileItem = {
           id: `text-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -215,6 +268,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
 
   // Click-to-browse trigger
   const handleBrowseClick = useCallback(() => {
+    playToggleClick();
     fileInputRef.current?.click();
   }, []);
 
@@ -226,6 +280,76 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
       e.target.value = '';
     },
     [handleProcessFiles]
+  );
+
+  // Paste from Clipboard Action
+  const handlePasteClipboard = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      playGlassPop();
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text || text.trim().length === 0) return;
+
+        onDropJellyBounce?.();
+        const trimmed = text.trim();
+
+        // Check if URL
+        if (/^https?:\/\//i.test(trimmed)) {
+          let host = 'Web Link';
+          try {
+            const parsed = new URL(trimmed);
+            host =
+              parsed.hostname +
+              (parsed.pathname.length > 1 ? parsed.pathname.slice(0, 22) : '');
+          } catch {
+            host = trimmed.slice(0, 28);
+          }
+
+          const newFile: ShelfFileItem = {
+            id: `link-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: host,
+            size: trimmed.length,
+            formattedSize: 'Web Link',
+            type: 'url',
+            previewUrl: '',
+            timestamp: 'Just now',
+            isCompressed: false,
+            content: trimmed,
+          };
+          systemStore.addShelfFile(newFile);
+          triggerCatchAlert(host);
+          return;
+        }
+
+        // Text / Code Snippet
+        const firstLine = trimmed.split('\n')[0].trim();
+        const title =
+          firstLine.length > 28
+            ? `${firstLine.substring(0, 28)}...`
+            : firstLine || 'Clipboard Snippet';
+        const isCodeLike = /[{};=()=>]|const |let |function |def |import |class /.test(
+          trimmed
+        );
+
+        const newFile: ShelfFileItem = {
+          id: `text-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          name: title,
+          size: trimmed.length,
+          formattedSize: `${trimmed.length} chars`,
+          type: isCodeLike ? 'text/code' : 'text/plain',
+          previewUrl: '',
+          timestamp: 'Just now',
+          isCompressed: false,
+          content: trimmed,
+        };
+        systemStore.addShelfFile(newFile);
+        triggerCatchAlert(title);
+      } catch (err) {
+        console.warn('Clipboard read error:', err);
+      }
+    },
+    [onDropJellyBounce, triggerCatchAlert]
   );
 
   // Quick Test Action: "Simulate Drop beach.jpg"
@@ -278,7 +402,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
     [onDropJellyBounce, triggerCatchAlert]
   );
 
-  // 1-Click Copy Text / URL
+  // 1-Click Copy Text / URL / Path
   const handleCopyText = useCallback((text: string, id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(text);
@@ -294,18 +418,52 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
     window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
 
+  // Reveal local file in Windows File Explorer
+  const handleRevealInExplorer = useCallback(async (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    playToggleClick();
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_file_in_explorer', { path });
+    } catch (err) {
+      console.warn('Reveal in Explorer failed:', err);
+    }
+  }, []);
+
+  // Open file with Windows default app
+  const handleOpenFileDefault = useCallback(async (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    playToggleClick();
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_file_default', { path });
+    } catch (err) {
+      console.warn('Open file default failed:', err);
+    }
+  }, []);
+
+  // Direct download / save file
+  const handleDownload = useCallback((file: ShelfFileItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    playToggleClick();
+    if (file.previewUrl) {
+      triggerFileDownload(file.previewUrl, file.name);
+    } else if (file.content) {
+      const blob = new Blob([file.content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      triggerFileDownload(
+        url,
+        file.name.includes('.') ? file.name : `${file.name}.txt`
+      );
+      URL.revokeObjectURL(url);
+    }
+  }, []);
+
   // Remove single file
   const handleRemove = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     playToggleClick();
     systemStore.removeShelfFile(id);
-  }, []);
-
-  // Clear all files
-  const handleClearAll = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    playGlassPop();
-    systemStore.clearShelfFiles();
   }, []);
 
   // Quick Image Compressor Action (Compress (-65%))
@@ -348,7 +506,6 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
         const targetFormat: 'webp' | 'png' = isCurrentWebp ? 'png' : 'webp';
         const res = await convertImageFormat(file.previewUrl, targetFormat);
 
-        // Compute new filename
         const baseName = file.name.replace(/\.[^/.]+$/, '');
         const newFilename = `${baseName}.${res.extension}`;
 
@@ -359,7 +516,6 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
           previewUrl: res.dataUrl,
         });
 
-        // Trigger direct native client download
         triggerFileDownload(res.dataUrl, newFilename);
       } catch (err) {
         console.error('Format conversion failed:', err);
@@ -392,7 +548,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,*"
+        accept="*/*"
         style={{ display: 'none' }}
         onChange={handleFileInputChange}
       />
@@ -408,140 +564,152 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
             transition={{ duration: 0.16 }}
             style={{
               position: 'absolute',
-              top: '4px',
+              top: '2px',
               left: '50%',
               transform: 'translateX(-50%)',
-              zIndex: 30,
-              padding: '2px 10px',
+              zIndex: 35,
+              padding: '3px 12px',
               borderRadius: '9999px',
-              backgroundColor: 'rgba(59, 130, 246, 0.9)',
-              color: '#ffffff',
+              backgroundColor: 'rgba(56, 189, 248, 0.92)',
+              backdropFilter: 'blur(12px)',
+              color: '#04101d',
               fontSize: '10px',
-              fontWeight: 600,
+              fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.45)',
+              gap: '5px',
+              boxShadow: '0 4px 16px rgba(56, 189, 248, 0.5)',
               pointerEvents: 'none',
             }}
           >
-            <Sparkles size={11} />
+            <Sparkles size={11} style={{ color: '#04101d' }} />
             <span>{catchNotification}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* ==================================================================== */}
-      {/* 1. Left Universal Dropzone Box (122px × 84px)                        */}
+      {/* 1. Left Universal Dropzone Box (128px × 86px)                        */}
       {/* ==================================================================== */}
       <motion.div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={handleBrowseClick}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         animate={{
-          scale: isDragOver ? 1.03 : 1,
-          borderColor: isDragOver ? '#3b82f6' : 'rgba(255, 255, 255, 0.22)',
-          backgroundColor: isDragOver ? 'rgba(59, 130, 246, 0.14)' : 'rgba(255, 255, 255, 0.04)',
+          borderColor: isDragOver ? '#38bdf8' : 'rgba(255, 255, 255, 0.22)',
+          backgroundColor: isDragOver ? 'rgba(56, 189, 248, 0.16)' : 'rgba(255, 255, 255, 0.04)',
+          boxShadow: isDragOver
+            ? '0 0 20px rgba(56, 189, 248, 0.45)'
+            : '0 4px 12px rgba(0, 0, 0, 0.15)',
         }}
         transition={{ type: 'spring', stiffness: 450, damping: 24 }}
         style={{
-          width: '122px',
-          height: '84px',
-          minWidth: '122px',
+          width: '128px',
+          height: '86px',
+          minWidth: '128px',
           borderWidth: '1.5px',
           borderStyle: 'dashed',
-          borderRadius: '12px',
+          borderRadius: '14px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '3px',
           cursor: 'pointer',
-          padding: '6px',
+          padding: '6px 4px',
           boxSizing: 'border-box',
           position: 'relative',
           overflow: 'hidden',
           flexShrink: 0,
+          background:
+            'linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%)',
+          backdropFilter: 'blur(16px)',
         }}
-        title="Drop anything: text selections, web images, links, or files"
+        title="Drop files, images, links, or snippets - or click to browse"
       >
-        <FolderDown
-          size={18}
+        <div
           style={{
-            color: isDragOver ? '#3b82f6' : 'var(--text-secondary)',
-            transition: 'color 0.15s ease',
+            width: '24px',
+            height: '24px',
+            borderRadius: '7px',
+            backgroundColor: isDragOver ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.15s ease',
           }}
-        />
+        >
+          <FolderDown
+            size={14}
+            style={{
+              color: isDragOver ? '#38bdf8' : '#e2e8f0',
+              transition: 'color 0.15s ease',
+            }}
+          />
+        </div>
 
         <span
           style={{
             fontSize: '9.5px',
-            fontWeight: 600,
-            color: isDragOver ? '#3b82f6' : 'var(--text-primary)',
+            fontWeight: 700,
+            color: isDragOver ? '#38bdf8' : '#ffffff',
             letterSpacing: '0.2px',
             textAlign: 'center',
+            lineHeight: 1.1,
           }}
         >
           {isDragOver ? 'Release to Drop' : 'Drop anything here'}
         </span>
 
-        {/* Actions inside Left Dropzone */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+        {/* Quick Action Pills inside Dropzone */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
           <button
             type="button"
-            onClick={handleSimulateDrop}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleBrowseClick();
+            }}
             className="btn-pill"
             style={{
               fontSize: '8px',
-              padding: '1px 5px',
-              height: '16px',
-              backgroundColor: 'var(--pill-bg)',
-              border: '1px solid var(--glass-border)',
-              color: 'var(--text-secondary)',
+              padding: '1px 6px',
+              height: '17px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              color: '#f8fafc',
+              borderRadius: '9999px',
+              gap: '3px',
+              cursor: 'pointer',
             }}
-            title="Simulate Drop: beach.jpg"
+            title="Browse files from PC"
           >
-            <Upload size={8} style={{ color: '#3b82f6' }} />
-            <span>File</span>
+            <Upload size={8} style={{ color: '#38bdf8' }} />
+            <span>Browse</span>
           </button>
 
           <button
             type="button"
-            onClick={handleSimulateTextDrop}
+            onClick={handlePasteClipboard}
             className="btn-pill"
             style={{
               fontSize: '8px',
-              padding: '1px 5px',
-              height: '16px',
-              backgroundColor: 'var(--pill-bg)',
-              border: '1px solid var(--glass-border)',
-              color: 'var(--text-secondary)',
+              padding: '1px 6px',
+              height: '17px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              color: '#f8fafc',
+              borderRadius: '9999px',
+              gap: '3px',
+              cursor: 'pointer',
             }}
-            title="Simulate Drop: Text/Code Snippet"
+            title="Paste text/link from clipboard"
           >
-            <FileCode size={8} style={{ color: '#10b981' }} />
-            <span>Text</span>
+            <Copy size={8} style={{ color: '#10b981' }} />
+            <span>Paste</span>
           </button>
-
-          {shelfFiles.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClearAll}
-              className="btn-pill"
-              style={{
-                fontSize: '8px',
-                padding: '1px 5px',
-                height: '16px',
-                backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                color: '#f87171',
-              }}
-              title="Clear all items from Shelf"
-            >
-              <Trash2 size={8} style={{ color: '#f87171' }} />
-            </button>
-          )}
         </div>
       </motion.div>
 
@@ -551,7 +719,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
       <div
         style={{
           flex: 1,
-          height: '84px',
+          height: '86px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
@@ -563,12 +731,13 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
       >
         <AnimatePresence mode="popLayout">
           {shelfFiles.length === 0 ? (
-            /* Empty State */
+            /* Modern Empty State */
             <motion.div
               key="shelf-empty-state"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.18 }}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -576,30 +745,73 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                 justifyContent: 'center',
                 width: '100%',
                 height: '100%',
-                gap: '5px',
-                color: 'var(--text-secondary)',
-                fontSize: '10.5px',
+                gap: '6px',
+                padding: '0 8px',
+                boxSizing: 'border-box',
               }}
             >
-              <span>Shelf is empty &mdash; drag text, images, links or files</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#ffffff',
+                    letterSpacing: '0.2px',
+                  }}
+                >
+                  Shelf is empty
+                </span>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: '#94a3b8',
+                  }}
+                >
+                  &mdash; drag files, photos, links or text
+                </span>
+              </div>
+
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button
                   type="button"
                   onClick={handleSimulateDrop}
                   className="btn-pill"
-                  style={{ fontSize: '9px', padding: '2px 8px' }}
+                  style={{
+                    fontSize: '9px',
+                    padding: '2px 9px',
+                    height: '20px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#f8fafc',
+                    borderRadius: '9999px',
+                    gap: '4px',
+                    cursor: 'pointer',
+                  }}
+                  title="Add sample 2.4 MB beach.jpg to test compression"
                 >
-                  <Sparkles size={9} style={{ color: '#3b82f6' }} />
-                  <span>Add beach.jpg</span>
+                  <Sparkles size={10} style={{ color: '#38bdf8' }} />
+                  <span>+ Add beach.jpg</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={handleSimulateTextDrop}
                   className="btn-pill"
-                  style={{ fontSize: '9px', padding: '2px 8px' }}
+                  style={{
+                    fontSize: '9px',
+                    padding: '2px 9px',
+                    height: '20px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#f8fafc',
+                    borderRadius: '9999px',
+                    gap: '4px',
+                    cursor: 'pointer',
+                  }}
+                  title="Add sample code snippet to test clipboard"
                 >
-                  <FileCode size={9} style={{ color: '#10b981' }} />
-                  <span>Add Snippet</span>
+                  <FileCode size={10} style={{ color: '#10b981' }} />
+                  <span>+ Add Snippet</span>
                 </button>
               </div>
             </motion.div>
@@ -607,12 +819,27 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
             /* Item Cards */
             shelfFiles.map((file: ShelfFileItem) => {
               const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-              const isText = file.type === 'text/plain' || file.type === 'text/code';
+              const isText =
+                file.type === 'text/plain' ||
+                file.type === 'text/code' ||
+                file.type?.startsWith('text/');
               const isUrl = file.type === 'url' || file.type === 'text/uri-list';
               const isWebImage = file.type === 'image/web';
-              const isImage = file.previewUrl && (isWebImage || file.type?.startsWith('image/') || ['PNG', 'JPG', 'JPEG', 'WEBP', 'GIF', 'SVG'].includes(ext));
+              const isLocalImage =
+                file.type?.startsWith('image/') ||
+                ['PNG', 'JPG', 'JPEG', 'WEBP', 'GIF', 'SVG', 'BMP', 'ICO'].includes(ext);
+              const isImage = Boolean(file.previewUrl) && (isWebImage || isLocalImage);
               const isWebp = ext === 'WEBP';
-              const formatLabel = isUrl ? 'URL' : isText ? (file.type === 'text/code' ? 'CODE' : 'TXT') : isWebImage ? 'WEB' : ext;
+              const hasDiskPath = Boolean(file.path);
+              const formatLabel = isUrl
+                ? 'URL'
+                : isText
+                ? file.type === 'text/code'
+                  ? 'CODE'
+                  : 'TXT'
+                : isWebImage
+                ? 'WEB'
+                : ext;
 
               return (
                 <motion.div
@@ -635,13 +862,14 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                   transition={{ duration: 0.16 }}
                   title="Draggable item - Drag out or click actions below"
                   style={{
-                    minWidth: '256px',
-                    width: '256px',
-                    height: '84px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid var(--glass-border)',
-                    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.22)',
+                    minWidth: '264px',
+                    width: '264px',
+                    height: '86px',
+                    borderRadius: '14px',
+                    backgroundColor: 'rgba(22, 22, 28, 0.88)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
                     display: 'flex',
                     alignItems: 'center',
                     padding: '7px 8px',
@@ -680,25 +908,25 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                     <X size={12} />
                   </button>
 
-                  {/* Thumbnail Preview */}
+                  {/* Thumbnail / Squircle Preview Container */}
                   <div
                     style={{
                       width: '66px',
                       height: '66px',
                       minWidth: '66px',
-                      borderRadius: '8px',
+                      borderRadius: '10px',
                       overflow: 'hidden',
                       border: '1px solid rgba(255, 255, 255, 0.16)',
                       background: isUrl
-                        ? 'rgba(56, 189, 248, 0.08)'
+                        ? 'rgba(56, 189, 248, 0.1)'
                         : isText
-                        ? '#141419'
-                        : '#1e1e24',
+                        ? '#0f172a'
+                        : '#18181b',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       position: 'relative',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.35)',
                     }}
                   >
                     {isImage ? (
@@ -723,11 +951,12 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                             padding: '4px',
                             boxSizing: 'border-box',
                             fontSize: '6.5px',
-                            fontFamily: 'monospace',
-                            color: '#94a3b8',
+                            fontFamily: 'Consolas, monospace',
+                            color: '#93c5fd',
                             overflow: 'hidden',
                             lineHeight: 1.25,
                             wordBreak: 'break-all',
+                            backgroundColor: '#0a0f1d',
                           }}
                         >
                           {file.content.slice(0, 90)}
@@ -748,12 +977,12 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                         fontSize: '7.5px',
                         fontWeight: 700,
                         backgroundColor: isUrl
-                          ? 'rgba(14, 165, 233, 0.85)'
+                          ? 'rgba(14, 165, 233, 0.9)'
                           : isText
-                          ? 'rgba(16, 185, 129, 0.85)'
-                          : 'rgba(0, 0, 0, 0.65)',
+                          ? 'rgba(16, 185, 129, 0.9)'
+                          : 'rgba(0, 0, 0, 0.75)',
                         color: '#f8fafc',
-                        padding: '1px 3px',
+                        padding: '1px 3.5px',
                         borderRadius: '3px',
                         letterSpacing: '0.3px',
                       }}
@@ -780,7 +1009,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                         style={{
                           fontSize: '11px',
                           fontWeight: 600,
-                          color: 'var(--text-primary)',
+                          color: '#ffffff',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -798,8 +1027,8 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                           alignItems: 'center',
                           gap: '4px',
                           fontSize: '9.5px',
-                          color: 'var(--text-secondary)',
-                          marginTop: '1.5px',
+                          color: '#94a3b8',
+                          marginTop: '2px',
                         }}
                       >
                         {file.isCompressed ? (
@@ -816,8 +1045,8 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                               fontSize: '8px',
                               padding: '0 4px',
                               borderRadius: '9999px',
-                              backgroundColor: 'rgba(16, 185, 129, 0.18)',
-                              border: '1px solid rgba(16, 185, 129, 0.35)',
+                              backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                              border: '1px solid rgba(16, 185, 129, 0.4)',
                               color: '#10b981',
                               fontWeight: 700,
                             }}
@@ -832,24 +1061,57 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       {/* Case A: Text / Code Snippet */}
                       {isText && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyText(file.content || file.name, file.id, e)}
-                          className="btn-pill"
-                          style={{
-                            fontSize: '8.5px',
-                            padding: '1.5px 6px',
-                            height: '18px',
-                            backgroundColor: copiedId === file.id ? 'rgba(16, 185, 129, 0.18)' : 'var(--pill-bg)',
-                            borderColor: copiedId === file.id ? '#10b981' : 'var(--glass-border)',
-                            color: copiedId === file.id ? '#10b981' : 'var(--text-primary)',
-                            gap: '3px',
-                          }}
-                          title="Copy text snippet to clipboard"
-                        >
-                          {copiedId === file.id ? <Check size={8} style={{ color: '#10b981' }} /> : <Copy size={8} style={{ color: '#38bdf8' }} />}
-                          <span>{copiedId === file.id ? 'Copied!' : 'Copy Text'}</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) =>
+                              handleCopyText(file.content || file.name, file.id, e)
+                            }
+                            className="btn-pill"
+                            style={{
+                              fontSize: '8.5px',
+                              padding: '1.5px 6px',
+                              height: '18px',
+                              backgroundColor:
+                                copiedId === file.id
+                                  ? 'rgba(16, 185, 129, 0.2)'
+                                  : 'rgba(255, 255, 255, 0.08)',
+                              borderColor:
+                                copiedId === file.id ? '#10b981' : 'rgba(255, 255, 255, 0.15)',
+                              color: copiedId === file.id ? '#10b981' : '#f8fafc',
+                              gap: '3px',
+                              cursor: 'pointer',
+                            }}
+                            title="Copy snippet to clipboard"
+                          >
+                            {copiedId === file.id ? (
+                              <Check size={8} style={{ color: '#10b981' }} />
+                            ) : (
+                              <Copy size={8} style={{ color: '#38bdf8' }} />
+                            )}
+                            <span>{copiedId === file.id ? 'Copied!' : 'Copy'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDownload(file, e)}
+                            className="btn-pill"
+                            style={{
+                              fontSize: '8.5px',
+                              padding: '1.5px 6px',
+                              height: '18px',
+                              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                              borderColor: 'rgba(255, 255, 255, 0.15)',
+                              color: '#f8fafc',
+                              gap: '3px',
+                              cursor: 'pointer',
+                            }}
+                            title="Download snippet as .txt"
+                          >
+                            <Download size={8} style={{ color: '#10b981' }} />
+                            <span>Save</span>
+                          </button>
+                        </>
                       )}
 
                       {/* Case B: Web Link / URL */}
@@ -863,14 +1125,23 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                               fontSize: '8.5px',
                               padding: '1.5px 6px',
                               height: '18px',
-                              backgroundColor: copiedId === file.id ? 'rgba(16, 185, 129, 0.18)' : 'var(--pill-bg)',
-                              borderColor: copiedId === file.id ? '#10b981' : 'var(--glass-border)',
-                              color: copiedId === file.id ? '#10b981' : 'var(--text-primary)',
+                              backgroundColor:
+                                copiedId === file.id
+                                  ? 'rgba(16, 185, 129, 0.2)'
+                                  : 'rgba(255, 255, 255, 0.08)',
+                              borderColor:
+                                copiedId === file.id ? '#10b981' : 'rgba(255, 255, 255, 0.15)',
+                              color: copiedId === file.id ? '#10b981' : '#f8fafc',
                               gap: '3px',
+                              cursor: 'pointer',
                             }}
                             title="Copy link URL"
                           >
-                            {copiedId === file.id ? <Check size={8} style={{ color: '#10b981' }} /> : <Copy size={8} style={{ color: '#38bdf8' }} />}
+                            {copiedId === file.id ? (
+                              <Check size={8} style={{ color: '#10b981' }} />
+                            ) : (
+                              <Copy size={8} style={{ color: '#38bdf8' }} />
+                            )}
                             <span>{copiedId === file.id ? 'Copied' : 'Copy'}</span>
                           </button>
 
@@ -882,10 +1153,11 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                               fontSize: '8.5px',
                               padding: '1.5px 6px',
                               height: '18px',
-                              backgroundColor: 'var(--pill-bg)',
-                              borderColor: 'var(--glass-border)',
-                              color: 'var(--text-primary)',
+                              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                              borderColor: 'rgba(255, 255, 255, 0.15)',
+                              color: '#f8fafc',
                               gap: '3px',
+                              cursor: 'pointer',
                             }}
                             title="Open URL in web browser"
                           >
@@ -900,21 +1172,36 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                         <>
                           <button
                             type="button"
-                            onClick={(e) => handleCopyText(file.content || file.previewUrl || '', file.id, e)}
+                            onClick={(e) =>
+                              handleCopyText(
+                                file.content || file.previewUrl || '',
+                                file.id,
+                                e
+                              )
+                            }
                             className="btn-pill"
                             style={{
                               fontSize: '8.5px',
                               padding: '1.5px 6px',
                               height: '18px',
-                              backgroundColor: copiedId === file.id ? 'rgba(16, 185, 129, 0.18)' : 'var(--pill-bg)',
-                              borderColor: copiedId === file.id ? '#10b981' : 'var(--glass-border)',
-                              color: copiedId === file.id ? '#10b981' : 'var(--text-primary)',
+                              backgroundColor:
+                                copiedId === file.id
+                                  ? 'rgba(16, 185, 129, 0.2)'
+                                  : 'rgba(255, 255, 255, 0.08)',
+                              borderColor:
+                                copiedId === file.id ? '#10b981' : 'rgba(255, 255, 255, 0.15)',
+                              color: copiedId === file.id ? '#10b981' : '#f8fafc',
                               gap: '3px',
+                              cursor: 'pointer',
                             }}
                             title="Copy image source URL"
                           >
-                            {copiedId === file.id ? <Check size={8} style={{ color: '#10b981' }} /> : <Copy size={8} style={{ color: '#38bdf8' }} />}
-                            <span>{copiedId === file.id ? 'Copied' : 'Copy URL'}</span>
+                            {copiedId === file.id ? (
+                              <Check size={8} style={{ color: '#10b981' }} />
+                            ) : (
+                              <Copy size={8} style={{ color: '#38bdf8' }} />
+                            )}
+                            <span>{copiedId === file.id ? 'Copied' : 'Copy'}</span>
                           </button>
 
                           {file.previewUrl && (
@@ -927,22 +1214,23 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                                 fontSize: '8.5px',
                                 padding: '1.5px 5px',
                                 height: '18px',
-                                backgroundColor: 'var(--pill-bg)',
-                                borderColor: 'var(--glass-border)',
-                                color: 'var(--text-primary)',
+                                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                borderColor: 'rgba(255, 255, 255, 0.15)',
+                                color: '#f8fafc',
                                 gap: '2px',
+                                cursor: 'pointer',
                               }}
                               title="Convert format to PNG/WEBP and download"
                             >
-                              <ArrowLeftRight size={8} style={{ color: '#3b82f6' }} />
+                              <ArrowLeftRight size={8} style={{ color: '#38bdf8' }} />
                               <span>Convert</span>
                             </button>
                           )}
                         </>
                       )}
 
-                      {/* Case D: Local Image / File (Compress & Transcode) */}
-                      {!isText && !isUrl && !isWebImage && (
+                      {/* Case D: Image Files (Compress, Transcode, Download) */}
+                      {isImage && !isWebImage && (
                         <>
                           {/* Compress (-65%) Pill */}
                           <button
@@ -956,9 +1244,11 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                               height: '18px',
                               backgroundColor: file.isCompressed
                                 ? 'rgba(16, 185, 129, 0.15)'
-                                : 'var(--pill-bg)',
-                              borderColor: file.isCompressed ? '#10b981' : 'var(--glass-border)',
-                              color: file.isCompressed ? '#10b981' : 'var(--text-primary)',
+                                : 'rgba(255, 255, 255, 0.08)',
+                              borderColor: file.isCompressed
+                                ? '#10b981'
+                                : 'rgba(255, 255, 255, 0.15)',
+                              color: file.isCompressed ? '#10b981' : '#f8fafc',
                               cursor: file.isCompressed ? 'default' : 'pointer',
                               gap: '2px',
                               opacity: file.isCompressed ? 0.8 : 1,
@@ -987,16 +1277,121 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                               fontSize: '8.5px',
                               padding: '1.5px 5px',
                               height: '18px',
-                              backgroundColor: 'var(--pill-bg)',
-                              borderColor: 'var(--glass-border)',
-                              color: 'var(--text-primary)',
+                              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                              borderColor: 'rgba(255, 255, 255, 0.15)',
+                              color: '#f8fafc',
                               gap: '2px',
+                              cursor: 'pointer',
                             }}
                             title={`Convert format to ${isWebp ? 'PNG' : 'WEBP'} and download`}
                           >
-                            <ArrowLeftRight size={8} style={{ color: '#3b82f6' }} />
+                            <ArrowLeftRight size={8} style={{ color: '#38bdf8' }} />
                             <span>{isWebp ? 'PNG' : 'WEBP'}</span>
                           </button>
+
+                          {/* Reveal in Explorer if disk path exists */}
+                          {hasDiskPath && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleRevealInExplorer(file.path!, e)}
+                              className="btn-pill"
+                              style={{
+                                fontSize: '8.5px',
+                                padding: '1.5px 5px',
+                                height: '18px',
+                                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                borderColor: 'rgba(255, 255, 255, 0.15)',
+                                color: '#f8fafc',
+                                gap: '2px',
+                                cursor: 'pointer',
+                              }}
+                              title="Reveal file in Windows File Explorer"
+                            >
+                              <FolderOpen size={8} style={{ color: '#38bdf8' }} />
+                              <span>Reveal</span>
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {/* Case E: General Local Files (Reveal, Open, Copy Path) */}
+                      {!isImage && !isText && !isUrl && !isWebImage && (
+                        <>
+                          {hasDiskPath && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => handleRevealInExplorer(file.path!, e)}
+                                className="btn-pill"
+                                style={{
+                                  fontSize: '8.5px',
+                                  padding: '1.5px 5px',
+                                  height: '18px',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                  borderColor: 'rgba(255, 255, 255, 0.15)',
+                                  color: '#f8fafc',
+                                  gap: '2px',
+                                  cursor: 'pointer',
+                                }}
+                                title="Reveal file in Windows Explorer"
+                              >
+                                <FolderOpen size={8} style={{ color: '#38bdf8' }} />
+                                <span>Reveal</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => handleOpenFileDefault(file.path!, e)}
+                                className="btn-pill"
+                                style={{
+                                  fontSize: '8.5px',
+                                  padding: '1.5px 5px',
+                                  height: '18px',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                  borderColor: 'rgba(255, 255, 255, 0.15)',
+                                  color: '#f8fafc',
+                                  gap: '2px',
+                                  cursor: 'pointer',
+                                }}
+                                title="Open file with default app"
+                              >
+                                <ExternalLink size={8} style={{ color: '#38bdf8' }} />
+                                <span>Open</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) =>
+                                  handleCopyText(file.path!, file.id, e)
+                                }
+                                className="btn-pill"
+                                style={{
+                                  fontSize: '8.5px',
+                                  padding: '1.5px 5px',
+                                  height: '18px',
+                                  backgroundColor:
+                                    copiedId === file.id
+                                      ? 'rgba(16, 185, 129, 0.2)'
+                                      : 'rgba(255, 255, 255, 0.08)',
+                                  borderColor:
+                                    copiedId === file.id
+                                      ? '#10b981'
+                                      : 'rgba(255, 255, 255, 0.15)',
+                                  color: copiedId === file.id ? '#10b981' : '#f8fafc',
+                                  gap: '2px',
+                                  cursor: 'pointer',
+                                }}
+                                title="Copy full file path"
+                              >
+                                {copiedId === file.id ? (
+                                  <Check size={8} style={{ color: '#10b981' }} />
+                                ) : (
+                                  <Copy size={8} style={{ color: '#38bdf8' }} />
+                                )}
+                                <span>{copiedId === file.id ? 'Copied' : 'Path'}</span>
+                              </button>
+                            </>
+                          )}
                         </>
                       )}
                     </div>

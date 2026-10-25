@@ -23,10 +23,10 @@ use windows_sys::Win32::System::Threading::{
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, DestroyIcon, EnumWindows, FindWindowW, GetCursorPos, GetDesktopWindow,
-    GetForegroundWindow, GetIconInfo, GetShellWindow, GetWindowLongW, GetWindowRect,
+    BringWindowToTop, EnumWindows, FindWindowW, GetCursorPos, GetDesktopWindow,
+    GetForegroundWindow, GetShellWindow, GetWindowLongW, GetWindowRect,
     GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
-    ShowWindow, GWL_EXSTYLE, ICONINFO, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
+    ShowWindow, GWL_EXSTYLE, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
     WS_EX_TOOLWINDOW,
 };
 
@@ -35,6 +35,7 @@ pub static NATIVE_TASKBAR_HIDDEN: AtomicBool = AtomicBool::new(false);
 pub static DOCK_LOOP_STARTED: AtomicBool = AtomicBool::new(false);
 pub static DOCK_HOVERED: AtomicBool = AtomicBool::new(false);
 pub static FLYOUT_OPEN: AtomicBool = AtomicBool::new(false);
+pub static DOCK_PINNED: AtomicBool = AtomicBool::new(false);
 
 static ICON_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
@@ -49,7 +50,7 @@ pub struct RunningAppInfo {
 }
 
 #[cfg(windows)]
-unsafe fn extract_exe_icon_base64(exe_path: &str) -> Option<String> {
+pub unsafe fn extract_exe_icon_base64(exe_path: &str) -> Option<String> {
     if let Ok(mut cache_guard) = ICON_CACHE.lock() {
         let cache = cache_guard.get_or_insert_with(HashMap::new);
         if let Some(cached) = cache.get(exe_path) {
@@ -58,8 +59,11 @@ unsafe fn extract_exe_icon_base64(exe_path: &str) -> Option<String> {
     }
 
     use windows_sys::Win32::Graphics::Gdi::{
-        CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, BITMAPINFO, BITMAPINFOHEADER,
-        BI_RGB, DIB_RGB_COLORS,
+        CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
+        ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DestroyIcon, DrawIconEx, DI_NORMAL,
     };
 
     #[repr(C)]
@@ -102,85 +106,106 @@ unsafe fn extract_exe_icon_base64(exe_path: &str) -> Option<String> {
     }
 
     let hicon = shfi.h_icon;
-    let mut icon_info: ICONINFO = std::mem::zeroed();
-    if GetIconInfo(hicon, &mut icon_info) == 0 {
-        DestroyIcon(hicon);
-        return None;
-    }
-
-    let hbm = if !icon_info.hbmColor.is_null() {
-        icon_info.hbmColor
-    } else {
-        icon_info.hbmMask
-    };
-
-    let hdc = CreateCompatibleDC(std::ptr::null_mut());
     let width = 32i32;
     let height = 32i32;
+
+    let screen_dc = GetDC(std::ptr::null_mut());
+    let mem_dc = CreateCompatibleDC(screen_dc);
+    let hbitmap = CreateCompatibleBitmap(screen_dc, width, height);
+    let old_bmp = SelectObject(mem_dc, hbitmap);
+
+    // DrawIconEx automatically scales any 16x16, 48x48, 64x64 or 256x256 icon cleanly into the exact 32x32 canvas
+    DrawIconEx(
+        mem_dc,
+        0,
+        0,
+        hicon,
+        width,
+        height,
+        0,
+        std::ptr::null_mut(),
+        DI_NORMAL,
+    );
 
     let mut bmi: BITMAPINFO = std::mem::zeroed();
     bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
     bmi.bmiHeader.biWidth = width;
-    bmi.bmiHeader.biHeight = -height; // top-down
+    bmi.bmiHeader.biHeight = -height; // negative for top-down orientation
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
 
-    let mut pixels = vec![0u8; (width * height * 4) as usize];
+    let mut bgra_pixels = vec![0u8; (width * height * 4) as usize];
     let lines = GetDIBits(
-        hdc,
-        hbm,
+        mem_dc,
+        hbitmap,
         0,
         height as u32,
-        pixels.as_mut_ptr() as *mut _,
+        bgra_pixels.as_mut_ptr() as *mut _,
         &mut bmi,
         DIB_RGB_COLORS,
     );
 
-    DeleteDC(hdc);
-    if !icon_info.hbmColor.is_null() {
-        DeleteObject(icon_info.hbmColor);
-    }
-    if !icon_info.hbmMask.is_null() {
-        DeleteObject(icon_info.hbmMask);
-    }
+    // Cleanup GDI objects immediately
+    SelectObject(mem_dc, old_bmp);
+    DeleteObject(hbitmap);
+    DeleteDC(mem_dc);
+    ReleaseDC(std::ptr::null_mut(), screen_dc);
     DestroyIcon(hicon);
 
     if lines == 0 {
         return None;
     }
 
-    // Assemble 32-bit BMP header & pixels in memory
-    let file_header_size = 14u32;
-    let info_header_size = 40u32;
-    let image_size = (width * height * 4) as u32;
-    let file_size = file_header_size + info_header_size + image_size;
+    // Convert BGRA to RGBA with alpha channel verification
+    let mut rgba_pixels = vec![0u8; (width * height * 4) as usize];
+    let mut has_non_zero_alpha = false;
 
-    let mut bmp_bytes = Vec::with_capacity(file_size as usize);
-    // BITMAPFILEHEADER
-    bmp_bytes.extend_from_slice(b"BM");
-    bmp_bytes.extend_from_slice(&file_size.to_le_bytes());
-    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // reserved
-    let off_bits = file_header_size + info_header_size;
-    bmp_bytes.extend_from_slice(&off_bits.to_le_bytes());
+    for i in 0..(width * height) as usize {
+        let b = bgra_pixels[i * 4];
+        let g = bgra_pixels[i * 4 + 1];
+        let r = bgra_pixels[i * 4 + 2];
+        let a = bgra_pixels[i * 4 + 3];
 
-    // BITMAPINFOHEADER
-    bmp_bytes.extend_from_slice(&info_header_size.to_le_bytes());
-    bmp_bytes.extend_from_slice(&width.to_le_bytes());
-    bmp_bytes.extend_from_slice(&(-height).to_le_bytes()); // top-down
-    bmp_bytes.extend_from_slice(&1u16.to_le_bytes()); // planes
-    bmp_bytes.extend_from_slice(&32u16.to_le_bytes()); // bit count
-    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // BI_RGB
-    bmp_bytes.extend_from_slice(&image_size.to_le_bytes());
-    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biXPelsPerMeter
-    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biYPelsPerMeter
-    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biClrUsed
-    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biClrImportant
+        if a > 0 {
+            has_non_zero_alpha = true;
+        }
 
-    bmp_bytes.extend_from_slice(&pixels);
+        rgba_pixels[i * 4] = r;
+        rgba_pixels[i * 4 + 1] = g;
+        rgba_pixels[i * 4 + 2] = b;
+        rgba_pixels[i * 4 + 3] = a;
+    }
 
-    let base64_str = base64::engine::general_purpose::STANDARD.encode(&bmp_bytes);
-    let data_url = format!("data:image/bmp;base64,{}", base64_str);
+    // If the icon lacks per-pixel alpha (older GDI format), make all visible pixels opaque
+    if !has_non_zero_alpha {
+        for i in 0..(width * height) as usize {
+            let r = rgba_pixels[i * 4];
+            let g = rgba_pixels[i * 4 + 1];
+            let b = rgba_pixels[i * 4 + 2];
+            if r > 0 || g > 0 || b > 0 {
+                rgba_pixels[i * 4 + 3] = 255;
+            }
+        }
+    }
+
+    // Encode cleanly to PNG base64
+    let mut png_bytes = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut png_bytes, width as u32, height as u32);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        if let Ok(mut writer) = encoder.write_header() {
+            if writer.write_image_data(&rgba_pixels).is_err() {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    }
+
+    let base64_str = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+    let data_url = format!("data:image/png;base64,{}", base64_str);
 
     if let Ok(mut cache_guard) = ICON_CACHE.lock() {
         if let Some(ref mut cache) = *cache_guard {
@@ -594,6 +619,12 @@ pub fn set_taskbar_flyout_open(open: bool) {
     FLYOUT_OPEN.store(open, Ordering::Relaxed);
 }
 
+/// Dynamic toggle for taskbar pin state (prevents dock auto-hide)
+#[tauri::command]
+pub fn set_dock_pinned(pinned: bool) {
+    DOCK_PINNED.store(pinned, Ordering::Relaxed);
+}
+
 /// Launches standard Windows tools or simulates the Start Menu keypress
 #[tauri::command]
 pub fn launch_system_action(action: String) -> bool {
@@ -603,6 +634,9 @@ pub fn launch_system_action(action: String) -> bool {
         use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
             keybd_event, KEYEVENTF_KEYUP, VK_LWIN,
         };
+
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         match action.as_str() {
             "start_menu" => unsafe {
@@ -623,6 +657,68 @@ pub fn launch_system_action(action: String) -> bool {
             "browser" => {
                 let _ = Command::new("cmd")
                     .args(&["/c", "start", "https://google.com"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "wifi_networks" => {
+                // Try available networks flyout first, fallback to Wi-Fi settings
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "ms-availablenetworks:"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "bluetooth_settings" => {
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "ms-settings:bluetooth"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "sound_settings" => {
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "ms-settings:sound"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "power_settings" => {
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "ms-settings:powersleep"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "datetime_settings" => {
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "ms-settings:dateandtime"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "lock_workstation" => {
+                let _ = Command::new("rundll32.exe")
+                    .args(&["user32.dll,LockWorkStation"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "task_manager" => {
+                let _ = Command::new("taskmgr.exe").spawn();
+                true
+            }
+            "windows_settings" => {
+                let _ = Command::new("cmd")
+                    .args(&["/c", "start", "ms-settings:"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+                true
+            }
+            "sleep" => {
+                let _ = Command::new("rundll32.exe")
+                    .args(&["powrprof.dll,SetSuspendState", "0,1,0"])
+                    .creation_flags(CREATE_NO_WINDOW)
                     .spawn();
                 true
             }
@@ -698,7 +794,7 @@ pub fn spawn_or_update_taskbar_window(app: &AppHandle) -> Result<(), Box<dyn std
         let pos = monitor.position();
         let size = monitor.size();
         let scale = monitor.scale_factor();
-        let height_px = (360.0 * scale).round() as u32;
+        let height_px = (520.0 * scale).round() as u32;
 
         let win_x = pos.x;
         let win_y = pos.y + size.height as i32 - height_px as i32;
@@ -729,6 +825,7 @@ pub fn start_dock_hit_test_loop(window: Window) {
         #[cfg(windows)]
         let mut pt: POINT = unsafe { std::mem::zeroed() };
         let mut prev_inside = false;
+        let mut dock_visible = true;
 
         loop {
             std::thread::sleep(Duration::from_millis(35));
@@ -737,30 +834,62 @@ pub fn start_dock_hit_test_loop(window: Window) {
 
             #[cfg(windows)]
             {
+                // 1. Permanently prevent native Windows taskbar from popping up while hidden
+                if NATIVE_TASKBAR_HIDDEN.load(Ordering::Relaxed) {
+                    unsafe {
+                        let primary = win32::get_taskbar_hwnd();
+                        if !primary.is_null() && IsWindowVisible(primary) != 0 {
+                            ShowWindow(primary, SW_HIDE);
+                        }
+                        let secondary = win32::get_secondary_taskbar_hwnd();
+                        if !secondary.is_null() && IsWindowVisible(secondary) != 0 {
+                            ShowWindow(secondary, SW_HIDE);
+                        }
+                    }
+                }
+
+                // 2. Cursor proximity hit-test and smart auto-hide
                 let success = unsafe { GetCursorPos(&mut pt) };
                 if success != 0 {
                     if let Ok(pos) = window.outer_position() {
                         if let Ok(size) = window.outer_size() {
                             let monitor_bottom = pos.y + size.height as i32;
                             let is_flyout = FLYOUT_OPEN.load(Ordering::Relaxed);
+                            let is_pinned = DOCK_PINNED.load(Ordering::Relaxed);
                             let scale = window.scale_factor().unwrap_or(1.0);
 
-                            let inside = if is_flyout || hover_forced {
-                                // Full 360px window clickable when flyout open or dock hovered
-                                let flyout_top = monitor_bottom - (360.0 * scale).round() as i32;
-                                pt.y >= flyout_top && pt.y <= (monitor_bottom + 6)
-                            } else {
-                                // Idle: only bottom 68px dock area is clickable
-                                let dock_top = monitor_bottom - (68.0 * scale).round() as i32;
-                                let in_dock_y = pt.y >= dock_top && pt.y <= (monitor_bottom + 6);
-                                let center_x = pos.x + (size.width as i32 / 2);
-                                let half_dock_w = 520;
-                                let in_capsule_x =
-                                    (pt.x >= center_x - half_dock_w) && (pt.x <= center_x + half_dock_w);
-                                let near_edge = pt.y >= (monitor_bottom - 12) && pt.y <= (monitor_bottom + 6);
+                            // Smart auto-hide choreography:
+                            // When pinned or flyout is open: always visible & clickable
+                            // Reveal trigger: bottom 16px boundary edge of the screen
+                            // Stay visible: within 78px dock area while revealed
+                            // Auto-hide: moved above dock into active apps
+                            let trigger_edge = (16.0 * scale).round() as i32;
+                            let dock_height_zone = (78.0 * scale).round() as i32;
 
-                                near_edge || (in_capsule_x && in_dock_y)
+                            let next_visible = if is_pinned || is_flyout || hover_forced {
+                                true
+                            } else if pt.y >= (monitor_bottom - trigger_edge) && pt.y <= (monitor_bottom + 10) {
+                                true
+                            } else if dock_visible
+                                && pt.y >= (monitor_bottom - dock_height_zone)
+                                && pt.y <= (monitor_bottom + 10)
+                            {
+                                true
+                            } else {
+                                false
                             };
+
+                            let inside = if is_flyout {
+                                let flyout_top = monitor_bottom - (510.0 * scale).round() as i32;
+                                pt.y >= flyout_top && pt.y <= (monitor_bottom + 10)
+                            } else {
+                                next_visible
+                            };
+
+                            if next_visible != dock_visible {
+                                dock_visible = next_visible;
+                                let _ = window.emit("dock-visibility", dock_visible);
+                            }
 
                             if inside != prev_inside {
                                 prev_inside = inside;

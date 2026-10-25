@@ -195,7 +195,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
         });
         unlistenApproach = subApproach;
 
-        const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+        const unlisten = await getCurrentWebview().onDragDropEvent(async (event) => {
           if (!isMounted) return;
           const payload = event.payload;
 
@@ -206,23 +206,56 @@ export const IslandShell: React.FC<IslandShellProps> = ({
             isDraggingRef.current = false;
             const paths = payload.paths;
             if (paths && paths.length > 0) {
-              paths.forEach((filePath) => {
+              const { convertFileSrc, invoke } = await import('@tauri-apps/api/core');
+              for (const filePath of paths) {
                 const name = filePath.split(/[\\/]/).pop() || filePath;
                 const ext = name.split('.').pop()?.toLowerCase() || '';
-                const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
+                const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico'].includes(ext);
+
+                let previewUrl = '';
+                if (isImage) {
+                  try {
+                    previewUrl = convertFileSrc(filePath);
+                  } catch {
+                    previewUrl = '';
+                  }
+                }
+
+                let formattedSize = isImage ? 'Photo' : ext ? `${ext.toUpperCase()} File` : 'File';
+                let sizeBytes: number = 1024 * 100;
+                let textPreview: string | undefined = undefined;
+
+                try {
+                  const meta = await invoke<{
+                    formatted_size?: string;
+                    size_bytes?: number;
+                    text_preview?: string;
+                  }>('inspect_dropped_file', { path: filePath });
+
+                  if (meta) {
+                    if (meta.formatted_size) formattedSize = meta.formatted_size;
+                    if (typeof meta.size_bytes === 'number') sizeBytes = meta.size_bytes;
+                    if (meta.text_preview) textPreview = meta.text_preview;
+                  }
+                } catch {
+                  // Fallback to defaults
+                }
 
                 const newFile: ShelfFileItem = {
                   id: `shelf-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                   name,
-                  size: 1024 * 120,
-                  formattedSize: 'File',
-                  type: isImage ? `image/${ext}` : 'application/octet-stream',
-                  previewUrl: '',
+                  size: sizeBytes,
+                  formattedSize,
+                  type: isImage ? `image/${ext}` : ext ? `file/${ext}` : 'application/octet-stream',
+                  previewUrl,
                   timestamp: 'Just now',
-                  content: filePath,
+                  content: textPreview || filePath,
+                  path: filePath,
+                  originalSize: sizeBytes,
+                  originalFormattedSize: formattedSize,
                 };
                 systemStore.addShelfFile(newFile);
-              });
+              }
               playGlassPop();
             }
           } else {
@@ -628,68 +661,6 @@ export const IslandShell: React.FC<IslandShellProps> = ({
               }}
             >
               {desktopDirection === 'left' ? '← DESK 1' : 'DESK 2 →'}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ==================================================================== */}
-      {/* 5. Floating Tab / App Switch Ticker below Island                      */}
-      {/* ==================================================================== */}
-      <AnimatePresence>
-        {isTabSwitch && !isDesktopSwitch && workspaceActivity && (
-          <motion.div
-            key={`tab-ticker-${workspaceActivity.timestamp}`}
-            initial={{ opacity: 0, y: -6, scale: 0.94 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.94 }}
-            transition={{ type: 'spring', stiffness: 480, damping: 26 }}
-            style={{
-              marginTop: '6px',
-              padding: '3px 12px',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(15, 23, 42, 0.88)',
-              backdropFilter: 'blur(16px)',
-              border: `1px solid ${workspaceActivity.accent_color || 'rgba(255, 255, 255, 0.16)'}`,
-              boxShadow: `0 6px 16px rgba(0, 0, 0, 0.4), 0 0 10px ${
-                workspaceActivity.accent_color || '#38bdf8'
-              }33`,
-              color: '#ffffff',
-              fontSize: '10.5px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              pointerEvents: 'none',
-              maxWidth: '320px',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              textOverflow: 'ellipsis',
-              zIndex: 40,
-            }}
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: workspaceActivity.accent_color || '#38bdf8',
-                boxShadow: `0 0 6px ${workspaceActivity.accent_color || '#38bdf8'}`,
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ color: '#94a3b8', fontWeight: 500 }}>
-              {workspaceActivity.app_name} &mdash;
-            </span>
-            <span
-              style={{
-                color: '#ffffff',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {workspaceActivity.tab_title}
             </span>
           </motion.div>
         )}

@@ -6,6 +6,7 @@ pub mod window_hooks;
 pub mod clipboard_ports;
 pub mod media_session;
 pub mod hardware_monitor;
+pub mod app_launcher;
 
 use tauri::Manager;
 
@@ -67,12 +68,19 @@ pub fn run() {
             media_session::media_next_track,
             media_session::media_prev_track,
             hardware_monitor::get_battery_hardware_status,
+            hardware_monitor::trigger_bluetooth_toast,
             taskbar::set_dock_click_through,
             taskbar::set_native_taskbar_hidden,
             taskbar::get_running_apps,
             taskbar::focus_or_toggle_app,
             taskbar::launch_system_action,
             taskbar::set_taskbar_flyout_open,
+            taskbar::set_dock_pinned,
+            app_launcher::get_installed_apps,
+            app_launcher::launch_installed_app,
+            app_launcher::inspect_dropped_file,
+            app_launcher::open_file_in_explorer,
+            app_launcher::open_file_default,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LiquidIsland application")

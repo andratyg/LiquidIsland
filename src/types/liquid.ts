@@ -55,6 +55,7 @@ export interface ShelfFileItem {
   originalSize?: number;
   originalFormattedSize?: string;
   content?: string;
+  path?: string;
 }
 
 export interface TodoTaskItem {
@@ -65,7 +66,15 @@ export interface TodoTaskItem {
   timestamp?: string;
 }
 
-export type ToastType = 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'hud' | 'desktop-switch' | 'window-pin';
+export type ToastType =
+  | 'airbuds'
+  | 'battery'
+  | 'charging'
+  | 'unplugged'
+  | 'hud'
+  | 'desktop-switch'
+  | 'window-pin'
+  | 'workspace';
 
 export type BatteryStatus = 'charging' | 'unplugged' | 'low' | 'guard' | 'normal';
 
@@ -75,7 +84,7 @@ export interface ToastPayload {
   subtitle: string;
   value?: number;               // 0–100 or metric
   percent?: number;             // Battery / Device %
-  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin';
+  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin' | 'workspace';
   hudType?: 'volume' | 'brightness' | 'mic';
   hudValue?: number;            // 0–100
   isMicMuted?: boolean;
@@ -85,6 +94,10 @@ export interface ToastPayload {
   isPinned?: boolean;
   isOvershoot?: boolean;
   isMuted?: boolean;
+  appName?: string;
+  tabTitle?: string;
+  accentColor?: string;
+  workspaceActivity?: WorkspaceActivityPayload;
 }
 
 export interface HardwareToastPayload {
@@ -167,6 +180,27 @@ export interface SystemSettings {
 
   // Stage 2 Extensions (Fluid Tab-Switch & Workspace Activity Morph)
   workspaceActivity?: WorkspaceActivityPayload | null;
+
+  // Fix Stage 2 Extensions (Supercharged System Tray & Smart Dock Auto-Hide)
+  dockPinned?: boolean;
+  networkSsid?: string;
+  isWifiEnabled?: boolean;
+  isBluetoothEnabled?: boolean;
+  isAirplaneMode?: boolean;
+  powerMode?: 'balanced' | 'performance' | 'saver';
+  batteryHealth?: number;
+
+  // Fix Stage 3 Extensions (Liquid Launchpad & Installed App Search)
+  launchpadOpen?: boolean;
+}
+
+export interface InstalledAppEntry {
+  id: string;
+  name: string;
+  path: string;
+  icon_data?: string | null;
+  category: string;
+  is_running: boolean;
 }
 
 export interface WorkspaceActivityPayload {
@@ -174,6 +208,7 @@ export interface WorkspaceActivityPayload {
   app_name: string;
   tab_title: string;
   direction?: 'left' | 'right';
+  desktop_index?: number;
   accent_color: string;
   timestamp?: number;
 }

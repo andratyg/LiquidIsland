@@ -92,10 +92,10 @@ pub fn start_hit_test_loop(window: Window) {
 
                         // Universal Drag-Approach Detector:
                         // If left mouse button is held down (VK_LBUTTON = 0x01) AND cursor is near top approach zone
-                        // (pt.y <= 90px from top and within 320px from screen horizontal center)
+                        // (pt.y <= 250px from top and within 380px from screen horizontal center, covering full expanded Island & Shelf)
                         let lbutton_down = unsafe { (GetAsyncKeyState(0x01) as u16 & 0x8000) != 0 };
-                        let approach_y_max = win_pos.y + (90.0 * scale).round() as i32;
-                        let approach_x_max = (320.0 * scale).round() as i32;
+                        let approach_y_max = win_pos.y + (250.0 * scale).round() as i32;
+                        let approach_x_max = (380.0 * scale).round() as i32;
                         let in_approach_zone = pt.y >= win_pos.y
                             && pt.y <= approach_y_max
                             && (pt.x - win_center_x).abs() <= approach_x_max;

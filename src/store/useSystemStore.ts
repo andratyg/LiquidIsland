@@ -102,6 +102,18 @@ export const DEFAULT_SETTINGS: SystemSettings = {
 
   // Stage 2 defaults
   workspaceActivity: null,
+
+  // Fix Stage 2 defaults
+  dockPinned: false,
+  networkSsid: 'Home-WiFi-5G',
+  isWifiEnabled: true,
+  isBluetoothEnabled: true,
+  isAirplaneMode: false,
+  powerMode: 'balanced',
+  batteryHealth: 98,
+
+  // Fix Stage 3 defaults
+  launchpadOpen: false,
 };
 
 function loadInitialSettings(): SystemSettings {
@@ -176,6 +188,18 @@ function loadInitialSettings(): SystemSettings {
 
       // Stage 2: Always start null on fresh boot
       workspaceActivity: null,
+
+      // Fix Stage 2 settings
+      dockPinned: typeof parsed.dockPinned === 'boolean' ? parsed.dockPinned : false,
+      networkSsid: typeof parsed.networkSsid === 'string' ? parsed.networkSsid : 'Home-WiFi-5G',
+      isWifiEnabled: typeof parsed.isWifiEnabled === 'boolean' ? parsed.isWifiEnabled : true,
+      isBluetoothEnabled: typeof parsed.isBluetoothEnabled === 'boolean' ? parsed.isBluetoothEnabled : true,
+      isAirplaneMode: typeof parsed.isAirplaneMode === 'boolean' ? parsed.isAirplaneMode : false,
+      powerMode: ['balanced', 'performance', 'saver'].includes(parsed.powerMode) ? parsed.powerMode : 'balanced',
+      batteryHealth: typeof parsed.batteryHealth === 'number' ? parsed.batteryHealth : 98,
+
+      // Fix Stage 3: Always closed on fresh boot
+      launchpadOpen: false,
     };
   } catch (err) {
     console.error('[LiquidIsland Store] Failed to parse localStorage state:', err);
@@ -451,6 +475,25 @@ export const systemStore = {
     const isPlaying = payload.is_playing;
     const pos = payload.position_secs;
     const dur = payload.duration_secs > 0 ? payload.duration_secs : (currentSettings.duration || 256);
+
+    // Monotonic Playback Guard:
+    // When receiving "system-media-update" for the SAME track while isPlaying === true,
+    // if incomingPosition < currentPlaybackTime and (currentPlaybackTime - incomingPosition) < 3.0,
+    // IGNORE the backward timestamp overwrite! Only sync backward if the user explicitly seeked (delta >= 3.0s) or changed tracks.
+    const isSameTrack =
+      Boolean(payload.title) &&
+      payload.title === currentSettings.mediaTitle &&
+      (!payload.artist || payload.artist === currentSettings.mediaArtist);
+    const currentPlaybackTime = currentSettings.playbackTime ?? 0;
+
+    let targetPosition = pos;
+    if (isSameTrack && currentSettings.isAudioPlaying && isPlaying) {
+      if (pos < currentPlaybackTime && (currentPlaybackTime - pos) < 3.0) {
+        // Retain the higher-precision smooth local playback time
+        targetPosition = currentPlaybackTime;
+      }
+    }
+
     saveSettings({
       ...currentSettings,
       mediaTitle: payload.title || currentSettings.mediaTitle,
@@ -459,8 +502,8 @@ export const systemStore = {
       mediaSourceApp: payload.source_app || currentSettings.mediaSourceApp,
       mediaIsPlaying: isPlaying,
       isAudioPlaying: isPlaying,
-      mediaPosition: pos,
-      playbackTime: pos,
+      mediaPosition: targetPosition,
+      playbackTime: targetPosition,
       mediaDuration: dur,
       duration: dur,
       mediaThumbnail: payload.thumbnail_base64 !== undefined ? payload.thumbnail_base64 : currentSettings.mediaThumbnail,
@@ -804,7 +847,7 @@ export const systemStore = {
       toastPayload: fullPayload,
     });
 
-    const autoRevertMs = (type === 'charging' || type === 'unplugged') ? 3000 : (type === 'hud' ? 2200 : 3200);
+    const autoRevertMs = (type === 'charging' || type === 'unplugged') ? 3000 : (type === 'hud' ? 2000 : 3200);
     toastTimeoutId = setTimeout(() => {
       systemStore.dismissToast();
     }, autoRevertMs);
@@ -897,22 +940,40 @@ export const systemStore = {
       playSlideWaveSound();
     }
 
-    saveSettings({
+    // Save activity in settings for bottom dock synchronization
+    currentSettings = {
       ...currentSettings,
       workspaceActivity: {
         ...payload,
         timestamp: Date.now(),
       },
+    };
+
+    // UNIFIED DYNAMIC ISLAND: Expand the top notch into a seamless Apple-style system alert!
+    const kindLabel =
+      payload.kind === 'tab-switch'
+        ? 'Active Tab Switched'
+        : payload.kind === 'desktop-switch'
+        ? `Desktop ${payload.desktop_index || 1}`
+        : 'Window Focused';
+
+    this.triggerToast('workspace', {
+      title: kindLabel,
+      subtitle: payload.tab_title || payload.app_name || 'Active Window',
+      appName: payload.app_name,
+      tabTitle: payload.tab_title,
+      accentColor: payload.accent_color || '#38bdf8',
+      workspaceActivity: payload,
     });
 
-    // Transient Context Micro-Pill auto-glides back after 1.4 seconds (1400ms)
+    // Auto-revert back to compact pill after 1.8 seconds (1800ms)
     workspaceActivityTimeoutId = setTimeout(() => {
       saveSettings({
         ...currentSettings,
         workspaceActivity: null,
       });
       workspaceActivityTimeoutId = null;
-    }, 1400);
+    }, 1800);
   },
 
   // Phase 9 Spotlight Actions
@@ -993,16 +1054,58 @@ export const systemStore = {
     saveSettings({ ...currentSettings, playbackTime: clamped, mediaPosition: clamped });
   },
 
-  tickPlaybackTime() {
+  tickPlaybackTime(delta: number = 0.2) {
     if (!currentSettings.isAudioPlaying) return;
     const current = currentSettings.playbackTime ?? 193;
     const dur = currentSettings.duration ?? 256;
-    const next = current + 1 >= dur ? 0 : current + 1;
-    saveSettings({ ...currentSettings, playbackTime: next });
+    const next = current + delta >= dur ? 0 : Math.round((current + delta) * 1000) / 1000;
+    saveSettings({ ...currentSettings, playbackTime: next, mediaPosition: next });
   },
 
   setDuration(duration: number) {
     saveSettings({ ...currentSettings, duration });
+  },
+
+  // Fix Stage 2: Supercharged System Tray & Smart Dock Auto-Hide
+  setDockPinned(dockPinned: boolean) {
+    playToggleClick();
+    saveSettings({ ...currentSettings, dockPinned });
+  },
+
+  toggleDockPinned() {
+    const next = !currentSettings.dockPinned;
+    systemStore.setDockPinned(next);
+  },
+
+  toggleWifi() {
+    playToggleClick();
+    saveSettings({ ...currentSettings, isWifiEnabled: !currentSettings.isWifiEnabled });
+  },
+
+  toggleBluetooth() {
+    playToggleClick();
+    saveSettings({ ...currentSettings, isBluetoothEnabled: !currentSettings.isBluetoothEnabled });
+  },
+
+  toggleAirplaneMode() {
+    playToggleClick();
+    saveSettings({ ...currentSettings, isAirplaneMode: !currentSettings.isAirplaneMode });
+  },
+
+  setPowerMode(powerMode: 'balanced' | 'performance' | 'saver') {
+    playToggleClick();
+    saveSettings({ ...currentSettings, powerMode });
+  },
+
+  // Fix Stage 3: Liquid Launchpad
+  setLaunchpadOpen(launchpadOpen: boolean) {
+    playToggleClick();
+    saveSettings({ ...currentSettings, launchpadOpen });
+  },
+
+  toggleLaunchpad() {
+    const next = !currentSettings.launchpadOpen;
+    systemStore.setLaunchpadOpen(next);
   },
 
   subscribe(listener: () => void) {

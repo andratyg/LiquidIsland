@@ -16,8 +16,8 @@ pub struct SystemMediaPayload {
     pub artist: String,
     pub album_title: String,
     pub is_playing: bool,
-    pub position_secs: u64,
-    pub duration_secs: u64,
+    pub position_secs: f64,
+    pub duration_secs: f64,
     pub source_app: String,
     pub thumbnail_base64: Option<String>,
     pub has_media: bool,
@@ -150,18 +150,18 @@ fn query_engine_a_smtc() -> Result<SystemMediaPayload, Box<dyn std::error::Error
     let (position_secs, duration_secs) = if let Ok(timeline) = session.GetTimelineProperties() {
         let pos = timeline
             .Position()
-            .map(|p| (p.Duration / 10_000_000) as u64)
-            .unwrap_or(0);
+            .map(|p| (p.Duration as f64) / 10_000_000.0)
+            .unwrap_or(0.0);
         let start = timeline.StartTime().map(|s| s.Duration).unwrap_or(0);
         let end = timeline.EndTime().map(|e| e.Duration).unwrap_or(0);
         let dur = if end > start {
-            ((end - start) / 10_000_000) as u64
+            ((end - start) as f64) / 10_000_000.0
         } else {
-            0
+            0.0
         };
         (pos, dur)
     } else {
-        (0, 0)
+        (0.0, 0.0)
     };
 
     // Extract stream thumbnail if available
@@ -307,8 +307,8 @@ fn query_engine_b_window_titles() -> Option<SystemMediaPayload> {
         artist: scan.artist,
         album_title: String::new(),
         is_playing: true,
-        position_secs: 0,
-        duration_secs: 240,
+        position_secs: 0.0,
+        duration_secs: 240.0,
         source_app: scan.source_app,
         thumbnail_base64: None,
         has_media: true,
@@ -360,27 +360,27 @@ pub fn start_media_session_listener(window: Window) {
 
         let mut last_title = String::new();
         let mut last_playing = false;
-        let mut last_pos = 0u64;
-        let mut tick_counter = 0u64;
+        let mut last_pos = 0.0f64;
+        let mut tick_counter = 0.0f64;
 
         loop {
             std::thread::sleep(Duration::from_millis(1000));
 
             #[cfg(windows)]
             if let Ok(mut payload) = query_system_media() {
-                // If detected via Engine B (position_secs == 0 && duration_secs == 240), tick position smoothly
-                if payload.has_media && payload.thumbnail_base64.is_none() && payload.duration_secs == 240 {
+                // If detected via Engine B (position_secs == 0.0 && duration_secs == 240.0), tick position smoothly
+                if payload.has_media && payload.thumbnail_base64.is_none() && (payload.duration_secs - 240.0).abs() < 0.1 {
                     if payload.title == last_title && payload.is_playing {
-                        tick_counter += 1;
+                        tick_counter += 1.0;
                     } else {
-                        tick_counter = 0;
+                        tick_counter = 0.0;
                     }
                     payload.position_secs = tick_counter;
                 }
 
                 let changed = payload.title != last_title
                     || payload.is_playing != last_playing
-                    || (payload.is_playing && payload.position_secs != last_pos);
+                    || (payload.is_playing && (payload.position_secs - last_pos).abs() >= 0.2);
 
                 if changed {
                     last_title = payload.title.clone();

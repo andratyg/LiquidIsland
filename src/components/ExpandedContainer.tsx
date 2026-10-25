@@ -31,6 +31,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
   const activeSlide = useSystemStore((s) => s.activeSlide);
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
   const volume = useSystemStore((s) => s.volume);
+  const shelfFilesCount = useSystemStore((s) => s.shelfFiles?.length ?? 0);
 
   // Live real-time formatted date & time: e.g. "Sun 25 Oct 2026  09:32"
   const [currentDateStr, setCurrentDateStr] = useState<string>(() => {
@@ -124,7 +125,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
       {/* 1. Top Header Bar (1:1 Video Match)                                  */}
       {/* ==================================================================== */}
       <div className="expanded-header">
-        {/* Left: Dynamic Slide Title (e.g. TodoList) */}
+        {/* Left: Dynamic Slide Title (e.g. TodoList or Shelf (3)) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span
             style={{
@@ -134,20 +135,22 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
               color: '#ffffff',
             }}
           >
-            {currentTitle}
+            {activeSlide === 3 && shelfFilesCount > 0 ? `Shelf (${shelfFilesCount})` : currentTitle}
           </span>
 
           {/* Shelf "Clear" Action Pill Button */}
-          {activeSlide === 3 && (
+          {activeSlide === 3 && shelfFilesCount > 0 && (
             <button
               type="button"
               onClick={handleClearShelf}
               className="btn-pill"
               style={{
                 fontSize: '9px',
-                padding: '1px 6px',
+                padding: '1px 7px',
                 height: '17px',
-                color: 'var(--text-secondary)',
+                color: '#f87171',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
                 cursor: 'pointer',
                 borderRadius: '9999px',
               }}

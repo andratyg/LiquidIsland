@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../../store/useSystemStore';
 import { SlimeCompanion } from './SlimeCompanion';
@@ -250,8 +250,23 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
     []
   );
 
-  // Current active synced lyric line (synced with real Spotify/YouTube song)
-  const activeLyric = getCurrentLyricLine(playbackTime, liveLyrics);
+  // Current active synced lyric line (synced with real Spotify/YouTube song with 300ms forward hysteresis)
+  const lastActiveLyricTimeRef = useRef<number | undefined>(undefined);
+  const lastMediaTitleRef = useRef<string>('');
+
+  const activeLyric = useMemo(() => {
+    if (mediaTitle !== lastMediaTitleRef.current) {
+      lastMediaTitleRef.current = mediaTitle;
+      lastActiveLyricTimeRef.current = undefined;
+    }
+    const line = getCurrentLyricLine(
+      playbackTime,
+      liveLyrics.length > 0 ? liveLyrics : undefined,
+      lastActiveLyricTimeRef.current
+    );
+    lastActiveLyricTimeRef.current = line.time;
+    return line;
+  }, [playbackTime, liveLyrics, mediaTitle]);
 
   // =========================================================================
   // Mode A: Live Synced Mini Lyrics View (360px × 44px when Music Playing)
@@ -322,7 +337,7 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
             overflow: 'hidden',
           }}
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false}>
             {workspaceActivity ? (
               <motion.div
                 key={`companion-ws-${workspaceActivity.timestamp}`}
@@ -375,10 +390,10 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
             ) : (
               <motion.div
                 key={`mini-lyric-${activeLyric.time}`}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
+                initial={{ y: 8, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -8, opacity: 0 }}
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',

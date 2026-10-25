@@ -96,5 +96,6 @@ This stage enhances multitasking and workflow speed with two major capabilities:
 1. **Rust Check**: `cargo check --manifest-path src-tauri/Cargo.toml` (0 warnings).
 2. **TypeScript Compilation**: `npx tsc --noEmit` (0 errors).
 3. **Frontend Production Build**: `npm run build` (clean output).
-4. **Functional Drag & Drop Test**: Verify text drops, web image drops, URL drops, and file drops into Shelf.
+4. **Functional Drag & Drop Test**: Verify text drops, web image drops, URL 
+drops, and file drops into Shelf.
 5. **Shortcut Test**: Verify `Alt + S` toggles Spotlight cleanly.
