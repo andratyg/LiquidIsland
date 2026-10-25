@@ -165,7 +165,7 @@ export const WaterSlide: React.FC = () => {
           <span>{statusSubtitle}</span>
         </div>
 
-        {/* Bottom Action Buttons: "💧 Drink" and "⚙ Settings" */}
+        {/* Bottom Action Buttons: "Drink" and "Settings" */}
         <div
           style={{
             display: 'flex',

@@ -5,8 +5,8 @@ import { playWaterDrop, playToggleClick, playGlassPop } from '../../utils/sfx';
 import type { TodoTaskItem } from '../../types/liquid';
 import {
   Check,
-  Plus,
-  Edit2,
+  PlusCircle,
+  Pencil,
   Trash2,
   X,
   ListTodo,
@@ -19,11 +19,10 @@ export const TodoSlide: React.FC = () => {
   const [newTaskText, setNewTaskText] = useState('');
   const addInputRef = useRef<HTMLInputElement>(null);
 
-  // Counter calculations: e.g. "4/5"
+  // Counter calculations: e.g. "4/5" or "0/0"
   const totalTasks = todoTasks.length;
   const completedTasks = todoTasks.filter((t: TodoTaskItem) => t.completed).length;
   const counterText = `${completedTasks}/${totalTasks}`;
-  const progressRatio = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
   // Toggle task completion
   const handleToggle = useCallback((id: string, e: React.MouseEvent) => {
@@ -94,55 +93,49 @@ export const TodoSlide: React.FC = () => {
         alignItems: 'center',
         width: '100%',
         height: '100%',
-        padding: '0 6px',
+        padding: '0 4px',
         boxSizing: 'border-box',
-        gap: '12px',
+        gap: '14px',
         userSelect: 'none',
       }}
     >
       {/* ==================================================================== */}
-      {/* 1. Left Summary Column (138px width)                                 */}
+      {/* 1. Left Summary Column (1:1 Video Match)                              */}
       {/* ==================================================================== */}
       <div
         style={{
-          width: '138px',
-          minWidth: '138px',
+          width: '136px',
+          minWidth: '136px',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          gap: '5px',
-          paddingLeft: '2px',
+          gap: '6px',
           boxSizing: 'border-box',
         }}
       >
-        {/* Large Dynamic Counter: e.g. "4/5" */}
+        {/* Large 34px Bold White Counter: e.g. "0/0" or "4/5" */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
           <span
             style={{
-              fontSize: '30px',
+              fontSize: '34px',
               fontWeight: 800,
               lineHeight: 1,
               letterSpacing: '-0.5px',
-              color: 'var(--text-primary)',
+              color: '#ffffff',
               fontVariantNumeric: 'tabular-nums',
             }}
           >
             {counterText}
           </span>
-          {completedTasks === totalTasks && totalTasks > 0 && (
-            <span style={{ fontSize: '10px', color: '#22c55e', fontWeight: 700 }}>
-              ★ Done
-            </span>
-          )}
         </div>
 
-        {/* Subtitle */}
+        {/* Subtitle in #9ca3af */}
         <div
           style={{
-            fontSize: '10.5px',
+            fontSize: '11px',
             fontWeight: 500,
-            color: 'var(--text-secondary)',
+            color: '#9ca3af',
             letterSpacing: '0.1px',
             lineHeight: 1.2,
           }}
@@ -150,90 +143,78 @@ export const TodoSlide: React.FC = () => {
           Task Done Today
         </div>
 
-        {/* Mini Emerald Progress Bar */}
-        <div
-          style={{
-            width: '100px',
-            height: '3px',
-            borderRadius: '9999px',
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            overflow: 'hidden',
-            margin: '1px 0 3px',
-          }}
-        >
-          <motion.div
-            initial={false}
-            animate={{ width: `${progressRatio}%` }}
-            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            style={{
-              height: '100%',
-              backgroundColor: '#22c55e',
-              borderRadius: '9999px',
-              boxShadow: '0 0 6px rgba(34, 197, 94, 0.65)',
-            }}
-          />
-        </div>
-
-        {/* Action Buttons: "+ Add Task" & "✎ Edit Task" */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+        {/* Two Dark Pill Buttons: "+ Add Task" and "Edit Task" */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="btn-pill"
             style={{
-              fontSize: '9.5px',
-              padding: '2px 7px',
-              height: '21px',
-              backgroundColor: 'rgba(34, 197, 94, 0.18)',
-              borderColor: 'rgba(34, 197, 94, 0.45)',
-              color: '#22c55e',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '10px',
               fontWeight: 600,
-              gap: '3px',
+              padding: '4px 9px',
+              height: '24px',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              color: '#ffffff',
+              cursor: 'pointer',
+              outline: 'none',
+              transition: 'background-color 0.15s ease, border-color 0.15s ease',
             }}
-            title="Add a new daily task"
+            title="Add Task"
           >
-            <Plus size={11} strokeWidth={2.5} />
+            <PlusCircle size={11} strokeWidth={1.75} style={{ color: '#22c55e' }} />
             <span>Add Task</span>
           </button>
 
           <button
             type="button"
             onClick={handleToggleEdit}
-            className="btn-pill"
             style={{
-              fontSize: '9.5px',
-              padding: '2px 7px',
-              height: '21px',
-              backgroundColor: isEditingMode ? 'rgba(239, 68, 68, 0.18)' : 'var(--pill-bg)',
-              borderColor: isEditingMode ? '#ef4444' : 'var(--glass-border)',
-              color: isEditingMode ? '#ef4444' : 'var(--text-secondary)',
-              gap: '3px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '10px',
+              fontWeight: 500,
+              padding: '4px 8px',
+              height: '24px',
+              borderRadius: '9999px',
+              backgroundColor: isEditingMode ? 'rgba(239, 68, 68, 0.18)' : 'rgba(255, 255, 255, 0.08)',
+              border: isEditingMode ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.12)',
+              color: isEditingMode ? '#ef4444' : '#9ca3af',
+              cursor: 'pointer',
+              outline: 'none',
+              transition: 'background-color 0.15s ease, border-color 0.15s ease',
             }}
-            title={isEditingMode ? 'Finish editing tasks' : 'Edit or delete tasks'}
+            title={isEditingMode ? 'Done editing' : 'Edit tasks'}
           >
-            <Edit2 size={10} />
-            <span>{isEditingMode ? 'Done' : 'Edit'}</span>
+            <Pencil size={10} strokeWidth={1.75} />
+            <span>{isEditingMode ? 'Done' : 'Edit Task'}</span>
           </button>
         </div>
       </div>
 
       {/* ==================================================================== */}
-      {/* 2. Right Scrollable Emerald Task Pills Area                          */}
+      {/* 2. Right Column: Dark Rounded Container (#0c0c0e, 18px radius)        */}
       {/* ==================================================================== */}
       <div
+        className="todo-dark-container"
         style={{
           flex: 1,
-          height: '100px',
+          height: '108px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '5px',
+          gap: '6px',
           overflowY: 'auto',
           overflowX: 'hidden',
-          paddingRight: '4px',
+          padding: '8px',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
           boxSizing: 'border-box',
-          justifyContent: todoTasks.length < 3 && !isAddingTask ? 'center' : 'flex-start',
+          justifyContent: todoTasks.length === 0 && !isAddingTask ? 'center' : 'flex-start',
         }}
       >
         {/* Inline Add Task Input Form */}
@@ -241,14 +222,14 @@ export const TodoSlide: React.FC = () => {
           {isAddingTask && (
             <motion.div
               key="add-task-inline"
-              initial={{ opacity: 0, height: 0, scale: 0.95 }}
-              animate={{ opacity: 1, height: '26px', scale: 1 }}
-              exit={{ opacity: 0, height: 0, scale: 0.95 }}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: '26px' }}
+              exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.15 }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '5px',
                 width: '100%',
                 marginBottom: '2px',
                 flexShrink: 0,
@@ -260,14 +241,14 @@ export const TodoSlide: React.FC = () => {
                 value={newTaskText}
                 onChange={(e) => setNewTaskText(e.target.value)}
                 onKeyDown={handleAddKeyDown}
-                placeholder="Enter new task..."
+                placeholder="New task..."
                 style={{
                   flex: 1,
                   height: '24px',
                   borderRadius: '9999px',
                   backgroundColor: 'rgba(255, 255, 255, 0.08)',
                   border: '1px solid #22c55e',
-                  color: 'var(--text-primary)',
+                  color: '#ffffff',
                   fontSize: '11px',
                   padding: '0 10px',
                   outline: 'none',
@@ -276,10 +257,9 @@ export const TodoSlide: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCommitAdd}
-                className="btn-pill"
                 style={{
-                  height: '24px',
-                  width: '24px',
+                  height: '22px',
+                  width: '22px',
                   padding: 0,
                   borderRadius: '9999px',
                   backgroundColor: '#22c55e',
@@ -288,30 +268,31 @@ export const TodoSlide: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  cursor: 'pointer',
                 }}
-                title="Save task"
+                title="Save"
               >
-                <Check size={12} strokeWidth={2.5} />
+                <Check size={12} strokeWidth={2} />
               </button>
               <button
                 type="button"
                 onClick={handleCancelAdd}
-                className="btn-pill"
                 style={{
-                  height: '24px',
-                  width: '24px',
+                  height: '22px',
+                  width: '22px',
                   padding: 0,
                   borderRadius: '9999px',
                   backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--glass-border)',
+                  color: '#9ca3af',
+                  border: 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  cursor: 'pointer',
                 }}
                 title="Cancel"
               >
-                <X size={12} />
+                <X size={11} strokeWidth={2} />
               </button>
             </motion.div>
           )}
@@ -327,56 +308,47 @@ export const TodoSlide: React.FC = () => {
               exit={{ opacity: 0 }}
               style={{
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '5px',
                 height: '100%',
-                color: 'var(--text-secondary)',
+                color: '#64748b',
                 fontSize: '11px',
               }}
             >
-              <ListTodo size={14} />
-              <span>No tasks. Click "+ Add Task" to begin!</span>
+              <ListTodo size={16} strokeWidth={1.75} />
+              <span>No tasks.</span>
             </motion.div>
           ) : (
             todoTasks.map((task: TodoTaskItem) => (
               <motion.div
                 key={task.id}
                 layout
-                initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.92, y: -6 }}
-                transition={{ duration: 0.14 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.12 }}
                 onClick={(e) => handleToggle(task.id, e)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   width: '100%',
-                  height: '27px',
-                  minHeight: '27px',
+                  height: '26px',
+                  minHeight: '26px',
                   borderRadius: '9999px',
                   backgroundColor: task.completed
                     ? 'rgba(34, 197, 94, 0.22)'
                     : 'rgba(255, 255, 255, 0.05)',
                   border: task.completed
-                    ? '1px solid rgba(34, 197, 94, 0.4)'
-                    : '1px solid var(--glass-border)',
+                    ? '1px solid rgba(34, 197, 94, 0.38)'
+                    : '1px solid rgba(255, 255, 255, 0.08)',
                   padding: '0 8px 0 12px',
                   boxSizing: 'border-box',
                   cursor: 'pointer',
                   transition: 'background-color 0.15s ease, border-color 0.15s ease',
                   flexShrink: 0,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = task.completed
-                    ? 'rgba(34, 197, 94, 0.30)'
-                    : 'rgba(255, 255, 255, 0.09)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = task.completed
-                    ? 'rgba(34, 197, 94, 0.22)'
-                    : 'rgba(255, 255, 255, 0.05)';
                 }}
               >
                 {/* Left: Task Text */}
@@ -406,17 +378,17 @@ export const TodoSlide: React.FC = () => {
                         outline: 'none',
                         flexShrink: 0,
                       }}
-                      title="Delete task"
+                      title="Delete"
                     >
-                      <Trash2 size={11} />
+                      <Trash2 size={11} strokeWidth={1.75} />
                     </button>
                   )}
 
                   <span
                     style={{
                       fontSize: '11px',
-                      fontWeight: task.completed ? 500 : 500,
-                      color: task.completed ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontWeight: 500,
+                      color: task.completed ? '#ffffff' : '#e2e8f0',
                       textDecoration: task.completed ? 'line-through' : 'none',
                       opacity: task.completed ? 0.9 : 1,
                       overflow: 'hidden',
@@ -429,12 +401,12 @@ export const TodoSlide: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Right: Circular Checkmark Toggle (✓) */}
+                {/* Right: Circular Checkmark Toggle */}
                 <div
                   style={{
-                    width: '16px',
-                    height: '16px',
-                    minWidth: '16px',
+                    width: '15px',
+                    height: '15px',
+                    minWidth: '15px',
                     borderRadius: '9999px',
                     backgroundColor: task.completed ? '#22c55e' : 'rgba(255, 255, 255, 0.08)',
                     border: task.completed ? 'none' : '1.5px solid rgba(255, 255, 255, 0.28)',
@@ -443,11 +415,9 @@ export const TodoSlide: React.FC = () => {
                     justifyContent: 'center',
                     color: '#ffffff',
                     transition: 'all 0.15s ease',
-                    boxShadow: task.completed ? '0 0 6px rgba(34, 197, 94, 0.5)' : 'none',
                   }}
-                  title={task.completed ? 'Mark as incomplete' : 'Mark as complete'}
                 >
-                  {task.completed && <Check size={10} strokeWidth={3} />}
+                  {task.completed && <Check size={10} strokeWidth={2.5} />}
                 </div>
               </motion.div>
             ))

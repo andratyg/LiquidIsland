@@ -38,7 +38,7 @@ export const ISLAND_DIMENSIONS: Record<IslandState, IslandDimensions> = {
   'bezel-line': { width: 136, height: 6 },
   'eyes': { width: 168, height: 40 },
   'compact': { width: 184, height: 40 },
-  'toast': { width: 325, height: 64 },
+  'toast': { width: 340, height: 64 },
   'expanded': { width: 432, height: 174 },
   'expanded-lyrics': { width: 595, height: 174 },
 };
@@ -65,16 +65,17 @@ export interface TodoTaskItem {
   timestamp?: string;
 }
 
-export type ToastType = 'airbuds' | 'battery' | 'hud' | 'desktop-switch' | 'window-pin';
+export type ToastType = 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'hud' | 'desktop-switch' | 'window-pin';
 
-export type BatteryStatus = 'charging' | 'low' | 'guard' | 'normal';
+export type BatteryStatus = 'charging' | 'unplugged' | 'low' | 'guard' | 'normal';
 
 export interface ToastPayload {
   type: ToastType;
   title: string;
   subtitle: string;
   value?: number;               // 0–100 or metric
-  icon?: 'airbuds' | 'battery' | 'charging' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin';
+  percent?: number;             // Battery / Device %
+  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin';
   hudType?: 'volume' | 'brightness' | 'mic';
   hudValue?: number;            // 0–100
   isMicMuted?: boolean;
@@ -82,6 +83,14 @@ export interface ToastPayload {
   batteryStatus?: BatteryStatus;
   pinnedTitle?: string;
   isPinned?: boolean;
+}
+
+export interface HardwareToastPayload {
+  kind: 'charging' | 'unplugged' | 'bluetooth' | string;
+  percent: number;
+  title: string;
+  subtitle: string;
+  device_name?: string | null;
 }
 
 export interface SystemSettings {
@@ -105,6 +114,16 @@ export interface SystemSettings {
   isAudioPlaying: boolean;      // True when waveform visualizer is active
   playbackTime?: number;        // Track playback timestamp in seconds (Default: 193)
   duration?: number;            // Total track duration in seconds (Default: 256)
+
+  // Refinement Phase 2 Extensions: Real Windows System Media (Spotify, YouTube, etc.)
+  mediaTitle?: string;
+  mediaArtist?: string;
+  mediaAlbum?: string;
+  mediaSourceApp?: string;     // 'Spotify' | 'YouTube' | 'YouTube Music' | 'Apple Music' | 'Windows Media'
+  mediaDuration?: number;
+  mediaPosition?: number;
+  mediaIsPlaying?: boolean;
+  hasSystemMedia?: boolean;
 
   // Phase 4 Extensions (backward compatible)
   isPomodoroRunning: boolean;   // True when focus timer is active (triggers focus glasses)
@@ -157,4 +176,22 @@ export interface DevPortInfo {
   pid: number;
   process_name: string;
   active: boolean;
+}
+
+export interface LiveLyricLine {
+  time: number;
+  text: string;
+  textId?: string;
+}
+
+export interface SystemMediaPayload {
+  title: string;
+  artist: string;
+  album_title: string;
+  is_playing: boolean;
+  position_secs: number;
+  duration_secs: number;
+  source_app: string;
+  thumbnail_base64?: string | null;
+  has_media: boolean;
 }

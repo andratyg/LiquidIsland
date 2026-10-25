@@ -7,7 +7,9 @@ import { CyberEyes } from './CyberEyes';
 import { MiniHeadphones } from './accessories/MiniHeadphones';
 import { FocusGlasses } from './accessories/FocusGlasses';
 import { getCurrentLyricLine } from '../../utils/lyricsData';
+import { fetchLiveLyrics, type LiveLyricLine } from '../../utils/liveLyricsFetcher';
 import { playJellyBounce, playPetPurr, playGlassPop, playToggleClick } from '../../utils/sfx';
+import { Music } from 'lucide-react';
 
 interface CompanionStageProps {
   testHeadphones?: boolean;
@@ -32,6 +34,22 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
   const isPomodoroRunning = useSystemStore((s) => s.isPomodoroRunning);
   const isCharging = useSystemStore((s) => s.isCharging);
   const batteryStatus = useSystemStore((s) => s.batteryStatus);
+  const mediaTitle = useSystemStore((s) => s.mediaTitle || 'Paper Sky');
+  const mediaArtist = useSystemStore((s) => s.mediaArtist || 'Sora & The Clouds');
+
+  const [liveLyrics, setLiveLyrics] = useState<LiveLyricLine[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetchLiveLyrics(mediaTitle, mediaArtist).then((lyrics) => {
+      if (active && lyrics) {
+        setLiveLyrics(lyrics);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [mediaTitle, mediaArtist]);
 
   // If companionMode is 'off', automatically fallback idle state to 'compact'
   useEffect(() => {
@@ -221,8 +239,8 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
     []
   );
 
-  // Current active synced lyric line
-  const activeLyric = getCurrentLyricLine(playbackTime);
+  // Current active synced lyric line (synced with real Spotify/YouTube song)
+  const activeLyric = getCurrentLyricLine(playbackTime, liveLyrics);
 
   // =========================================================================
   // Mode A: Live Synced Mini Lyrics View (360px × 44px when Music Playing)
@@ -322,17 +340,7 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
                   lineHeight: 1.25,
                 }}
               >
-                <span
-                  style={{
-                    color: '#38bdf8',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    flexShrink: 0,
-                    filter: 'drop-shadow(0 0 5px rgba(56, 189, 248, 0.85))',
-                  }}
-                >
-                  ♪
-                </span>
+                <Music size={11} strokeWidth={2} style={{ color: '#38bdf8', flexShrink: 0 }} />
                 <span
                   style={{
                     overflow: 'hidden',

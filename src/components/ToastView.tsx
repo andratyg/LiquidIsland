@@ -3,9 +3,6 @@ import { motion } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import {
   Bluetooth,
-  Zap,
-  BatteryWarning,
-  ShieldCheck,
   Volume2,
   VolumeX,
   SunMedium,
@@ -18,16 +15,19 @@ import {
 
 export const ToastView: React.FC = () => {
   const toastPayload = useSystemStore((s) => s.toastPayload);
-  const companionMode = useSystemStore((s) => s.companionMode);
-  const companionColor = useSystemStore((s) => s.companionColor);
 
   // If no payload is active, fallback gracefully
-  const type = toastPayload?.type ?? 'airbuds';
-  const title = toastPayload?.title ?? 'AirBuds Pro';
-  const subtitle = toastPayload?.subtitle ?? 'Connected - 70%';
-  const value = toastPayload?.value ?? 70;
+  const type = toastPayload?.type ?? 'charging';
+  const title = toastPayload?.title ?? 'Charging';
+  const subtitle = toastPayload?.subtitle ?? 'Charger connected';
+  const batteryPct = toastPayload?.percent ?? toastPayload?.value ?? 84;
+  const value = toastPayload?.value ?? 84;
   const direction = toastPayload?.direction ?? 'right';
   const batteryStatus = toastPayload?.batteryStatus ?? 'charging';
+
+  const isChargingState = type === 'charging' || (type === 'battery' && batteryStatus === 'charging');
+  const isUnpluggedState = type === 'unplugged' || (type === 'battery' && batteryStatus === 'unplugged');
+  const isPluggedIn = isChargingState;
 
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -48,10 +48,149 @@ export const ToastView: React.FC = () => {
       exit={{ opacity: 0, scale: 0.94 }}
       transition={{ type: 'spring', stiffness: 440, damping: 32, mass: 0.75 }}
       onClick={handleDismiss}
-      title="Click to dismiss notification"
+      title="Notification - Click to dismiss"
+      style={{
+        width: '340px',
+        height: '64px',
+        borderRadius: '32px',
+        backgroundColor: '#000000',
+        padding: '0 22px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        position: 'relative',
+        overflow: 'hidden',
+        userSelect: 'none',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: '0 16px 36px -4px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+      }}
     >
       {/* ==================================================================== */}
-      {/* Toast Mode A — AirBuds Pro Connected (00:19 Reference Video 1:1)     */}
+      {/* 1:1 Video Charging & Unplugged Toast UI (00:03–00:10 of Reference)  */}
+      {/* ==================================================================== */}
+      {(isChargingState || isUnpluggedState) && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            height: '100%',
+          }}
+        >
+          {/* Left: 36x36px Green Progress Ring with Centered Lightning Bolt */}
+          <div
+            style={{
+              position: 'relative',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+              {/* Dark Green Track */}
+              <circle
+                cx="18"
+                cy="18"
+                r="14"
+                stroke="rgba(34, 197, 94, 0.22)"
+                strokeWidth="3"
+                fill="none"
+              />
+              {/* Active Green Arc */}
+              <circle
+                cx="18"
+                cy="18"
+                r="14"
+                stroke="#22c55e"
+                strokeWidth="3"
+                fill="none"
+                strokeDasharray={87.96}
+                strokeDashoffset={87.96 - (87.96 * Math.max(0, Math.min(100, batteryPct))) / 100}
+                strokeLinecap="round"
+                transform="rotate(-90 18 18)"
+                style={{ transition: 'stroke-dashoffset 0.4s ease' }}
+              />
+            </svg>
+
+            {/* Crisp White Lightning Bolt (Visible on Charging, Faded/Scaled out on Unplugged) */}
+            <motion.svg
+              initial={false}
+              animate={{
+                opacity: isPluggedIn ? 1 : 0,
+                scale: isPluggedIn ? 1 : 0.4,
+              }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="#ffffff"
+              style={{
+                position: 'absolute',
+                pointerEvents: 'none',
+              }}
+            >
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </motion.svg>
+          </div>
+
+          {/* Center-Left: Exact Typography from Video */}
+          <div
+            style={{
+              marginLeft: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              lineHeight: 1.25,
+              flex: 1,
+            }}
+          >
+            <div
+              style={{
+                fontSize: '15px',
+                fontWeight: 600,
+                color: '#ffffff',
+                letterSpacing: '-0.2px',
+                fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif",
+              }}
+            >
+              {isPluggedIn ? 'Charging' : 'Charger unplugged'}
+            </div>
+            <div
+              style={{
+                fontSize: '12.5px',
+                fontWeight: 400,
+                color: '#8e8e93',
+                letterSpacing: '-0.1px',
+                fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif",
+              }}
+            >
+              {isPluggedIn ? 'Charger connected' : `${batteryPct}% remaining`}
+            </div>
+          </div>
+
+          {/* Right: Large Tabular Percentage from Video */}
+          <div
+            style={{
+              marginLeft: 'auto',
+              fontSize: '22px',
+              fontWeight: 600,
+              color: '#ffffff',
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: '-0.4px',
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif",
+            }}
+          >
+            {batteryPct}%
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* Toast Mode A — AirBuds Pro Connected                                 */}
       {/* ==================================================================== */}
       {type === 'airbuds' && (
         <>
@@ -145,201 +284,11 @@ export const ToastView: React.FC = () => {
             </div>
           </div>
 
-          {/* Right: 28x28px Blue Sonar Ring with Expanding Pulse Wave */}
+          {/* Right: Sonar Pulse Ring */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="toast-sonar-ring" title="Connected">
               <div className="toast-sonar-pulse" />
               <div className="toast-sonar-dot" />
-            </div>
-
-            <button
-              onClick={handleDismiss}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '2px',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                opacity: 0.6,
-                display: 'flex',
-                alignItems: 'center',
-              }}
-              title="Dismiss"
-            >
-              <X size={13} />
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ==================================================================== */}
-      {/* Toast Mode B — Battery Charging & Health Guard (00:20 Reference 1:1)  */}
-      {/* ==================================================================== */}
-      {type === 'battery' && (
-        <>
-          {/* Left: Glowing Lightning Bolt */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              backgroundColor:
-                batteryStatus === 'low'
-                  ? 'rgba(245, 158, 11, 0.16)'
-                  : batteryStatus === 'guard'
-                  ? 'rgba(6, 182, 212, 0.16)'
-                  : 'rgba(34, 197, 94, 0.16)',
-              border: `1px solid ${
-                batteryStatus === 'low'
-                  ? 'rgba(245, 158, 11, 0.35)'
-                  : batteryStatus === 'guard'
-                  ? 'rgba(6, 182, 212, 0.35)'
-                  : 'rgba(34, 197, 94, 0.35)'
-              }`,
-            }}
-          >
-            {batteryStatus === 'low' ? (
-              <BatteryWarning size={16} color="#f59e0b" />
-            ) : batteryStatus === 'guard' ? (
-              <ShieldCheck size={16} color="#06b6d4" />
-            ) : (
-              <Zap size={16} color="#22c55e" className="toast-battery-bolt" />
-            )}
-          </div>
-
-          {/* Center: Label & Subtitle */}
-          <div
-            style={{
-              flex: 1,
-              marginLeft: '10px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              lineHeight: 1.25,
-            }}
-          >
-            <div
-              style={{
-                fontSize: '13.5px',
-                fontWeight: 600,
-                color:
-                  batteryStatus === 'low'
-                    ? '#f59e0b'
-                    : batteryStatus === 'guard'
-                    ? '#06b6d4'
-                    : '#22c55e',
-                letterSpacing: '-0.2px',
-              }}
-            >
-              {title}
-            </div>
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 500,
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {subtitle}
-            </div>
-          </div>
-
-          {/* Right: Bold Percentage + Mini Companion Reaction Badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span
-              style={{
-                fontSize: '15.5px',
-                fontWeight: 700,
-                color:
-                  batteryStatus === 'low'
-                    ? '#f59e0b'
-                    : batteryStatus === 'guard'
-                    ? '#06b6d4'
-                    : '#22c55e',
-                letterSpacing: '-0.3px',
-              }}
-            >
-              {value}%
-            </span>
-
-            {/* Mini Companion Reaction Badge */}
-            <div
-              className="toast-companion-badge"
-              title={
-                batteryStatus === 'low'
-                  ? `${companionMode} is sleepy (low battery)`
-                  : `${companionMode} is energized by charging!`
-              }
-            >
-              {companionMode === 'cat' ? (
-                /* Mini Cat Vector */
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M 3 6 L 6 10 L 4 11 Z"
-                    fill={companionColor}
-                  />
-                  <path
-                    d="M 17 6 L 14 10 L 16 11 Z"
-                    fill={companionColor}
-                  />
-                  <circle cx="10" cy="11" r="6" fill={companionColor} />
-                  {batteryStatus === 'low' ? (
-                    // Sleepy horizontal slit eyes
-                    <>
-                      <line x1="7" y1="10" x2="9" y2="10" stroke="#000" strokeWidth="1.2" strokeLinecap="round" />
-                      <line x1="11" y1="10" x2="13" y2="10" stroke="#000" strokeWidth="1.2" strokeLinecap="round" />
-                    </>
-                  ) : (
-                    // Happy curved anime eyes
-                    <>
-                      <path d="M 7 11 Q 8 9 9 11" stroke="#000" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                      <path d="M 11 11 Q 12 9 13 11" stroke="#000" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                      <circle cx="10" cy="13" r="0.75" fill="#f43f5e" />
-                    </>
-                  )}
-                </svg>
-              ) : (
-                /* Mini Slime Vector */
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M 4 14 Q 3 9 10 7 Q 17 9 16 14 Q 10 17 4 14 Z"
-                    fill={companionColor}
-                  />
-                  {batteryStatus === 'low' ? (
-                    // Drowsy eyes
-                    <>
-                      <ellipse cx="8" cy="11.5" rx="1.4" ry="0.6" fill="#000" />
-                      <ellipse cx="12" cy="11.5" rx="1.4" ry="0.6" fill="#000" />
-                    </>
-                  ) : (
-                    // Joyful spark eyes
-                    <>
-                      <circle cx="8" cy="11" r="1.3" fill="#000" />
-                      <circle cx="12" cy="11" r="1.3" fill="#000" />
-                      <circle cx="8.4" cy="10.6" r="0.5" fill="#fff" />
-                      <circle cx="12.4" cy="10.6" r="0.5" fill="#fff" />
-                    </>
-                  )}
-                </svg>
-              )}
-
-              {/* Sparkle Particle Badge */}
-              {batteryStatus !== 'low' && (
-                <span
-                  className="sparkle-particle"
-                  style={{
-                    position: 'absolute',
-                    top: '-4px',
-                    right: '-4px',
-                    fontSize: '9px',
-                  }}
-                >
-                  ⚡
-                </span>
-              )}
             </div>
 
             <button

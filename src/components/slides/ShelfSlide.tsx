@@ -18,7 +18,8 @@ import {
   ArrowLeftRight,
   Check,
   Sparkles,
-  FileImage,
+  FileText,
+  Trash2,
 } from 'lucide-react';
 
 interface ShelfSlideProps {
@@ -35,7 +36,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
 
   // Trigger transient Companion Catch Flash Notification
   const triggerCatchAlert = useCallback((filename: string) => {
-    setCatchNotification(`Caught ${filename}! ✨`);
+    setCatchNotification(`Caught ${filename}!`);
     if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     notificationTimerRef.current = setTimeout(() => {
       setCatchNotification(null);
@@ -148,7 +149,14 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
     systemStore.removeShelfFile(id);
   }, []);
 
-  // Quick Image Compressor Action (⚡ Compress (-65%))
+  // Clear all files
+  const handleClearAll = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    playGlassPop();
+    systemStore.clearShelfFiles();
+  }, []);
+
+  // Quick Image Compressor Action (Compress (-65%))
   const handleCompress = useCallback(
     async (file: ShelfFileItem, e: React.MouseEvent) => {
       e.stopPropagation();
@@ -323,25 +331,46 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
           {isDragOver ? 'Release to Drop' : 'Drop files here'}
         </span>
 
-        {/* Simulate Drop beach.jpg Shortcut */}
-        <button
-          type="button"
-          onClick={handleSimulateDrop}
-          className="btn-pill"
-          style={{
-            fontSize: '8.5px',
-            padding: '1px 6px',
-            height: '16px',
-            backgroundColor: 'var(--pill-bg)',
-            border: '1px solid var(--glass-border)',
-            color: 'var(--text-secondary)',
-            marginTop: '2px',
-          }}
-          title="Simulate OS File Drop: beach.jpg (2.4 MB)"
-        >
-          <Upload size={8} style={{ color: '#3b82f6' }} />
-          <span>Simulate Drop</span>
-        </button>
+        {/* Actions inside Left Dropzone */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+          <button
+            type="button"
+            onClick={handleSimulateDrop}
+            className="btn-pill"
+            style={{
+              fontSize: '8.5px',
+              padding: '1px 6px',
+              height: '16px',
+              backgroundColor: 'var(--pill-bg)',
+              border: '1px solid var(--glass-border)',
+              color: 'var(--text-secondary)',
+            }}
+            title="Simulate OS File Drop: beach.jpg (2.4 MB)"
+          >
+            <Upload size={8} style={{ color: '#3b82f6' }} />
+            <span>Simulate</span>
+          </button>
+
+          {shelfFiles.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="btn-pill"
+              style={{
+                fontSize: '8.5px',
+                padding: '1px 6px',
+                height: '16px',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#f87171',
+              }}
+              title="Clear all files from Shelf"
+            >
+              <Trash2 size={8} style={{ color: '#f87171' }} />
+              <span>Clear</span>
+            </button>
+          )}
+        </div>
       </motion.div>
 
       {/* ==================================================================== */}
@@ -394,19 +423,31 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
           ) : (
             /* File Cards */
             shelfFiles.map((file: ShelfFileItem) => {
-              const isJpeg = file.name.toLowerCase().endsWith('.jpg') || file.name.toLowerCase().endsWith('.jpeg');
-              const isWebp = file.name.toLowerCase().endsWith('.webp');
-              const isPng = file.name.toLowerCase().endsWith('.png');
-              const formatLabel = isWebp ? 'WEBP' : isPng ? 'PNG' : isJpeg ? 'JPG' : 'FILE';
+              const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+              const isImage = file.type?.startsWith('image/') || ['PNG', 'JPG', 'JPEG', 'WEBP', 'GIF', 'SVG'].includes(ext);
+              const isWebp = ext === 'WEBP';
+              const formatLabel = ext;
 
               return (
                 <motion.div
                   key={file.id}
                   layout
+                  draggable
+                  onDragStart={(e) => {
+                    const de = e as unknown as React.DragEvent;
+                    if (de && de.dataTransfer) {
+                      if (file.content) {
+                        de.dataTransfer.setData('text/plain', file.content);
+                      } else if (file.previewUrl) {
+                        de.dataTransfer.setData('text/uri-list', file.previewUrl);
+                      }
+                    }
+                  }}
                   initial={{ opacity: 0, scale: 0.92, x: 14 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 0.88, x: -14 }}
                   transition={{ duration: 0.16 }}
+                  title="Draggable item - Drag out or click actions below"
                   style={{
                     minWidth: '256px',
                     width: '256px',
@@ -422,6 +463,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                     boxSizing: 'border-box',
                     position: 'relative',
                     flexShrink: 0,
+                    cursor: 'grab',
                   }}
                 >
                   {/* Top-Right Remove Button (×) */}
@@ -469,7 +511,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                       boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
                     }}
                   >
-                    {file.previewUrl ? (
+                    {file.previewUrl && isImage ? (
                       <img
                         src={file.previewUrl}
                         alt={file.name}
@@ -481,7 +523,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                         }}
                       />
                     ) : (
-                      <FileImage size={24} style={{ color: 'var(--text-secondary)' }} />
+                      <FileText size={24} style={{ color: '#38bdf8' }} />
                     )}
 
                     {/* Format Tag Pill Overlay */}
@@ -532,7 +574,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                         {file.name}
                       </div>
 
-                      {/* Size Readout (e.g. 2.4 MB or 2.4 MB ➔ 840 KB (-65%)) */}
+                      {/* Size Readout (e.g. 2.4 MB or 2.4 MB -> 840 KB (-65%)) */}
                       <div
                         style={{
                           display: 'flex',
@@ -545,7 +587,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                       >
                         {file.isCompressed ? (
                           <span style={{ color: '#10b981', fontWeight: 600 }}>
-                            {file.originalFormattedSize || '2.4 MB'} ➔ {file.formattedSize}
+                            {file.originalFormattedSize || '2.4 MB'} &rarr; {file.formattedSize}
                           </span>
                         ) : (
                           <span>{file.formattedSize}</span>
@@ -571,7 +613,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
 
                     {/* Smart Quick Converter & Compressor Bar */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      {/* ⚡ Compress (-65%) Pill */}
+                      {/* Compress (-65%) Pill */}
                       <button
                         type="button"
                         onClick={(e) => handleCompress(file, e)}
@@ -622,7 +664,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                         title={`Convert format to ${isWebp ? 'PNG' : 'WEBP'} and download`}
                       >
                         <ArrowLeftRight size={8} style={{ color: '#3b82f6' }} />
-                        <span>{isWebp ? '➔ PNG' : '➔ WEBP'}</span>
+                        <span>{isWebp ? 'PNG' : 'WEBP'}</span>
                       </button>
                     </div>
                   </div>

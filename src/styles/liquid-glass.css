@@ -9,17 +9,17 @@
 
 /* Liquid Dark Glass (Obsidian Droplet) */
 .theme-dark {
-  --island-bg: #0b0c10;
+  --island-bg: #000000;
   --glass-surface: none;
-  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-border: rgba(255, 255, 255, 0.08);
   --glass-rim-top: transparent;
   --glass-rim-bottom: transparent;
-  --glass-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.65);
+  --glass-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.75);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
-  --pill-bg: rgba(255, 255, 255, 0.10);
-  --bezel-bg: #0b0c10;
-  --ear-fill: #0b0c10;
+  --pill-bg: rgba(255, 255, 255, 0.08);
+  --bezel-bg: #000000;
+  --ear-fill: #000000;
   --blue-glow: rgba(59, 130, 246, 0.45);
   --lyrics-glow: rgba(168, 85, 247, 0.40);
   --specular-color: rgba(255, 255, 255, 0.35);
@@ -180,9 +180,9 @@
 }
 
 .audio-bar {
-  width: 2px;
+  width: 2.5px;
   border-radius: 9999px;
-  background-color: var(--text-primary);
+  background-color: #ffffff;
   transform-origin: center bottom;
   will-change: transform;
 }
@@ -192,27 +192,27 @@
 }
 
 .audio-bar:nth-child(1) {
-  height: 12px;
+  height: 4px;
   animation-delay: 0.00s;
 }
 
 .audio-bar:nth-child(2) {
-  height: 16px;
+  height: 10px;
   animation-delay: 0.18s;
 }
 
 .audio-bar:nth-child(3) {
-  height: 10px;
+  height: 14px;
   animation-delay: 0.36s;
 }
 
 .audio-bar:nth-child(4) {
-  height: 15px;
+  height: 8px;
   animation-delay: 0.12s;
 }
 
 .audio-bar:nth-child(5) {
-  height: 8px;
+  height: 4px;
   animation-delay: 0.28s;
 }
 
@@ -728,13 +728,13 @@
    ========================================================================== */
 
 .toast-container-shell {
-  width: 325px;
+  width: 340px;
   height: 64px;
   border-radius: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 22px;
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
@@ -1239,6 +1239,108 @@
   background: var(--glass-rim-top);
   border-radius: 9999px;
   pointer-events: none;
+}
+
+/* ==========================================================================
+   Refinement Phase 1: macOS Control Center Style Settings & Todo Box
+   ========================================================================== */
+
+.settings-macos-popover {
+  width: 420px;
+  max-width: 95vw;
+  background: rgba(12, 12, 14, 0.94);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+  position: relative;
+}
+
+.segmented-control {
+  display: flex;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.segmented-btn {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  outline: none;
+}
+
+.segmented-btn:hover {
+  color: #ffffff;
+}
+
+.segmented-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.ios-switch {
+  width: 38px;
+  height: 22px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.14);
+  position: relative;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: background-color 0.2s ease;
+  padding: 2px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ios-switch.active {
+  background: #22c55e;
+}
+
+.ios-switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block;
+}
+
+.ios-switch.active .ios-switch-thumb {
+  transform: translateX(16px);
+}
+
+.todo-dark-container {
+  background-color: #0c0c0e;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-sizing: border-box;
 }
 
 

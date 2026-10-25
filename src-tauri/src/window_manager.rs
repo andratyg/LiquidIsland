@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
-use tauri::{PhysicalPosition, Position, Window};
+use tauri::{Emitter, PhysicalPosition, Position, Window};
 
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::POINT;
@@ -12,6 +12,7 @@ pub static HIT_HEIGHT: AtomicU32 = AtomicU32::new(56);
 pub static HIT_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
 pub static CURRENT_IGNORE_STATE: AtomicBool = AtomicBool::new(false);
 pub static HIT_LOOP_STARTED: AtomicBool = AtomicBool::new(false);
+pub static PREV_CURSOR_INSIDE: AtomicBool = AtomicBool::new(false);
 
 /// Updates the dynamic hit box for the Dynamic Island and modals.
 /// Called by React whenever islandState, lyrics, audio, or modals change.
@@ -23,7 +24,8 @@ pub fn update_hit_box(width: u32, height: u32, modal_open: bool) {
 }
 
 /// Spawns a background thread (polling every 35ms) using Win32 GetCursorPos to perform
-/// hardware-level hit testing, switching set_ignore_cursor_events(false/true) dynamically.
+/// hardware-level hit testing, switching set_ignore_cursor_events(false/true) dynamically,
+/// and emitting "cursor-in-island" (bool) to React for 100% reliable auto-expand & auto-shrink.
 pub fn start_hit_test_loop(window: Window) {
     if HIT_LOOP_STARTED.swap(true, Ordering::SeqCst) {
         return;
@@ -40,9 +42,9 @@ pub fn start_hit_test_loop(window: Window) {
             let box_w = HIT_WIDTH.load(Ordering::Relaxed);
             let box_h = HIT_HEIGHT.load(Ordering::Relaxed);
 
-            let should_ignore = if modal_open {
+            let is_inside = if modal_open {
                 // If a modal or dev dock is open, allow interaction across the window
-                false
+                true
             } else {
                 #[cfg(windows)]
                 {
@@ -70,26 +72,43 @@ pub fn start_hit_test_loop(window: Window) {
                         let island_top = win_pos.y;
                         let island_bottom = win_pos.y + physical_box_h + margin;
 
-                        let is_inside = pt.x >= island_left
+                        // Check if cursor is inside island bounds
+                        let inside_island = pt.x >= island_left
                             && pt.x <= island_right
                             && pt.y >= island_top
                             && pt.y <= island_bottom;
 
-                        !is_inside
+                        // Stealth Mode (bezel-line) Auto-Wake hit detection:
+                        // Top bezel strip (y <= 14px relative to screen, centered horizontally)
+                        let bezel_margin_x = (100.0 * scale).round() as i32;
+                        let bezel_bottom = win_pos.y + (14.0 * scale).round() as i32;
+                        let inside_bezel = pt.y >= win_pos.y
+                            && pt.y <= bezel_bottom
+                            && pt.x >= (win_center_x - bezel_margin_x)
+                            && pt.x <= (win_center_x + bezel_margin_x);
+
+                        inside_island || inside_bezel
                     }
                 }
 
                 #[cfg(not(windows))]
                 {
-                    false
+                    true
                 }
             };
 
+            let should_ignore = !is_inside;
             let current_ignore = CURRENT_IGNORE_STATE.load(Ordering::Relaxed);
             if should_ignore != current_ignore {
                 if window.set_ignore_cursor_events(should_ignore).is_ok() {
                     CURRENT_IGNORE_STATE.store(should_ignore, Ordering::Relaxed);
                 }
+            }
+
+            let prev_inside = PREV_CURSOR_INSIDE.load(Ordering::Relaxed);
+            if is_inside != prev_inside {
+                PREV_CURSOR_INSIDE.store(is_inside, Ordering::Relaxed);
+                let _ = window.emit("cursor-in-island", is_inside);
             }
         }
     });

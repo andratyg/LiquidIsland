@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import {
@@ -33,9 +33,37 @@ import {
 } from 'lucide-react';
 
 interface TaskbarPreviewDockProps {
-  onOpenSettings: () => void;
-  onOpenSpotlight: () => void;
+  onOpenSettings?: () => void;
+  onOpenSpotlight?: () => void;
   onTrayAction?: (action: string) => void;
+}
+
+// Safe IPC Invoker with fallback
+async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
+  try {
+    const isTauri =
+      typeof window !== 'undefined' &&
+      ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (!isTauri) return null;
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<T>(cmd, args);
+  } catch (err) {
+    console.warn(`[Tauri IPC] "${cmd}" returned:`, err);
+    return null;
+  }
+}
+
+async function safeEmit(event: string, payload?: unknown) {
+  try {
+    const isTauri =
+      typeof window !== 'undefined' &&
+      ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (!isTauri) return;
+    const { emit } = await import('@tauri-apps/api/event');
+    await emit(event, payload);
+  } catch (err) {
+    console.warn(`[Tauri Event] "${event}" emit error:`, err);
+  }
 }
 
 export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
@@ -49,9 +77,11 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   const companionMode = useSystemStore((s) => s.companionMode);
   const enableOptionalLofi = useSystemStore((s) => s.enableOptionalLofi);
   const activeSlide = useSystemStore((s) => s.activeSlide);
-  const isWindowMaximizedSimulated = useSystemStore(
-    (s) => s.isWindowMaximizedSimulated
-  );
+  const isWindowMaximizedSimulated = useSystemStore((s) => s.isWindowMaximizedSimulated);
+
+  // Real Windows Hardware Status
+  const batteryLevel = useSystemStore((s) => s.batteryLevel ?? 84);
+  const isCharging = useSystemStore((s) => s.isCharging ?? true);
 
   const [showTrayFlyout, setShowTrayFlyout] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -60,18 +90,26 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
   const flyoutRef = useRef<HTMLDivElement>(null);
 
+  // Click-Through toggle helper for bottom dock
+  const handleDockMouseEnter = useCallback(() => {
+    safeInvoke('set_dock_click_through', { ignore: false });
+  }, []);
+
+  const handleDockMouseLeave = useCallback(() => {
+    safeInvoke('set_dock_click_through', { ignore: true });
+  }, []);
+
   // Synchronized Win32 Digital Clock
   useEffect(() => {
     function updateClock() {
       const now = new Date();
       setTimeStr(
-        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
       );
       setDateStr(
         now.toLocaleDateString([], {
-          month: 'numeric',
+          month: 'short',
           day: 'numeric',
-          year: 'numeric',
         })
       );
     }
@@ -124,15 +162,36 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           systemStore.toggleOptionalLofi();
           break;
         case 'open_settings':
-          onOpenSettings();
+          if (onOpenSettings) onOpenSettings();
+          else safeEmit('open-settings');
           break;
         case 'trim_ram':
           playWaterDrop();
+          safeInvoke('trim_ram_working_set');
           break;
       }
     }
     setShowContextMenu(false);
     setShowTrayFlyout(false);
+  };
+
+  const triggerOpenSpotlight = () => {
+    playGlassPop();
+    if (onOpenSpotlight) onOpenSpotlight();
+    safeEmit('open-spotlight');
+  };
+
+  const triggerOpenSettings = () => {
+    playGlassPop();
+    if (onOpenSettings) onOpenSettings();
+    safeEmit('open-settings');
+  };
+
+  const triggerOpenSlide = (slideIndex: number) => {
+    playGlassPop();
+    systemStore.setActiveSlide(slideIndex as any);
+    systemStore.setIslandState('expanded');
+    safeEmit('open-slide', slideIndex);
   };
 
   // Reusable Dock App Items
@@ -142,10 +201,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       <button
         type="button"
         className="dock-app-icon"
-        onClick={() => {
-          playGlassPop();
-          onOpenSpotlight();
-        }}
+        onClick={triggerOpenSpotlight}
         title="Start Menu & Spotlight (Alt + Space)"
       >
         <div
@@ -167,10 +223,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       {/* Search Pill */}
       <button
         type="button"
-        onClick={() => {
-          playToggleClick();
-          onOpenSpotlight();
-        }}
+        onClick={triggerOpenSpotlight}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -237,11 +290,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       <button
         type="button"
         className={`dock-app-icon ${activeSlide === 3 ? 'active' : ''}`}
-        onClick={() => {
-          playGlassPop();
-          systemStore.setActiveSlide(3);
-          systemStore.setIslandState('expanded');
-        }}
+        onClick={() => triggerOpenSlide(3)}
         title="File Shelf (Slide 3)"
       >
         <Folder size={16} style={{ color: '#f59e0b' }} />
@@ -251,11 +300,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       <button
         type="button"
         className={`dock-app-icon ${activeSlide === 0 ? 'active' : ''}`}
-        onClick={() => {
-          playGlassPop();
-          systemStore.setActiveSlide(0);
-          systemStore.setIslandState('expanded');
-        }}
+        onClick={() => triggerOpenSlide(0)}
         title="Music Player & Lyrics (Slide 0)"
       >
         <Music size={16} style={{ color: '#ec4899' }} />
@@ -281,10 +326,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       <button
         type="button"
         className="dock-app-icon"
-        onClick={() => {
-          playGlassPop();
-          onOpenSettings();
-        }}
+        onClick={triggerOpenSettings}
         title="Settings Dashboard & Character Studio"
       >
         <Settings size={16} style={{ color: '#a855f7' }} />
@@ -369,7 +411,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         <Volume2 size={14} />
       </button>
 
-      {/* Battery Indicator */}
+      {/* Real Windows Battery Indicator from hardware_monitor.rs */}
       <div
         style={{
           display: 'flex',
@@ -379,10 +421,18 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           color: 'var(--text-primary)',
           cursor: 'pointer',
         }}
-        title="Battery: 70% (Plugged in)"
+        onClick={() => {
+          playGlassPop();
+          if (isCharging) {
+            systemStore.showChargingToast(batteryLevel);
+          } else {
+            systemStore.showUnpluggedToast(batteryLevel);
+          }
+        }}
+        title={`Battery: ${batteryLevel}% (${isCharging ? 'Plugged In / Charging' : 'On Battery'})`}
       >
-        <BatteryCharging size={14} style={{ color: '#10b981' }} />
-        <span>70%</span>
+        <BatteryCharging size={14} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{batteryLevel}%</span>
       </div>
 
       {/* Date & Time */}
@@ -400,22 +450,35 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         onClick={() => {
           playToggleClick();
           systemStore.triggerToast('hud', {
-            title: 'Calendar & Notifications',
+            title: 'Notification Center',
             subtitle: `${dateStr} · LiquidIsland Active`,
           });
         }}
         title="Windows Notification Center"
       >
-        <span style={{ fontSize: '11px', fontWeight: 600 }}>{timeStr || '11:42 AM'}</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+          {timeStr || '11:42'}
+        </span>
         <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
-          {dateStr || '10/24/2026'}
+          {dateStr || 'Oct 25'}
         </span>
       </div>
     </>
   );
 
   return (
-    <div ref={flyoutRef}>
+    <div
+      ref={flyoutRef}
+      style={{
+        position: 'relative',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        pointerEvents: 'none',
+      }}
+    >
       {/* ================================================================== */}
       {/* TASKBAR MODE RENDERING: OPTION A vs OPTION B                       */}
       {/* ================================================================== */}
@@ -423,11 +486,14 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         /* OPTION A: Full-Width Bottom Crystal Bar (100% width, 48px height) */
         <motion.div
           key="taskbar-full-width"
+          onMouseEnter={handleDockMouseEnter}
+          onMouseLeave={handleDockMouseLeave}
           initial={{ y: 50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 50, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
           className="liquid-taskbar-full"
+          style={{ pointerEvents: 'auto' }}
         >
           {/* Left / Center Section: App Dock */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -471,15 +537,21 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         </motion.div>
       ) : (
         /* OPTION B: Two Floating Liquid Glass Capsules */
-        <div className="liquid-dock-container">
+        <div
+          className="liquid-dock-container"
+          style={{ pointerEvents: 'none' }}
+        >
           {/* Left Capsule: App Dock */}
           <motion.div
             key="dock-capsule-left"
+            onMouseEnter={handleDockMouseEnter}
+            onMouseLeave={handleDockMouseLeave}
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 30, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
             className="liquid-dock-capsule"
+            style={{ pointerEvents: 'auto' }}
           >
             {renderAppIcons()}
           </motion.div>
@@ -487,11 +559,14 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           {/* Right Capsule: System Tray */}
           <motion.div
             key="dock-capsule-right"
+            onMouseEnter={handleDockMouseEnter}
+            onMouseLeave={handleDockMouseLeave}
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 30, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
             className="liquid-dock-capsule"
+            style={{ pointerEvents: 'auto' }}
           >
             {renderTrayIcons()}
           </motion.div>
@@ -505,6 +580,8 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         {showTrayFlyout && (
           <motion.div
             key="tray-flyout"
+            onMouseEnter={handleDockMouseEnter}
+            onMouseLeave={handleDockMouseLeave}
             initial={{ opacity: 0, scale: 0.92, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 12 }}
@@ -512,6 +589,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             className="tray-flyout-panel"
             style={{
               bottom: effectiveMode === 'A' ? '54px' : '62px',
+              pointerEvents: 'auto',
             }}
           >
             <div
@@ -531,7 +609,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
             {/* 3x3 Tray Grid */}
             <div className="tray-grid-3x3">
-              {/* Tile 1: LiquidIsland OS (Primary Active Icon) */}
+              {/* Tile 1: LiquidIsland OS */}
               <div
                 className="tray-grid-item active"
                 onClick={() => {
@@ -599,7 +677,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                 <span>Security</span>
               </div>
 
-              {/* Tile 5: NVIDIA / GPU Engine */}
+              {/* Tile 5: GPU Engine */}
               <div
                 className="tray-grid-item"
                 onClick={() => handleAction('gpu')}
@@ -612,11 +690,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               {/* Tile 6: Settings Dashboard */}
               <div
                 className="tray-grid-item"
-                onClick={() => {
-                  playGlassPop();
-                  onOpenSettings();
-                  setShowTrayFlyout(false);
-                }}
+                onClick={triggerOpenSettings}
                 title="Open Settings Dashboard"
               >
                 <Sliders size={16} style={{ color: '#a855f7' }} />
@@ -664,6 +738,8 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         {showContextMenu && (
           <motion.div
             key="tray-context-menu"
+            onMouseEnter={handleDockMouseEnter}
+            onMouseLeave={handleDockMouseLeave}
             initial={{ opacity: 0, scale: 0.94, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 10 }}
@@ -671,6 +747,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             className="tray-context-menu"
             style={{
               bottom: effectiveMode === 'A' ? '64px' : '72px',
+              pointerEvents: 'auto',
             }}
           >
             {/* Header */}
@@ -759,8 +836,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             <div
               className="tray-menu-item"
               onClick={() => {
-                playGlassPop();
-                onOpenSettings();
+                triggerOpenSettings();
                 setShowContextMenu(false);
                 setShowTrayFlyout(false);
               }}

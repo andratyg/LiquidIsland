@@ -9,6 +9,7 @@ import { ExpandedContainer } from './components/ExpandedContainer';
 import { ToastView } from './components/ToastView';
 import { SpotlightModal } from './components/SpotlightModal';
 import { SettingsModal } from './components/SettingsModal';
+import { TaskbarPreviewDock } from './components/TaskbarPreviewDock';
 import {
   Sun,
   Moon,
@@ -29,8 +30,10 @@ import {
   Shield,
   SunMedium,
   Layout,
+  Zap,
 } from 'lucide-react';
-import { ISLAND_DIMENSIONS } from './types/liquid';
+import { ISLAND_DIMENSIONS, type SystemMediaPayload, type HardwareToastPayload } from './types/liquid';
+import { fetchLiveLyrics } from './utils/liveLyricsFetcher';
 
 interface TrayActionPayload {
   action: string;
@@ -77,6 +80,11 @@ export const App: React.FC = () => {
   const nightEyeCareEnabled = useSystemStore((s) => s.nightEyeCareEnabled);
   const showTaskbarDock = useSystemStore((s) => s.showTaskbarDock);
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
+
+  const isTaskbarWindow =
+    typeof window !== 'undefined' &&
+    (window.location.search.includes('window=taskbar') ||
+      window.location.hash.includes('window=taskbar'));
 
   // Global 1s audio playback ticker so lyrics advance seamlessly in all views
   useEffect(() => {
@@ -263,6 +271,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     let unlistenAction: (() => void) | null = null;
     let unlistenCmd: (() => void) | null = null;
+    let unlistenMedia: (() => void) | null = null;
+    let unlistenHardware: (() => void) | null = null;
+    let unlistenStoreSync: (() => void) | null = null;
+    let unlistenSpotlight: (() => void) | null = null;
+    let unlistenSettings: (() => void) | null = null;
+    let unlistenSlide: (() => void) | null = null;
     let isMounted = true;
 
     async function registerTrayListeners() {
@@ -284,8 +298,59 @@ export const App: React.FC = () => {
           handleTrayAction(event.payload);
         });
         unlistenCmd = sub2;
+
+        const sub3 = await listen<SystemMediaPayload>('system-media-update', async (event) => {
+          const payload = event.payload;
+          if (payload) {
+            systemStore.updateSystemMedia(payload);
+            if (payload.title && payload.artist) {
+              fetchLiveLyrics(payload.title, payload.artist).catch(() => {});
+            }
+          }
+        });
+        unlistenMedia = sub3;
+
+        const sub4 = await listen<HardwareToastPayload>('hardware-toast', (event) => {
+          const p = event.payload;
+          if (!p) return;
+          if (p.kind === 'charging') {
+            systemStore.showChargingToast(p.percent);
+          } else if (p.kind === 'unplugged') {
+            systemStore.showUnpluggedToast(p.percent);
+          } else if (p.kind === 'bluetooth') {
+            systemStore.triggerToast('airbuds', {
+              title: p.title || p.device_name || 'AirBuds Pro',
+              subtitle: p.subtitle || `Connected - ${p.percent}%`,
+              value: p.percent,
+            });
+          }
+        });
+        unlistenHardware = sub4;
+
+        const sub5 = await listen('store-sync', (event) => {
+          if (event.payload) {
+            systemStore.syncFromExternal(event.payload as any);
+          }
+        });
+        unlistenStoreSync = sub5;
+
+        const sub6 = await listen('open-spotlight', () => {
+          systemStore.toggleSpotlight();
+        });
+        unlistenSpotlight = sub6;
+
+        const sub7 = await listen('open-settings', () => {
+          setShowSettingsModal(true);
+        });
+        unlistenSettings = sub7;
+
+        const sub8 = await listen<number>('open-slide', (event) => {
+          systemStore.setActiveSlide(event.payload as any);
+          systemStore.setIslandState('expanded');
+        });
+        unlistenSlide = sub8;
       } catch (err) {
-        console.warn('[Tauri Event Listener] Failed to subscribe to tray events:', err);
+        console.warn('[Tauri Event Listener] Failed to subscribe to tray/media/hardware events:', err);
       }
     }
 
@@ -295,8 +360,50 @@ export const App: React.FC = () => {
       isMounted = false;
       if (unlistenAction) unlistenAction();
       if (unlistenCmd) unlistenCmd();
+      if (unlistenMedia) unlistenMedia();
+      if (unlistenHardware) unlistenHardware();
+      if (unlistenStoreSync) unlistenStoreSync();
+      if (unlistenSpotlight) unlistenSpotlight();
+      if (unlistenSettings) unlistenSettings();
+      if (unlistenSlide) unlistenSlide();
     };
   }, [handleTrayAction]);
+
+  // Hardware-level Cursor In Island listener from Win32 GetCursorPos
+  useEffect(() => {
+    if (isTaskbarWindow) return;
+    let unlisten: (() => void) | null = null;
+    let isMounted = true;
+
+    async function registerCursorListener() {
+      const isTauri =
+        typeof window !== 'undefined' &&
+        ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+      if (!isTauri) return;
+
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        if (!isMounted) return;
+
+        unlisten = await listen<boolean>('cursor-in-island', (event) => {
+          if (event.payload) {
+            window.dispatchEvent(new CustomEvent('liquid-cursor-enter'));
+          } else {
+            window.dispatchEvent(new CustomEvent('liquid-cursor-leave'));
+          }
+        });
+      } catch (err) {
+        console.warn('[Cursor Listener] Caught:', err);
+      }
+    }
+
+    registerCursorListener();
+
+    return () => {
+      isMounted = false;
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   // Query connected monitors and initial RAM working set on mount
   useEffect(() => {
@@ -418,7 +525,7 @@ export const App: React.FC = () => {
       if (e.ctrlKey && e.altKey && (e.key === 't' || e.key === 'T')) {
         e.preventDefault();
         const res = await safeInvoke<string>('toggle_pin_active_window');
-        const msg = res || '📌 Window Pinned Always-on-Top';
+        const msg = res || 'Window Pinned Always-on-Top';
         systemStore.triggerToast('window-pin', {
           title: msg.includes('Unpinned') ? 'Window Unpinned' : 'Window Pinned',
           subtitle: msg,
@@ -442,7 +549,7 @@ export const App: React.FC = () => {
 
   // Automatic Fullscreen Gaming / Video Stealth Detection
   useEffect(() => {
-    if (!autoFullscreenStealth) return;
+    if (isTaskbarWindow || !autoFullscreenStealth) return;
     const fsTimer = setInterval(async () => {
       const isFullscreen = await safeInvoke<boolean>('check_fullscreen_state');
       if (isFullscreen && systemStore.getState().islandState !== 'bezel-line') {
@@ -451,10 +558,11 @@ export const App: React.FC = () => {
     }, 2500);
 
     return () => clearInterval(fsTimer);
-  }, [autoFullscreenStealth]);
+  }, [autoFullscreenStealth, isTaskbarWindow]);
 
   // Synchronize dynamic hit-box with native Rust Win32 GetCursorPos tracker (35ms loop)
   useEffect(() => {
+    if (isTaskbarWindow) return;
     let width = 210;
     let height = 56;
 
@@ -487,10 +595,11 @@ export const App: React.FC = () => {
       height,
       modalOpen,
     });
-  }, [islandState, isAudioPlaying, spotlightOpen, showSettingsModal, showDevControls]);
+  }, [islandState, isAudioPlaying, spotlightOpen, showSettingsModal, showDevControls, isTaskbarWindow]);
 
   // Collapse Island when clicking outside #liquid-island-root
   useEffect(() => {
+    if (isTaskbarWindow) return;
     function handlePointerDown(e: MouseEvent) {
       const currentState = systemStore.getState().islandState;
       if (currentState === 'expanded' || currentState === 'expanded-lyrics') {
@@ -503,10 +612,11 @@ export const App: React.FC = () => {
     }
     window.addEventListener('pointerdown', handlePointerDown);
     return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, []);
+  }, [isTaskbarWindow]);
 
   // Dynamic Window Resizing for Spotlight & Settings Modals (960px when open, 210px when closed)
   useEffect(() => {
+    if (isTaskbarWindow) return;
     async function updateWindowSize() {
       if (spotlightOpen || showSettingsModal) {
         await safeInvoke('set_window_size', { width: 720, height: 960 });
@@ -515,7 +625,7 @@ export const App: React.FC = () => {
       }
     }
     updateWindowSize();
-  }, [spotlightOpen, showSettingsModal]);
+  }, [spotlightOpen, showSettingsModal, isTaskbarWindow]);
 
   // Click-Through handling for floating Dev Toolbar
   const handleToolbarMouseEnter = useCallback(async () => {
@@ -532,6 +642,62 @@ export const App: React.FC = () => {
     : islandState === 'eyes' && isAudioPlaying
     ? { width: 360, height: 44 }
     : ISLAND_DIMENSIONS[islandState] || ISLAND_DIMENSIONS['compact'];
+
+  // Bottom Window Render Branch: Dedicated Taskbar Window
+  if (isTaskbarWindow) {
+    return (
+      <div
+        className={`liquidisland-app theme-${theme}`}
+        style={{
+          width: '100vw',
+          height: '68px',
+          background: 'transparent',
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            pointerEvents: 'auto',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <TaskbarPreviewDock
+            onOpenSettings={async () => {
+              playGlassPop();
+              try {
+                const { emit } = await import('@tauri-apps/api/event');
+                await emit('open-settings');
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            onOpenSpotlight={async () => {
+              playGlassPop();
+              try {
+                const { emit } = await import('@tauri-apps/api/event');
+                await emit('open-spotlight');
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            onTrayAction={(action) => handleTrayAction({ action })}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`island-canvas theme-${theme}`}>
@@ -1173,6 +1339,44 @@ export const App: React.FC = () => {
                   }}
                 >
                   <span>Pet</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.showChargingToast(84);
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: '#22c55e',
+                    color: '#22c55e',
+                  }}
+                  title="Simulate 1:1 Charger Plugged In Toast (84%)"
+                >
+                  <Zap size={9} style={{ color: '#22c55e' }} />
+                  <span>Charging (84%)</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => {
+                    playToggleClick();
+                    systemStore.showUnpluggedToast(84);
+                  }}
+                  style={{
+                    fontSize: '9.5px',
+                    padding: '2px 6px',
+                    borderColor: '#f59e0b',
+                    color: '#f59e0b',
+                  }}
+                  title="Simulate 1:1 Charger Unplugged Toast (84%)"
+                >
+                  <Zap size={9} style={{ color: '#f59e0b' }} />
+                  <span>Unplugged (84%)</span>
                 </button>
 
                 <button

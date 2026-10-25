@@ -11,6 +11,7 @@ import {
   BatteryStatus,
   type ShelfFileItem,
   type TodoTaskItem,
+  type SystemMediaPayload,
 } from '../types/liquid';
 import {
   playAirBudsChime,
@@ -45,6 +46,16 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   playbackTime: 193,
   duration: 256,
   isPomodoroRunning: false,
+
+  // Refinement Phase 2 media defaults
+  mediaTitle: 'Paper Sky',
+  mediaArtist: 'Sora & The Clouds',
+  mediaAlbum: 'Tokyo Lo-Fi Beats',
+  mediaSourceApp: 'Spotify',
+  mediaDuration: 256,
+  mediaPosition: 193,
+  mediaIsPlaying: true,
+  hasSystemMedia: false,
 
   // Phase 6 defaults
   pomodoroActive: false,
@@ -175,6 +186,19 @@ function emitChange() {
   }
 }
 
+async function syncToOtherWindows(updated: SystemSettings) {
+  try {
+    const isTauri =
+      typeof window !== 'undefined' &&
+      ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (!isTauri) return;
+    const { emit } = await import('@tauri-apps/api/event');
+    await emit('store-sync', updated);
+  } catch {
+    // Non-fatal
+  }
+}
+
 function saveSettings(updated: SystemSettings) {
   currentSettings = updated;
   try {
@@ -183,9 +207,29 @@ function saveSettings(updated: SystemSettings) {
     console.error('[LiquidIsland Store] Failed to persist state:', err);
   }
   emitChange();
+  syncToOtherWindows(updated);
+}
+
+// Cross-window localStorage sync listener
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        currentSettings = { ...currentSettings, ...parsed };
+        emitChange();
+      } catch {
+        // Ignore JSON error
+      }
+    }
+  });
 }
 
 export const systemStore = {
+  syncFromExternal(updates: Partial<SystemSettings>) {
+    currentSettings = { ...currentSettings, ...updates };
+    emitChange();
+  },
   getState(): SystemSettings {
     return currentSettings;
   },
@@ -314,12 +358,33 @@ export const systemStore = {
     saveSettings({ ...currentSettings, brightness: clamped });
   },
   setIsAudioPlaying(isAudioPlaying: boolean) {
-    saveSettings({ ...currentSettings, isAudioPlaying });
+    saveSettings({ ...currentSettings, isAudioPlaying, mediaIsPlaying: isAudioPlaying });
   },
   toggleAudioPlaying() {
+    const nextVal = !currentSettings.isAudioPlaying;
     saveSettings({
       ...currentSettings,
-      isAudioPlaying: !currentSettings.isAudioPlaying,
+      isAudioPlaying: nextVal,
+      mediaIsPlaying: nextVal,
+    });
+  },
+  updateSystemMedia(payload: SystemMediaPayload) {
+    const isPlaying = payload.is_playing;
+    const pos = payload.position_secs;
+    const dur = payload.duration_secs > 0 ? payload.duration_secs : (currentSettings.duration || 256);
+    saveSettings({
+      ...currentSettings,
+      mediaTitle: payload.title || currentSettings.mediaTitle,
+      mediaArtist: payload.artist || currentSettings.mediaArtist,
+      mediaAlbum: payload.album_title || currentSettings.mediaAlbum,
+      mediaSourceApp: payload.source_app || currentSettings.mediaSourceApp,
+      mediaIsPlaying: isPlaying,
+      isAudioPlaying: isPlaying,
+      mediaPosition: pos,
+      playbackTime: pos,
+      mediaDuration: dur,
+      duration: dur,
+      hasSystemMedia: payload.has_media,
     });
   },
 
@@ -505,6 +570,44 @@ export const systemStore = {
         icon: 'airbuds',
         ...payload,
       };
+    } else if (type === 'charging') {
+      playChargingChime();
+      const pct = payload?.percent ?? payload?.value ?? 84;
+      fullPayload = {
+        type: 'charging',
+        title: 'Charging',
+        subtitle: 'Charger connected',
+        value: pct,
+        percent: pct,
+        icon: 'charging',
+        batteryStatus: 'charging',
+        ...payload,
+      };
+      currentSettings = {
+        ...currentSettings,
+        batteryLevel: pct,
+        isCharging: true,
+        batteryStatus: 'charging',
+      };
+    } else if (type === 'unplugged') {
+      playBatteryLowChime();
+      const pct = payload?.percent ?? payload?.value ?? 84;
+      fullPayload = {
+        type: 'unplugged',
+        title: 'Charger unplugged',
+        subtitle: `${pct}% remaining`,
+        value: pct,
+        percent: pct,
+        icon: 'unplugged',
+        batteryStatus: 'unplugged',
+        ...payload,
+      };
+      currentSettings = {
+        ...currentSettings,
+        batteryLevel: pct,
+        isCharging: false,
+        batteryStatus: 'unplugged',
+      };
     } else if (type === 'battery') {
       const bStatus: BatteryStatus =
         payload?.batteryStatus ??
@@ -621,10 +724,18 @@ export const systemStore = {
       toastPayload: fullPayload,
     });
 
-    const autoRevertMs = type === 'hud' ? 2200 : 3200;
+    const autoRevertMs = (type === 'charging' || type === 'unplugged') ? 3000 : (type === 'hud' ? 2200 : 3200);
     toastTimeoutId = setTimeout(() => {
       systemStore.dismissToast();
     }, autoRevertMs);
+  },
+
+  showChargingToast(percent: number = 84) {
+    this.triggerToast('charging', { percent, value: percent });
+  },
+
+  showUnpluggedToast(percent: number = 84) {
+    this.triggerToast('unplugged', { percent, value: percent });
   },
 
   dismissToast() {
@@ -677,6 +788,13 @@ export const systemStore = {
     saveSettings({
       ...currentSettings,
       autoFullscreenStealth,
+    });
+  },
+
+  toggleAutoFullscreenStealth() {
+    saveSettings({
+      ...currentSettings,
+      autoFullscreenStealth: !currentSettings.autoFullscreenStealth,
     });
   },
 
@@ -763,7 +881,7 @@ export const systemStore = {
     const next = typeof time === 'function' ? time(current) : time;
     const dur = currentSettings.duration ?? 256;
     const clamped = next >= dur ? 0 : Math.max(0, next);
-    saveSettings({ ...currentSettings, playbackTime: clamped });
+    saveSettings({ ...currentSettings, playbackTime: clamped, mediaPosition: clamped });
   },
 
   tickPlaybackTime() {

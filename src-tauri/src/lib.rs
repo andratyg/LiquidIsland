@@ -4,6 +4,8 @@ pub mod tray;
 pub mod window_manager;
 pub mod window_hooks;
 pub mod clipboard_ports;
+pub mod media_session;
+pub mod hardware_monitor;
 
 use tauri::Manager;
 
@@ -30,6 +32,15 @@ pub fn run() {
                 let _ = window.set_ignore_cursor_events(false);
                 // Start background Win32 GetCursorPos hit-test thread (35ms)
                 window_manager::start_hit_test_loop(window.as_ref().window().clone());
+                // Start Windows SMTC media session polling thread (1000ms)
+                media_session::start_media_session_listener(window.as_ref().window().clone());
+                // Start Windows Hardware Power/Battery monitor thread (800ms)
+                hardware_monitor::start_hardware_monitor(window.as_ref().window().clone());
+            }
+
+            // Spawn the dedicated bottom Liquid Glass Taskbar window ("taskbar-dock")
+            if let Err(e) = taskbar::spawn_or_update_taskbar_window(app.handle()) {
+                eprintln!("[LiquidIsland Taskbar] Failed to spawn taskbar dock window: {}", e);
             }
 
             Ok(())
@@ -50,6 +61,11 @@ pub fn run() {
             taskbar::restart_windows_explorer,
             clipboard_ports::scan_active_dev_ports,
             clipboard_ports::kill_dev_port,
+            media_session::media_play_pause,
+            media_session::media_next_track,
+            media_session::media_prev_track,
+            hardware_monitor::get_battery_hardware_status,
+            taskbar::set_dock_click_through,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LiquidIsland application")

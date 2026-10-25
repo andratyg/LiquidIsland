@@ -1,13 +1,25 @@
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewUrl,
+    WebviewWindowBuilder, Window,
+};
+
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::POINT;
+#[cfg(windows)]
+use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
 pub static TASKBAR_MODIFIED: AtomicBool = AtomicBool::new(false);
+pub static DOCK_LOOP_STARTED: AtomicBool = AtomicBool::new(false);
+pub static DOCK_HOVERED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(windows)]
 mod win32 {
     use super::*;
     use windows_sys::Win32::Foundation::{BOOL, HWND};
     use windows_sys::Win32::Graphics::Gdi::{
-        SetWindowRgn, RedrawWindow, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE,
+        RedrawWindow, SetWindowRgn, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE,
         RDW_UPDATENOW,
     };
     use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
@@ -123,15 +135,13 @@ mod win32 {
     }
 
     pub unsafe fn apply_option_b(hwnd: HWND, theme: &str) -> bool {
-        // Option B: Liquid Glass Dock Styling
-        // IMPORTANT: NEVER clip Shell_TrayWnd with SetWindowRgn as it breaks native Windows taskbar
-        // clickability on DPI-scaled displays. Always reset to NULL region!
+        // Option B: Transparent Acrylic on native Shell_TrayWnd so floating Liquid Glass dock capsules shine through
         ensure_taskbar_visible_and_unclipped(hwnd);
 
         let color = if theme.eq_ignore_ascii_case("light") {
-            0xCCF8FAFC
+            0x25F8FAFC // Ultra-transparent quartz
         } else {
-            0xD0121216
+            0x25121216 // Ultra-transparent obsidian
         };
 
         apply_acrylic_policy(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, color);
@@ -171,6 +181,106 @@ mod win32 {
 
         TASKBAR_MODIFIED.store(false, Ordering::Relaxed);
         true
+    }
+}
+
+/// Spawns or updates the dedicated bottom Taskbar Dock window ("taskbar-dock") flush at bottom of screen
+pub fn spawn_or_update_taskbar_window(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let window = if let Some(w) = app.get_webview_window("taskbar-dock") {
+        w
+    } else {
+        let builder = WebviewWindowBuilder::new(
+            app,
+            "taskbar-dock",
+            WebviewUrl::App("index.html?window=taskbar".into()),
+        )
+        .title("LiquidIsland Taskbar")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .resizable(false);
+
+        builder.build()?
+    };
+
+    // Position window flush against the bottom of the primary monitor
+    if let Ok(Some(monitor)) = app.primary_monitor() {
+        let pos = monitor.position();
+        let size = monitor.size();
+        let scale = monitor.scale_factor();
+        let height_px = (68.0 * scale).round() as u32;
+
+        let win_x = pos.x;
+        let win_y = pos.y + size.height as i32 - height_px as i32;
+
+        let _ = window.set_size(Size::Physical(PhysicalSize {
+            width: size.width,
+            height: height_px,
+        }));
+        let _ = window.set_position(Position::Physical(PhysicalPosition {
+            x: win_x,
+            y: win_y,
+        }));
+    }
+
+    // Default clickable on startup
+    let _ = window.set_ignore_cursor_events(false);
+
+    // Start background cursor hit-test thread
+    start_dock_hit_test_loop(window.as_ref().window().clone());
+
+    Ok(())
+}
+
+/// Spawns a background thread checking cursor position for the bottom dock window
+pub fn start_dock_hit_test_loop(window: Window) {
+    if DOCK_LOOP_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    std::thread::spawn(move || {
+        #[cfg(windows)]
+        let mut pt: POINT = unsafe { std::mem::zeroed() };
+        let mut prev_inside = false;
+
+        loop {
+            std::thread::sleep(Duration::from_millis(35));
+
+            let hover_forced = DOCK_HOVERED.load(Ordering::Relaxed);
+
+            #[cfg(windows)]
+            {
+                let success = unsafe { GetCursorPos(&mut pt) };
+                if success != 0 {
+                    if let Ok(pos) = window.outer_position() {
+                        if let Ok(size) = window.outer_size() {
+                            let center_x = pos.x + (size.width as i32 / 2);
+                            let half_dock_w = 460; // Option B dock capsules span ~900px centered
+                            let in_capsule_x = (pt.x >= center_x - half_dock_w) && (pt.x <= center_x + half_dock_w);
+                            let in_dock_y = pt.y >= pos.y && pt.y <= (pos.y + size.height as i32);
+
+                            let inside = hover_forced || (in_capsule_x && in_dock_y);
+
+                            if inside != prev_inside {
+                                prev_inside = inside;
+                                let _ = window.set_ignore_cursor_events(!inside);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// Tauri command to dynamically set click-through for taskbar-dock
+#[tauri::command]
+pub fn set_dock_click_through(app: AppHandle, ignore: bool) {
+    DOCK_HOVERED.store(!ignore, Ordering::Relaxed);
+    if let Some(dock_win) = app.get_webview_window("taskbar-dock") {
+        let _ = dock_win.set_ignore_cursor_events(ignore);
     }
 }
 
@@ -226,8 +336,8 @@ pub fn restore_default_taskbar() -> bool {
 pub fn restart_windows_explorer() -> bool {
     #[cfg(windows)]
     {
-        use std::process::Command;
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         // Force kill explorer.exe

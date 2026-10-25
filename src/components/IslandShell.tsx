@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import { playToggleClick, playGlassPop } from '../utils/sfx';
 import { Volume2, SunMedium } from 'lucide-react';
-import { IslandDimensions } from '../types/liquid';
+import { IslandDimensions, ShelfFileItem } from '../types/liquid';
 import { CatCompanion } from './companions/CatCompanion';
 
 interface IslandShellProps {
@@ -26,10 +26,12 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   const theme = useSystemStore((s) => s.theme);
 
   const shellRef = useRef<HTMLDivElement>(null);
-  const [isMagneticHover, setIsMagneticHover] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
 
   // Transient Scroll HUD Pill state (Volume / Brightness)
-  const [hudState] = useState<{
+  const [hudState] = React.useState<{
     visible: boolean;
     type: 'volume' | 'brightness';
     value: number;
@@ -39,12 +41,198 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     value: currentVolume,
   });
 
-  const hudTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cursor Enter Logic: Stealth Auto-Wake and 220ms Hover Auto-Expand
+  const handleCursorEnter = useCallback(() => {
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
 
-  // Clear HUD timer on unmount
+    const current = systemStore.getState().islandState;
+    if (current === 'bezel-line') {
+      // Stealth Mode Auto-Wake: Wake to compact immediately
+      systemStore.setIslandState('compact');
+      // If hovered for 220ms, smoothly expand to expanded dashboard
+      hoverTimerRef.current = setTimeout(() => {
+        const stateNow = systemStore.getState().islandState;
+        if (stateNow === 'compact' || stateNow === 'eyes') {
+          playGlassPop();
+          systemStore.setIslandState('expanded');
+        }
+      }, 220);
+    } else if (current === 'compact' || current === 'eyes') {
+      // Hover Auto-Expand: expand after 220ms hover
+      hoverTimerRef.current = setTimeout(() => {
+        const stateNow = systemStore.getState().islandState;
+        if (stateNow === 'compact' || stateNow === 'eyes') {
+          playGlassPop();
+          systemStore.setIslandState('expanded');
+        }
+      }, 220);
+    }
+
+    onHoverChange?.(true);
+  }, [onHoverChange]);
+
+  // Cursor Leave Logic: 280ms Debounced Auto-Shrink with Input Focus & Modal Guards
+  const handleCursorLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+
+    onHoverChange?.(false);
+
+    // Auto-Shrink on cursor leave after 280ms
+    leaveTimerRef.current = setTimeout(() => {
+      // Check guards: do not shrink if an input/textarea is focused or modal open
+      const activeEl = document.activeElement;
+      const isInputFocused =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      const store = systemStore.getState();
+      const isModalOpen = store.spotlightOpen || store.privacyBlurEnabled;
+
+      if (isDraggingRef.current) {
+        return; // Inhibit auto-shrink while dragging files over the Island
+      }
+
+      if (!isInputFocused && !isModalOpen) {
+        if (store.islandState === 'expanded' || store.islandState === 'expanded-lyrics') {
+          playGlassPop();
+          systemStore.collapseIsland();
+        }
+      }
+    }, 280);
+  }, [onHoverChange]);
+
+  // Clean up timers on unmount & listen to Win32 hardware events
   useEffect(() => {
+    function onCustomCursorEnter() {
+      handleCursorEnter();
+    }
+    function onCustomCursorLeave() {
+      handleCursorLeave();
+    }
+
+    window.addEventListener('liquid-cursor-enter', onCustomCursorEnter);
+    window.addEventListener('liquid-cursor-leave', onCustomCursorLeave);
+
     return () => {
-      if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+      window.removeEventListener('liquid-cursor-enter', onCustomCursorEnter);
+      window.removeEventListener('liquid-cursor-leave', onCustomCursorLeave);
+    };
+  }, [handleCursorEnter, handleCursorLeave]);
+
+  // Universal File Drag-and-Drop Auto-Wake to Shelf
+  useEffect(() => {
+    let dragCounter = 0;
+
+    const onWindowDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter++;
+      isDraggingRef.current = true;
+
+      const hasFiles =
+        e.dataTransfer &&
+        (e.dataTransfer.types.includes('Files') ||
+          e.dataTransfer.types.includes('text/uri-list'));
+
+      if (hasFiles) {
+        systemStore.wakeShelfForDrop();
+      }
+    };
+
+    const onWindowDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      isDraggingRef.current = true;
+    };
+
+    const onWindowDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        isDraggingRef.current = false;
+      }
+    };
+
+    const onWindowDrop = () => {
+      dragCounter = 0;
+      isDraggingRef.current = false;
+    };
+
+    window.addEventListener('dragenter', onWindowDragEnter);
+    window.addEventListener('dragover', onWindowDragOver);
+    window.addEventListener('dragleave', onWindowDragLeave);
+    window.addEventListener('drop', onWindowDrop);
+
+    // Tauri Native Window Drag-Drop Listener for OS-level Explorer drags
+    let unlistenTauriDrag: (() => void) | null = null;
+    let isMounted = true;
+
+    async function initTauriDragListener() {
+      const isTauri =
+        typeof window !== 'undefined' &&
+        ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+      if (!isTauri) return;
+
+      try {
+        const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+        const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+          if (!isMounted) return;
+          const payload = event.payload;
+
+          if (payload.type === 'enter' || payload.type === 'over') {
+            isDraggingRef.current = true;
+            systemStore.wakeShelfForDrop();
+          } else if (payload.type === 'drop') {
+            isDraggingRef.current = false;
+            const paths = payload.paths;
+            if (paths && paths.length > 0) {
+              paths.forEach((filePath) => {
+                const name = filePath.split(/[\\/]/).pop() || filePath;
+                const ext = name.split('.').pop()?.toLowerCase() || '';
+                const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
+
+                const newFile: ShelfFileItem = {
+                  id: `shelf-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                  name,
+                  size: 1024 * 120,
+                  formattedSize: 'File',
+                  type: isImage ? `image/${ext}` : 'application/octet-stream',
+                  previewUrl: '',
+                  timestamp: 'Just now',
+                  content: filePath,
+                };
+                systemStore.addShelfFile(newFile);
+              });
+              playGlassPop();
+            }
+          } else {
+            isDraggingRef.current = false;
+          }
+        });
+        unlistenTauriDrag = unlisten;
+      } catch (err) {
+        console.warn('[Tauri DragDrop] Native drag listener setup:', err);
+      }
+    }
+
+    initTauriDragListener();
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('dragenter', onWindowDragEnter);
+      window.removeEventListener('dragover', onWindowDragOver);
+      window.removeEventListener('dragleave', onWindowDragLeave);
+      window.removeEventListener('drop', onWindowDrop);
+      if (unlistenTauriDrag) unlistenTauriDrag();
     };
   }, []);
 
@@ -58,22 +246,8 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     shellRef.current.style.setProperty('--mouse-y', `${y}px`);
   }, []);
 
-  // Dynamic Cursor Tracking on Enter
-  const handleMouseEnter = useCallback(() => {
-    if (islandState === 'bezel-line') {
-      setIsMagneticHover(true);
-    }
-    onHoverChange?.(true);
-  }, [islandState, onHoverChange]);
-
-  // Dynamic Cursor Tracking on Leave
-  const handleMouseLeave = useCallback(() => {
-    setIsMagneticHover(false);
-    onHoverChange?.(false);
-  }, [onHoverChange]);
-
-  // Double-Click Notch to Expand into Dashboard
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+  // Click on compact/eyes or bezel wakes/expands immediately
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     const current = systemStore.getState().islandState;
     if (current === 'compact' || current === 'eyes' || current === 'bezel-line') {
@@ -85,9 +259,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   // Mouse Wheel: Scroll gesture to adjust Volume or Brightness via Toast Mode C HUD
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
-      // Prevent page/window scrolling
       e.stopPropagation();
-
       const step = e.deltaY < 0 ? 4 : -4;
       const isBrightness = e.shiftKey || e.altKey;
 
@@ -118,33 +290,21 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     []
   );
 
-  // Middle-Click Gesture (e.button === 1): Toggle music or collapse to bezel-line
+  // Middle-Click Gesture: Toggle audio playback or wake from bezel
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.button === 1) {
-        // Middle click
         e.preventDefault();
         e.stopPropagation();
         playToggleClick();
         if (islandState === 'bezel-line') {
           systemStore.setIslandState('compact');
         } else {
-          // If in compact or expanded, toggle audio playback
           systemStore.toggleAudioPlaying();
         }
       }
     },
     [islandState]
-  );
-
-  // Wake Island from Stealth Bezel Line to Expanded Dashboard
-  const handleWakeFromBezel = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      playGlassPop();
-      systemStore.setIslandState('expanded');
-    },
-    []
   );
 
   const isBezelLine = islandState === 'bezel-line';
@@ -157,14 +317,14 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       ? '32px'
       : islandState === 'bezel-line'
       ? '4px'
-      : '24px';
+      : '20px';
 
   return (
     <div
       id="liquid-island-root"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onDoubleClick={handleDoubleClick}
+      onMouseEnter={handleCursorEnter}
+      onMouseLeave={handleCursorLeave}
+      onClick={handleClick}
       style={{
         position: 'absolute',
         top: 0,
@@ -188,9 +348,9 @@ export const IslandShell: React.FC<IslandShellProps> = ({
         className="liquid-notch-shell"
         initial={false}
         animate={{
-          width: isBezelLine && isMagneticHover ? 144 : activeDimensions.width,
-          height: isBezelLine && isMagneticHover ? 10 : activeDimensions.height,
-          scaleX: isJellyBouncing ? [1, 1.05, 0.96, 1.02, 1] : (isBezelLine && isMagneticHover ? 1.06 : 1),
+          width: activeDimensions.width,
+          height: activeDimensions.height,
+          scaleX: isJellyBouncing ? [1, 1.05, 0.96, 1.02, 1] : 1,
           scaleY: isJellyBouncing ? [1, 0.94, 1.05, 0.98, 1] : 1,
         }}
         transition={{
@@ -209,17 +369,14 @@ export const IslandShell: React.FC<IslandShellProps> = ({
           borderBottomRightRadius: bottomCornerRadius,
         }}
       >
-        {/* Concave SVG Notch Corner Ears (Mounted inside motion.div for 1:1 edge tracking) */}
+        {/* Concave SVG Notch Corner Ears */}
         {!isBezelLine && (
           <>
-            {/* Left Notch Ear */}
             <div className="notch-ear notch-ear-left">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M 0,0 L 16,0 L 16,16 A 16,16 0 0,0 0,0 Z" />
               </svg>
             </div>
-
-            {/* Right Notch Ear (Horizontally Flipped) */}
             <div className="notch-ear notch-ear-right">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M 0,0 L 16,0 L 16,16 A 16,16 0 0,0 0,0 Z" />
@@ -227,12 +384,12 @@ export const IslandShell: React.FC<IslandShellProps> = ({
             </div>
           </>
         )}
-        {/* State 0: Stealth Bezel Line with Magnetic Tension Wake */}
+
+        {/* State 0: Stealth Bezel Line */}
         {isBezelLine ? (
           <div
-            className={`bezel-line-strip ${isMagneticHover ? 'magnetic-hover' : ''}`}
-            onClick={handleWakeFromBezel}
-            title="Stealth Bezel Active (136x6). Click or hover to wake into Compact view."
+            className="bezel-line-strip"
+            title="Stealth Bezel Active (136x6). Hover or click to wake."
           >
             {companionMode === 'cat' && (
               <CatCompanion

@@ -8,7 +8,7 @@ import { WaterSlide } from './slides/WaterSlide';
 import { ShelfSlide } from './slides/ShelfSlide';
 import { TodoSlide } from './slides/TodoSlide';
 import { SlidePlaceholder } from './slides/SlidePlaceholder';
-import { ChevronLeft, ChevronRight, X, Search, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Settings } from 'lucide-react';
 import { SlideIndex } from '../types/liquid';
 
 const SLIDE_TITLES: Record<SlideIndex, string> = {
@@ -32,7 +32,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
   const volume = useSystemStore((s) => s.volume);
 
-  // Live real-time formatted date & time: e.g. "Fri 23 Oct 2026  07:33"
+  // Live real-time formatted date & time: e.g. "Sun 25 Oct 2026  09:32"
   const [currentDateStr, setCurrentDateStr] = useState<string>(() => {
     const now = new Date();
     const datePart = now.toLocaleDateString('en-US', {
@@ -64,7 +64,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
         hour12: false,
       });
       setCurrentDateStr(`${datePart}  ${timePart}`);
-    }, 4000);
+    }, 1000);
 
     return () => clearInterval(timer);
   }, []);
@@ -121,24 +121,23 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
   return (
     <div className="expanded-carousel-container">
       {/* ==================================================================== */}
-      {/* 1. Top Header Bar                                                    */}
+      {/* 1. Top Header Bar (1:1 Video Match)                                  */}
       {/* ==================================================================== */}
       <div className="expanded-header">
-        {/* Left: Dynamic Slide Title & Shelf Clear Action (00:17 video match) */}
+        {/* Left: Dynamic Slide Title (e.g. TodoList) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span
             style={{
-              fontSize: '11px',
+              fontSize: '11.5px',
               fontWeight: 700,
-              letterSpacing: '0.3px',
-              color: 'var(--text-primary)',
-              textTransform: 'uppercase',
+              letterSpacing: '0.4px',
+              color: '#ffffff',
             }}
           >
             {currentTitle}
           </span>
 
-          {/* Shelf "Clear" Action Pill Button (00:17 in video) */}
+          {/* Shelf "Clear" Action Pill Button */}
           {activeSlide === 3 && (
             <button
               type="button"
@@ -167,7 +166,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
             gap: '6px',
             fontSize: '10.5px',
             fontWeight: 500,
-            color: 'var(--text-secondary)',
+            color: '#94a3b8',
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -205,11 +204,11 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
           <span>{currentDateStr}</span>
         </div>
 
-        {/* Right: 5-Bar Waveform Visualizer + Spotlight + Settings + Subtle Collapse/Close Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {/* Right: 5-Bar Waveform Visualizer + Hover-only Settings + Close Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {/* 5-Bar Animated Audio Waveform */}
           <div
-            title={`Audio Visualizer (${isAudioPlaying ? 'Playing' : 'Paused'}) - Click to Toggle`}
+            title={`Audio Visualizer (${isAudioPlaying ? 'Playing' : 'Paused'})`}
             onClick={handleToggleAudio}
             style={{
               display: 'flex',
@@ -228,35 +227,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
             <span className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`} />
           </div>
 
-          {/* 1. 🔍 Spotlight Search Trigger (Alt + Space) */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              playGlassPop();
-              systemStore.toggleSpotlight();
-            }}
-            title="Spotlight Search & Clipboard (Alt + Space)"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '2px',
-              borderRadius: '4px',
-              outline: 'none',
-              transition: 'color 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
-          >
-            <Search size={13} />
-          </button>
-
-          {/* 2. ⚙️ Settings Dashboard Trigger */}
+          {/* Settings Trigger */}
           <button
             type="button"
             onClick={(e) => {
@@ -264,7 +235,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
               playGlassPop();
               onOpenSettings?.();
             }}
-            title="Settings Dashboard & Character Studio (⚙️)"
+            title="Settings"
             style={{
               background: 'transparent',
               border: 'none',
@@ -278,17 +249,17 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
               outline: 'none',
               transition: 'color 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
             onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
           >
-            <Settings size={13} />
+            <Settings size={13} strokeWidth={1.75} />
           </button>
 
-          {/* 3. Close / Collapse Button (×) */}
+          {/* Close / Collapse Button */}
           <button
             type="button"
             onClick={handleCollapse}
-            title="Collapse Expanded Dashboard (Esc)"
+            title="Collapse (Esc)"
             style={{
               background: 'transparent',
               border: 'none',
@@ -300,18 +271,18 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
               padding: '2px',
               borderRadius: '4px',
               outline: 'none',
-              transition: 'color 0.15s ease, transform 0.1s ease',
+              transition: 'color 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
             onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
           >
-            <X size={14} />
+            <X size={13} strokeWidth={1.75} />
           </button>
         </div>
       </div>
 
       {/* ==================================================================== */}
-      {/* 2. Slide Content Area (STRICT DOM UNMOUNTING FOR ~10 MB RAM)        */}
+      {/* 2. Slide Content Area                                                */}
       {/* ==================================================================== */}
       <div className="slide-content-area">
         <AnimatePresence mode="wait">
@@ -388,27 +359,25 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
       {/* ==================================================================== */}
       {/* 3. Floating Left / Right Navigation Chevrons & Bottom Pagination Dots */}
       {/* ==================================================================== */}
-      {/* Left Chevron Button (<) */}
       <button
         type="button"
         onClick={handlePrevSlide}
         className="carousel-nav-btn carousel-nav-prev"
-        title="Previous Slide (<)"
+        title="Previous (<)"
       >
-        <ChevronLeft size={14} />
+        <ChevronLeft size={13} strokeWidth={1.75} />
       </button>
 
-      {/* Right Chevron Button (>) */}
       <button
         type="button"
         onClick={handleNextSlide}
         className="carousel-nav-btn carousel-nav-next"
-        title="Next Slide (>)"
+        title="Next (>)"
       >
-        <ChevronRight size={14} />
+        <ChevronRight size={13} strokeWidth={1.75} />
       </button>
 
-      {/* Bottom Center Pagination Dots (Active dot morphs into 14px elongated pill) */}
+      {/* Bottom Center Pagination Dots */}
       <div className="carousel-pagination-bottom">
         <div className="pagination-track">
           {([0, 1, 2, 3, 4] as SlideIndex[]).map((idx) => {
@@ -418,7 +387,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
                 key={`page-dot-${idx}`}
                 onClick={(e) => handleSelectSlide(idx, e)}
                 className={`pagination-dot ${isActive ? 'active' : ''}`}
-                title={`Go to Slide ${idx + 1}: ${SLIDE_TITLES[idx]}`}
+                title={`Slide ${idx + 1}: ${SLIDE_TITLES[idx]}`}
               />
             );
           })}

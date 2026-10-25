@@ -210,7 +210,7 @@ const CREATE_SNIP_DATA_URL = (text: string, timestamp: string): string => {
     <rect x="18" y="44" width="264" height="2" fill="url(#glow)"/>
     <text x="20" y="74" fill="#f8fafc" font-size="12" font-family="monospace" font-weight="bold">${safeText || 'Code Snapshot'}</text>
     <text x="20" y="100" fill="#94a3b8" font-size="10" font-family="monospace">Snapshot captured from Spotlight</text>
-    <text x="20" y="152" fill="#64748b" font-size="9" font-family="sans-serif">📸 ${timestamp}</text>
+    <text x="20" y="152" fill="#64748b" font-size="9" font-family="sans-serif">${timestamp}</text>
     <rect x="236" y="138" width="46" height="20" rx="4" fill="rgba(59,130,246,0.2)" stroke="#3b82f6" stroke-width="1"/>
     <text x="246" y="152" fill="#60a5fa" font-size="9" font-family="sans-serif" font-weight="bold">SHELF</text>
   </svg>`;
@@ -686,7 +686,7 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
     };
 
     systemStore.addShelfFile(shelfCard);
-    setSnipToast('📸 Snapshot captured to Slide 3 (Shelf)!');
+    setSnipToast('Snapshot captured to Slide 3 (Shelf)');
     setTimeout(() => setSnipToast(null), 2500);
   }, [scratchpadText]);
 
@@ -837,10 +837,10 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
         }}
       >
         {[
-          { key: 'omni', label: '⚡ Omni Search', icon: Sparkles },
-          { key: 'clipboard', label: '📋 Smart Clipboard', icon: Copy },
-          { key: 'ports', label: '🌐 Dev Ports', icon: Terminal },
-          { key: 'scratchpad', label: '📝 Scratchpad', icon: FileText },
+          { key: 'omni', label: 'Omni Search', icon: Sparkles },
+          { key: 'clipboard', label: 'Smart Clipboard', icon: Copy },
+          { key: 'ports', label: 'Dev Ports', icon: Terminal },
+          { key: 'scratchpad', label: 'Scratchpad', icon: FileText },
         ].map((tab) => {
           const isCurrent = activeTab === tab.key;
           return (
@@ -1124,7 +1124,7 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
                       cursor: 'pointer',
                     }}
                   >
-                    {filter === 'pinned' ? '📌 Pinned' : filter.toUpperCase()}
+                    {filter === 'pinned' ? 'Pinned' : filter.toUpperCase()}
                   </button>
                 ))}
               </div>
@@ -1546,7 +1546,7 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
                   }}
                 >
                   <Camera size={12} style={{ color: '#60a5fa' }} />
-                  <span>📸 Snip Screen to Shelf</span>
+                  <span>Snip Screen to Shelf</span>
                 </button>
 
                 <button

@@ -96,8 +96,29 @@ export const PAPER_SKY_LYRICS: LyricLine[] = [
 
 /**
  * Returns the currently active lyric line for a given playback timestamp in seconds.
+ * Supports custom live lyrics from LRCLib (Spotify / YouTube sync) or falls back to Paper Sky.
  */
-export function getCurrentLyricLine(currentTime: number): LyricLine {
+export function getCurrentLyricLine(
+  currentTime: number,
+  customLyrics?: { time: number; text: string; textId?: string }[]
+): { textEn: string; textId?: string; time: number } {
+  if (customLyrics && customLyrics.length > 0) {
+    for (let i = customLyrics.length - 1; i >= 0; i--) {
+      if (currentTime >= customLyrics[i].time) {
+        return {
+          time: customLyrics[i].time,
+          textEn: customLyrics[i].text,
+          textId: customLyrics[i].textId,
+        };
+      }
+    }
+    return {
+      time: customLyrics[0].time,
+      textEn: customLyrics[0].text,
+      textId: customLyrics[0].textId,
+    };
+  }
+
   for (let i = PAPER_SKY_LYRICS.length - 1; i >= 0; i--) {
     if (currentTime >= PAPER_SKY_LYRICS[i].time) {
       return PAPER_SKY_LYRICS[i];

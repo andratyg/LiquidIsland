@@ -10,21 +10,41 @@ import {
   type LyricLine,
 } from '../../utils/lyricsData';
 import {
+  fetchLiveLyrics,
+  type LiveLyricLine,
+} from '../../utils/liveLyricsFetcher';
+import {
   Play,
   Pause,
   SkipBack,
   SkipForward,
   MessageSquareText,
   Languages,
+  Radio,
 } from 'lucide-react';
 
 export { type LyricLine, PAPER_SKY_LYRICS };
 
 const AUDIO_OUTPUT_DEVICES = [
-  '🎧 AirBuds Pro',
-  '🔊 Realtek Speakers',
-  '🎧 Studio Monitors',
+  'AirBuds Pro',
+  'Realtek Speakers',
+  'Studio Monitors',
 ];
+
+// Safe Tauri IPC Invoker with fallback
+async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
+  try {
+    const isTauri =
+      typeof window !== 'undefined' &&
+      ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (!isTauri) return null;
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<T>(cmd, args);
+  } catch (err) {
+    console.warn(`[Tauri IPC] "${cmd}" returned:`, err);
+    return null;
+  }
+}
 
 export const MusicLyricsSlide: React.FC = () => {
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
@@ -33,7 +53,19 @@ export const MusicLyricsSlide: React.FC = () => {
   const islandState = useSystemStore((s) => s.islandState);
   const currentTime = useSystemStore((s) => s.playbackTime ?? 193);
 
+  // Real Windows SMTC Media Metadata
+  const mediaTitle = useSystemStore((s) => s.mediaTitle || 'Paper Sky');
+  const mediaArtist = useSystemStore((s) => s.mediaArtist || 'Sora & The Clouds');
+  const mediaAlbum = useSystemStore((s) => s.mediaAlbum || 'Tokyo Lo-Fi');
+  const mediaSourceApp = useSystemStore((s) => s.mediaSourceApp || 'Spotify');
+  const totalDuration = useSystemStore((s) => (s.mediaDuration && s.mediaDuration > 0 ? s.mediaDuration : TOTAL_DURATION));
+
   const [deviceIndex, setDeviceIndex] = useState<number>(0);
+
+  // Active synced lyrics array from LRCLib or fallback
+  const [lyricsLines, setLyricsLines] = useState<LiveLyricLine[]>(() =>
+    PAPER_SKY_LYRICS.map((l) => ({ time: l.time, text: l.textEn, textId: l.textId }))
+  );
 
   // Seek bar drag state
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -43,10 +75,36 @@ export const MusicLyricsSlide: React.FC = () => {
   const activeLineRef = useRef<HTMLDivElement>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
 
-  // Determine current active lyric index
+  // Automatically fetch synchronized lyrics whenever song changes
+  useEffect(() => {
+    let active = true;
+
+    async function loadLyrics() {
+      try {
+        const fetched = await fetchLiveLyrics(mediaTitle, mediaArtist);
+        if (active && fetched && fetched.length > 0) {
+          setLyricsLines(fetched);
+        }
+      } catch {
+        if (active) {
+          setLyricsLines(
+            PAPER_SKY_LYRICS.map((l) => ({ time: l.time, text: l.textEn, textId: l.textId }))
+          );
+        }
+      }
+    }
+
+    loadLyrics();
+
+    return () => {
+      active = false;
+    };
+  }, [mediaTitle, mediaArtist]);
+
+  // Determine current active lyric index based on timestamp
   const activeLyricIndex = (() => {
-    for (let i = PAPER_SKY_LYRICS.length - 1; i >= 0; i--) {
-      if (currentTime >= PAPER_SKY_LYRICS[i].time) {
+    for (let i = lyricsLines.length - 1; i >= 0; i--) {
+      if (currentTime >= lyricsLines[i].time) {
         return i;
       }
     }
@@ -63,27 +121,33 @@ export const MusicLyricsSlide: React.FC = () => {
     }
   }, [activeLyricIndex, lyricsOpen]);
 
-  // Toggle Play / Pause
-  const handleTogglePlay = (e: React.MouseEvent) => {
+  // Toggle Play / Pause via real Windows SMTC
+  const handleTogglePlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
     playToggleClick();
+    await safeInvoke('media_play_pause');
     systemStore.toggleAudioPlaying();
   };
 
-  // Skip Previous (restart or rewind)
-  const handlePrev = (e: React.MouseEvent) => {
+  // Skip Previous via real Windows SMTC
+  const handlePrev = async (e: React.MouseEvent) => {
     e.stopPropagation();
     playGlassPop();
-    systemStore.setPlaybackTime(0);
+    const handled = await safeInvoke<boolean>('media_prev_track');
+    if (!handled) {
+      systemStore.setPlaybackTime(0);
+    }
   };
 
-  // Skip Next
-  const handleNext = (e: React.MouseEvent) => {
+  // Skip Next via real Windows SMTC
+  const handleNext = async (e: React.MouseEvent) => {
     e.stopPropagation();
     playGlassPop();
-    // Advance to next section or loop
-    const nextLine = PAPER_SKY_LYRICS[Math.min(activeLyricIndex + 1, PAPER_SKY_LYRICS.length - 1)];
-    systemStore.setPlaybackTime(nextLine.time);
+    const handled = await safeInvoke<boolean>('media_next_track');
+    if (!handled) {
+      const nextLine = lyricsLines[Math.min(activeLyricIndex + 1, lyricsLines.length - 1)];
+      systemStore.setPlaybackTime(nextLine.time);
+    }
   };
 
   // Toggle Lyrics Wing
@@ -93,14 +157,14 @@ export const MusicLyricsSlide: React.FC = () => {
     systemStore.toggleLyrics();
   };
 
-  // Toggle Dual Subtitle (Indonesian Translation - Feature #2)
+  // Toggle Dual Subtitle (Indonesian Translation)
   const handleToggleDualSubtitle = (e: React.MouseEvent) => {
     e.stopPropagation();
     playToggleClick();
     systemStore.toggleDualSubtitle();
   };
 
-  // Cycle Per-Device Audio Output
+  // Cycle Audio Output Device
   const handleCycleDevice = (e: React.MouseEvent) => {
     e.stopPropagation();
     playToggleClick();
@@ -113,7 +177,7 @@ export const MusicLyricsSlide: React.FC = () => {
     const rect = progressBarRef.current.getBoundingClientRect();
     const clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
     const ratio = clickX / rect.width;
-    const newTime = Math.round(ratio * TOTAL_DURATION);
+    const newTime = Math.round(ratio * totalDuration);
     systemStore.setPlaybackTime(newTime);
   };
 
@@ -144,7 +208,27 @@ export const MusicLyricsSlide: React.FC = () => {
   };
 
   const isExpandedLyrics = islandState === 'expanded-lyrics' || lyricsOpen;
-  const progressRatio = Math.max(0, Math.min(1, currentTime / TOTAL_DURATION));
+  const progressRatio = Math.max(0, Math.min(1, currentTime / (totalDuration || 1)));
+
+  // Source App Badge Color Coding
+  const getSourceBadgeStyle = () => {
+    const app = (mediaSourceApp || '').toLowerCase();
+    if (app.includes('spotify')) {
+      return { dotColor: '#1ed760', borderColor: 'rgba(30, 215, 96, 0.35)', bg: 'rgba(30, 215, 96, 0.12)' };
+    }
+    if (app.includes('youtube music')) {
+      return { dotColor: '#f43f5e', borderColor: 'rgba(244, 63, 94, 0.35)', bg: 'rgba(244, 63, 94, 0.12)' };
+    }
+    if (app.includes('youtube')) {
+      return { dotColor: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.35)', bg: 'rgba(239, 68, 68, 0.12)' };
+    }
+    if (app.includes('apple')) {
+      return { dotColor: '#ec4899', borderColor: 'rgba(236, 72, 153, 0.35)', bg: 'rgba(236, 72, 153, 0.12)' };
+    }
+    return { dotColor: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.35)', bg: 'rgba(59, 130, 246, 0.12)' };
+  };
+
+  const sourceStyle = getSourceBadgeStyle();
 
   return (
     <div
@@ -159,7 +243,7 @@ export const MusicLyricsSlide: React.FC = () => {
       }}
     >
       {/* ==================================================================== */}
-      {/* 1. Left Music Player Section (Width: 388px approx)                   */}
+      {/* 1. Left Music Player Section (Width: 376px / 100%)                   */}
       {/* ==================================================================== */}
       <div
         style={{
@@ -175,34 +259,43 @@ export const MusicLyricsSlide: React.FC = () => {
       >
         {/* Top Info Row: Album Art + Track Info + Device Switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '11px', width: '100%' }}>
-          {/* Album Art: 66x66px Notebook Lined Texture + Blue Slash Graphic */}
+          {/* Album Art: 66x66px Clean Glass Aesthetic */}
           <div
             className={`album-art-card notebook-paper-texture ${isAudioPlaying ? 'album-art-playing' : ''}`}
-            title="Lumen Coast - Paper Sky"
+            title={`${mediaArtist} - ${mediaTitle}`}
+            style={{
+              width: '66px',
+              height: '66px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
           >
-            {/* SVG Minimalist Graphic: Sapphire Blue Circle with Slash */}
-            <svg width="38" height="38" viewBox="0 0 42 42" fill="none">
+            {/* SVG Minimalist Graphic */}
+            <svg width="36" height="36" viewBox="0 0 42 42" fill="none">
               <circle
                 cx="21"
                 cy="21"
                 r="16"
-                stroke="#2563eb"
-                strokeWidth="2.8"
-                fill="rgba(37, 99, 235, 0.08)"
+                stroke={sourceStyle.dotColor}
+                strokeWidth="2.6"
+                fill="rgba(255, 255, 255, 0.04)"
               />
               <path
                 d="M 12 30 L 30 12"
-                stroke="#2563eb"
-                strokeWidth="2.8"
+                stroke={sourceStyle.dotColor}
+                strokeWidth="2.6"
                 strokeLinecap="round"
               />
-              <circle cx="21" cy="21" r="3.5" fill="#2563eb" />
+              <circle cx="21" cy="21" r="3" fill={sourceStyle.dotColor} />
             </svg>
           </div>
 
           {/* Track Metadata & Audio Output Device Switcher */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: '2px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '6px' }}>
               <span
                 style={{
                   fontSize: '13px',
@@ -212,9 +305,55 @@ export const MusicLyricsSlide: React.FC = () => {
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  flex: 1,
                 }}
               >
-                Paper Sky
+                {mediaTitle}
+              </span>
+
+              {/* Real Windows SMTC Source App Badge */}
+              <div
+                style={{
+                  fontSize: '9.5px',
+                  fontWeight: 600,
+                  padding: '2px 7px',
+                  borderRadius: '9999px',
+                  background: sourceStyle.bg,
+                  border: `1px solid ${sourceStyle.borderColor}`,
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+                title={`Active Media Source: ${mediaSourceApp}`}
+              >
+                <span
+                  style={{
+                    width: '5px',
+                    height: '5px',
+                    borderRadius: '9999px',
+                    backgroundColor: sourceStyle.dotColor,
+                    boxShadow: `0 0 6px ${sourceStyle.dotColor}`,
+                  }}
+                />
+                <span>{mediaSourceApp}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '220px',
+                }}
+              >
+                {mediaArtist} {mediaAlbum ? `• ${mediaAlbum}` : ''}
               </span>
 
               {/* Per-Device Audio Output Switcher Pill */}
@@ -223,9 +362,9 @@ export const MusicLyricsSlide: React.FC = () => {
                 onClick={handleCycleDevice}
                 title="Switch Audio Output Device"
                 style={{
-                  fontSize: '9.5px',
+                  fontSize: '9px',
                   fontWeight: 600,
-                  padding: '2px 7px',
+                  padding: '1px 6px',
                   borderRadius: '9999px',
                   background: 'var(--pill-bg)',
                   border: '1px solid var(--glass-border)',
@@ -233,27 +372,15 @@ export const MusicLyricsSlide: React.FC = () => {
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: '3px',
                   whiteSpace: 'nowrap',
                   outline: 'none',
                 }}
               >
+                <Radio size={9} strokeWidth={2} />
                 <span>{AUDIO_OUTPUT_DEVICES[deviceIndex]}</span>
-                <span style={{ opacity: 0.6 }}>⇄</span>
               </button>
             </div>
-
-            <span
-              style={{
-                fontSize: '11px',
-                color: 'var(--text-secondary)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              Lumen Coast - Summer Flows
-            </span>
 
             {/* Media Controls Bar (Lyrics Toggle, Subtitle Badge, Prev, Play, Next) */}
             <div
@@ -271,7 +398,7 @@ export const MusicLyricsSlide: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleToggleLyrics}
-                  title={isExpandedLyrics ? 'Close Lyrics Wing (Collapse to 432px)' : 'Open Synced Lyrics Wing (Expand to 595px)'}
+                  title={isExpandedLyrics ? 'Close Lyrics Wing' : 'Open Synced Lyrics Wing'}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -293,13 +420,13 @@ export const MusicLyricsSlide: React.FC = () => {
                   <span>Lyrics</span>
                 </button>
 
-                {/* Dual Subtitle Toggle Badge (ID · EN) - Feature #2 */}
+                {/* Dual Subtitle Toggle Badge (ID · EN) */}
                 <button
                   type="button"
                   onClick={handleToggleDualSubtitle}
                   title={
                     dualSubtitleEnabled
-                      ? 'Feature #2: Dual Subtitles (Bahasa Indonesia + English) Enabled'
+                      ? 'Dual Subtitles (Bahasa Indonesia + English) Enabled'
                       : 'Dual Subtitles Disabled (English Only)'
                   }
                   style={{
@@ -329,7 +456,7 @@ export const MusicLyricsSlide: React.FC = () => {
                 <button
                   type="button"
                   onClick={handlePrev}
-                  title="Previous / Restart (⏮)"
+                  title="Previous Track on Windows SMTC (⏮)"
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -349,7 +476,7 @@ export const MusicLyricsSlide: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleTogglePlay}
-                  title={isAudioPlaying ? 'Pause (⏸)' : 'Play (▶)'}
+                  title={isAudioPlaying ? 'Pause Windows Media (⏸)' : 'Play Windows Media (▶)'}
                   style={{
                     width: '28px',
                     height: '28px',
@@ -371,7 +498,7 @@ export const MusicLyricsSlide: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleNext}
-                  title="Next (⏭)"
+                  title="Next Track on Windows SMTC (⏭)"
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -391,7 +518,7 @@ export const MusicLyricsSlide: React.FC = () => {
           </div>
         </div>
 
-        {/* Bottom Interactive Seek Bar: Elapsed (03:13) + Track + Remaining (-01:03) */}
+        {/* Bottom Interactive Seek Bar: Elapsed + Progress + Remaining */}
         <div
           style={{
             display: 'flex',
@@ -479,7 +606,7 @@ export const MusicLyricsSlide: React.FC = () => {
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {formatRemaining(currentTime)}
+            {formatRemaining(currentTime, totalDuration)}
           </span>
         </div>
       </div>
@@ -522,20 +649,20 @@ export const MusicLyricsSlide: React.FC = () => {
                 zIndex: 2,
               }}
             >
-              {PAPER_SKY_LYRICS.map((line, idx) => {
+              {lyricsLines.map((line, idx) => {
                 const isActive = idx === activeLyricIndex;
                 return (
                   <div
-                    key={line.id}
+                    key={`${line.time}-${idx}`}
                     ref={isActive ? activeLineRef : null}
                     onClick={(e) => handleLyricClick(line.time, e)}
                     className={`lyrics-line-item ${isActive ? 'lyrics-line-active' : 'lyrics-line-inactive'}`}
                     title="Click line to seek"
                   >
-                    {/* Primary English Lyric Line */}
-                    <div style={{ lineHeight: 1.25 }}>{line.textEn}</div>
+                    {/* Primary Lyric Line */}
+                    <div style={{ lineHeight: 1.25 }}>{line.text}</div>
 
-                    {/* Feature #2: Indonesian Translation Sub-caption */}
+                    {/* Dual Subtitle: Indonesian Translation */}
                     {dualSubtitleEnabled && line.textId && (
                       <div className="dual-subtitle-id">
                         {line.textId}

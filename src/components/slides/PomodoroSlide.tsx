@@ -168,11 +168,11 @@ export const PomodoroSlide: React.FC = () => {
   // Lofi Badge Label
   const lofiLabel =
     lofiSound === 'rain'
-      ? '🌧️ Rain'
+      ? 'Rain'
       : lofiSound === 'lofi-pad'
-      ? '🎹 Pad'
+      ? 'Pad'
       : lofiSound === 'white-noise'
-      ? '🌊 Noise'
+      ? 'Noise'
       : 'Off';
 
   return (
