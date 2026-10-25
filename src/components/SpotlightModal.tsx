@@ -253,7 +253,7 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
   // Tab 4: Scratchpad State
   const [scratchpadText, setScratchpadText] = useState<string>(() => {
     try {
-      return localStorage.getItem(SCRATCHPAD_STORAGE_KEY) || '# Developer Scratchpad\n\n- [ ] Review active ports\n- [ ] Test Spotlight Alt+Space dropdown\n- [ ] Verify liquid glass specular highlights\n';
+      return localStorage.getItem(SCRATCHPAD_STORAGE_KEY) || '# Developer Scratchpad\n\n- [ ] Review active ports\n- [ ] Test Spotlight Alt+S dropdown\n- [ ] Verify liquid glass specular highlights\n';
     } catch {
       return '';
     }
@@ -541,9 +541,9 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
     });
   }, [snippets, snippetFilter, query, activeTab]);
 
-  // Handle Enter key for instant execution
+  // Handle Enter key for instant execution & Escape/Alt+S for closing
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' || (e.altKey && (e.code === 'KeyS' || e.key === 's' || e.key === 'S'))) {
       e.preventDefault();
       playToggleClick();
       onClose();
@@ -698,6 +698,11 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
       id="spotlight-overlay"
       className="spotlight-modal-overlay"
       onClick={onClose}
+      style={{
+        background: 'transparent',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+      }}
     >
       <motion.div
         key="spotlight-modal-card"
@@ -792,7 +797,7 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
               fontFamily: 'monospace',
             }}
           >
-            Alt + Space
+            Alt + S
           </span>
           <span
             style={{

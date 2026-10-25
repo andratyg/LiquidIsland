@@ -1,17 +1,104 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import {
   Bluetooth,
-  Volume2,
-  VolumeX,
-  SunMedium,
   Mic,
   MicOff,
   Layers,
   Pin,
   X,
 } from 'lucide-react';
+
+// Animated Volume Speaker SVG with 3 sequential soundwave arcs
+const AnimatedSpeakerSvg: React.FC<{ value: number; isMuted: boolean }> = ({ value, isMuted }) => {
+  const muted = value === 0 || isMuted;
+  const arc1 = value > 0 && !muted;
+  const arc2 = value >= 34 && !muted;
+  const arc3 = value >= 67 && !muted;
+
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+      {/* Speaker horn body */}
+      <path
+        d="M11 5L6 9H2v6h4l5 4V5z"
+        fill={muted ? '#ef4444' : '#38bdf8'}
+        stroke={muted ? '#ef4444' : '#38bdf8'}
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      {/* Diagonal Mute Slash */}
+      {muted && (
+        <line
+          x1="22"
+          y1="2"
+          x2="2"
+          y2="22"
+          stroke="#ef4444"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
+      )}
+      {/* Soundwave Arc 1 (1–33%) */}
+      {arc1 && (
+        <path
+          d="M15.54 8.46a5 5 0 0 1 0 7.07"
+          stroke="#38bdf8"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
+      )}
+      {/* Soundwave Arc 2 (34–66%) */}
+      {arc2 && (
+        <path
+          d="M18.07 5.93a8.5 8.5 0 0 1 0 12.14"
+          stroke="#06b6d4"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
+      )}
+      {/* Soundwave Arc 3 (67–100%) */}
+      {arc3 && (
+        <path
+          d="M20.6 3.4a12 12 0 0 1 0 17.2"
+          stroke="#10b981"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+};
+
+// Animated Sun SVG with rotating rays and dynamic scale
+const AnimatedSunSvg: React.FC<{ value: number }> = ({ value }) => {
+  const rotation = value * 1.8;
+  const scale = 0.82 + 0.35 * (Math.max(0, Math.min(100, value)) / 100);
+
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{
+        flexShrink: 0,
+        transform: `rotate(${rotation}deg) scale(${scale})`,
+        transition: 'transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1)',
+      }}
+    >
+      <circle cx="12" cy="12" r="4.5" fill="#fde047" stroke="#f59e0b" strokeWidth="1.5" />
+      <line x1="12" y1="1" x2="12" y2="3.8" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="12" y1="20.2" x2="12" y2="23" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="4.22" y1="4.22" x2="6.2" y2="6.2" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="17.8" y1="17.8" x2="19.78" y2="19.78" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="1" y1="12" x2="3.8" y2="12" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="20.2" y1="12" x2="23" y2="12" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="4.22" y1="19.78" x2="6.2" y2="17.8" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="17.8" y1="6.2" x2="19.78" y2="4.22" stroke="#fde047" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+};
 
 export const ToastView: React.FC = () => {
   const toastPayload = useSystemStore((s) => s.toastPayload);
@@ -28,6 +115,9 @@ export const ToastView: React.FC = () => {
   const isChargingState = type === 'charging' || (type === 'battery' && batteryStatus === 'charging');
   const isUnpluggedState = type === 'unplugged' || (type === 'battery' && batteryStatus === 'unplugged');
   const isPluggedIn = isChargingState;
+  const isHud = type === 'hud';
+  const isOvershoot = Boolean(toastPayload?.isOvershoot);
+  const isMuted = Boolean(toastPayload?.isMuted || value === 0);
 
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -35,37 +125,49 @@ export const ToastView: React.FC = () => {
   };
 
   return (
-    <motion.div
-      className={`toast-container-shell ${
-        type === 'desktop-switch'
-          ? direction === 'left'
-            ? 'slide-wave-left'
-            : 'slide-wave-right'
-          : ''
-      }`}
-      initial={{ opacity: 0, scale: 0.94 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.94 }}
-      transition={{ type: 'spring', stiffness: 440, damping: 32, mass: 0.75 }}
-      onClick={handleDismiss}
-      title="Notification - Click to dismiss"
-      style={{
-        width: '340px',
-        height: '64px',
-        borderRadius: '32px',
-        backgroundColor: '#000000',
-        padding: '0 22px',
-        boxSizing: 'border-box',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        position: 'relative',
-        overflow: 'hidden',
-        userSelect: 'none',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '0 16px 36px -4px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06)',
-      }}
-    >
+    <>
+      <motion.div
+        className={`toast-container-shell ${
+          type === 'desktop-switch'
+            ? direction === 'left'
+              ? 'slide-wave-left'
+              : 'slide-wave-right'
+            : ''
+        }`}
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          scaleX: isOvershoot ? [1, 1.06, 0.97, 1] : 1,
+          scaleY: isOvershoot ? [1, 0.94, 1.02, 1] : 1,
+        }}
+        exit={{ opacity: 0, scale: 0.94 }}
+        transition={
+          isOvershoot
+            ? { duration: 0.35, ease: [0.22, 1, 0.36, 1] }
+            : { type: 'spring', stiffness: 440, damping: 32, mass: 0.75 }
+        }
+        onClick={handleDismiss}
+        title="Notification - Click to dismiss"
+        style={{
+          width: isHud ? '360px' : '340px',
+          height: isHud ? '62px' : '64px',
+          borderRadius: isHud ? '31px' : '32px',
+          backgroundColor: '#000000',
+          padding: '0 20px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          position: 'relative',
+          overflow: 'hidden',
+          userSelect: 'none',
+          border: `1px solid ${isOvershoot ? 'rgba(239, 68, 68, 0.5)' : 'rgba(255, 255, 255, 0.08)'}`,
+          boxShadow: isOvershoot
+            ? '0 16px 36px -4px rgba(239, 68, 68, 0.35), 0 0 0 1px rgba(239, 68, 68, 0.4)'
+            : '0 16px 36px -4px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+        }}
+      >
       {/* ==================================================================== */}
       {/* 1:1 Video Charging & Unplugged Toast UI (00:03–00:10 of Reference)  */}
       {/* ==================================================================== */}
@@ -312,54 +414,63 @@ export const ToastView: React.FC = () => {
       )}
 
       {/* ==================================================================== */}
-      {/* Toast Mode C — Custom Liquid System HUD (Volume / Brightness / Mic)   */}
+      {/* Toast Mode C — Dedicated 360x62px Liquid System HUD                  */}
       {/* ==================================================================== */}
       {type === 'hud' && (
         <>
-          {/* Left: High-Contrast Icon */}
+          {/* Left: Dedicated High-Contrast Animated Graphic */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: '32px',
-              height: '32px',
+              width: '36px',
+              height: '36px',
+              minWidth: '36px',
               borderRadius: '50%',
               backgroundColor:
                 toastPayload?.hudType === 'brightness'
-                  ? 'rgba(245, 158, 11, 0.16)'
+                  ? 'rgba(253, 224, 71, 0.16)'
                   : toastPayload?.hudType === 'mic'
                   ? toastPayload?.isMicMuted
                     ? 'rgba(244, 63, 94, 0.16)'
                     : 'rgba(16, 185, 129, 0.16)'
-                  : 'rgba(59, 130, 246, 0.16)',
+                  : isMuted
+                  ? 'rgba(239, 68, 68, 0.18)'
+                  : 'rgba(56, 189, 248, 0.16)',
               border: `1px solid ${
                 toastPayload?.hudType === 'brightness'
-                  ? 'rgba(245, 158, 11, 0.35)'
+                  ? 'rgba(253, 224, 71, 0.35)'
                   : toastPayload?.hudType === 'mic'
                   ? toastPayload?.isMicMuted
                     ? 'rgba(244, 63, 94, 0.35)'
                     : 'rgba(16, 185, 129, 0.35)'
-                  : 'rgba(59, 130, 246, 0.35)'
+                  : isMuted
+                  ? 'rgba(239, 68, 68, 0.45)'
+                  : 'rgba(56, 189, 248, 0.35)'
               }`,
+              boxShadow:
+                toastPayload?.hudType === 'brightness'
+                  ? '0 0 12px rgba(253, 224, 71, 0.25)'
+                  : isMuted
+                  ? '0 0 12px rgba(239, 68, 68, 0.35)'
+                  : '0 0 12px rgba(56, 189, 248, 0.25)',
             }}
           >
             {toastPayload?.hudType === 'brightness' ? (
-              <SunMedium size={16} color="#f59e0b" />
+              <AnimatedSunSvg value={value} />
             ) : toastPayload?.hudType === 'mic' ? (
               toastPayload?.isMicMuted ? (
-                <MicOff size={16} color="#f43f5e" />
+                <MicOff size={17} color="#f43f5e" />
               ) : (
-                <Mic size={16} color="#10b981" />
+                <Mic size={17} color="#10b981" />
               )
-            ) : value === 0 ? (
-              <VolumeX size={16} color="#ef4444" />
             ) : (
-              <Volume2 size={16} color="#3b82f6" />
+              <AnimatedSpeakerSvg value={value} isMuted={isMuted} />
             )}
           </div>
 
-          {/* Center: Title & Liquid Progress Bar */}
+          {/* Center: Title & Dynamic Liquid Gradient Progress Bar */}
           <div
             style={{
               flex: 1,
@@ -367,7 +478,8 @@ export const ToastView: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              gap: '4px',
+              gap: '5px',
+              minWidth: 0,
             }}
           >
             <div
@@ -375,14 +487,14 @@ export const ToastView: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                paddingRight: '6px',
+                paddingRight: '4px',
               }}
             >
               <span
                 style={{
-                  fontSize: '12.5px',
+                  fontSize: '13px',
                   fontWeight: 600,
-                  color: 'var(--text-primary)',
+                  color: '#ffffff',
                   letterSpacing: '-0.2px',
                 }}
               >
@@ -390,39 +502,67 @@ export const ToastView: React.FC = () => {
               </span>
               <span
                 style={{
-                  fontSize: '11px',
-                  fontWeight: 600,
+                  fontSize: '11.5px',
+                  fontWeight: 700,
                   color:
                     toastPayload?.hudType === 'brightness'
-                      ? '#f59e0b'
+                      ? '#fde047'
                       : toastPayload?.hudType === 'mic'
                       ? toastPayload?.isMicMuted
                         ? '#f43f5e'
                         : '#10b981'
-                      : '#3b82f6',
+                      : isMuted
+                      ? '#ef4444'
+                      : value >= 67
+                      ? '#10b981'
+                      : '#38bdf8',
+                  fontVariantNumeric: 'tabular-nums',
                 }}
               >
                 {toastPayload?.hudType === 'mic'
                   ? toastPayload?.isMicMuted
                     ? 'MUTED'
                     : 'ACTIVE'
+                  : isMuted
+                  ? 'MUTED'
                   : `${value}%`}
               </span>
             </div>
 
             {/* Liquid Glass Progress Bar */}
             {toastPayload?.hudType !== 'mic' && (
-              <div className="toast-hud-track">
+              <div
+                style={{
+                  width: '100%',
+                  height: '6px',
+                  borderRadius: '3px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
                 <div
-                  className="toast-hud-fill"
                   style={{
+                    height: '100%',
                     width: `${Math.max(0, Math.min(100, value))}%`,
-                    backgroundColor:
-                      toastPayload?.hudType === 'brightness' ? '#f59e0b' : '#3b82f6',
+                    borderRadius: '3px',
+                    transition: 'width 0.12s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    background:
+                      toastPayload?.hudType === 'brightness'
+                        ? 'linear-gradient(90deg, #fde047, #ffffff)'
+                        : isMuted
+                        ? '#ef4444'
+                        : value >= 67
+                        ? 'linear-gradient(90deg, #06b6d4, #10b981)'
+                        : '#38bdf8',
                     boxShadow:
                       toastPayload?.hudType === 'brightness'
-                        ? '0 0 8px rgba(245, 158, 11, 0.6)'
-                        : '0 0 8px rgba(59, 130, 246, 0.6)',
+                        ? '0 0 10px rgba(253, 224, 71, 0.7)'
+                        : isMuted
+                        ? '0 0 10px rgba(239, 68, 68, 0.7)'
+                        : value >= 67
+                        ? '0 0 12px rgba(16, 185, 129, 0.65)'
+                        : '0 0 8px rgba(56, 189, 248, 0.6)',
                   }}
                 />
               </div>
@@ -435,7 +575,8 @@ export const ToastView: React.FC = () => {
             style={{
               background: 'none',
               border: 'none',
-              padding: '2px',
+              padding: '4px',
+              marginLeft: '4px',
               color: 'var(--text-secondary)',
               cursor: 'pointer',
               opacity: 0.6,
@@ -555,5 +696,75 @@ export const ToastView: React.FC = () => {
         </>
       )}
     </motion.div>
+
+    {/* Floating Mini-Pill Badge below Liquid HUD Capsule */}
+    <AnimatePresence>
+      {isHud && (
+        <motion.div
+          key={`hud-pill-${toastPayload?.hudType}-${value}-${isOvershoot}`}
+          initial={{ opacity: 0, y: -6, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -6, scale: 0.92 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+          style={{
+            position: 'absolute',
+            top: '68px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 50,
+            padding: '3px 12px',
+            borderRadius: '9999px',
+            backgroundColor: isOvershoot
+              ? 'rgba(239, 68, 68, 0.92)'
+              : 'rgba(15, 23, 42, 0.88)',
+            backdropFilter: 'blur(16px)',
+            border: `1px solid ${
+              isOvershoot ? 'rgba(239, 68, 68, 0.65)' : 'rgba(255, 255, 255, 0.18)'
+            }`,
+            boxShadow: isOvershoot
+              ? '0 8px 20px rgba(239, 68, 68, 0.45)'
+              : '0 8px 20px rgba(0, 0, 0, 0.45)',
+            color: '#ffffff',
+            fontSize: '10.5px',
+            fontWeight: 600,
+            letterSpacing: '0.3px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span
+            style={{
+              width: '5px',
+              height: '5px',
+              borderRadius: '50%',
+              backgroundColor: isOvershoot
+                ? '#ffffff'
+                : toastPayload?.hudType === 'brightness'
+                ? '#fde047'
+                : isMuted
+                ? '#ef4444'
+                : '#38bdf8',
+            }}
+          />
+          <span>
+            {isOvershoot
+              ? value === 100
+                ? '100% MAXIMUM'
+                : '0% BOUNDARY'
+              : toastPayload?.hudType === 'mic'
+              ? toastPayload?.isMicMuted
+                ? 'Microphone Muted'
+                : 'Microphone Active'
+              : isMuted
+              ? 'Volume Muted'
+              : `${title}: ${value}%`}
+          </span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </>
   );
 };

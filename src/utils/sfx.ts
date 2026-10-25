@@ -384,3 +384,46 @@ export function playSlideWaveSound(): void {
   osc.start(now);
   osc.stop(now + 0.16);
 }
+
+/**
+ * Stage 2: Crystal Harmonic Elastic Boundary Overshoot Chime.
+ * Triggers when Volume or Brightness hits 100% or 0% limit.
+ * Dual high-frequency pure sine harmonics (C6 1046 Hz & C7 2093 Hz).
+ */
+export function playOvershootChime(): void {
+  if (!systemStore.getState().enableSfx) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc1 = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const gain1 = ctx.createGain();
+  const gain2 = ctx.createGain();
+
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(1046.5, now);
+  osc1.frequency.exponentialRampToValueAtTime(1318.5, now + 0.04);
+
+  gain1.gain.setValueAtTime(0.001, now);
+  gain1.gain.linearRampToValueAtTime(0.2, now + 0.005);
+  gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+  osc2.type = 'sine';
+  osc2.frequency.setValueAtTime(2093, now);
+  osc2.frequency.exponentialRampToValueAtTime(2637, now + 0.04);
+
+  gain2.gain.setValueAtTime(0.001, now);
+  gain2.gain.linearRampToValueAtTime(0.12, now + 0.005);
+  gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+  osc1.connect(gain1);
+  gain1.connect(ctx.destination);
+  osc2.connect(gain2);
+  gain2.connect(ctx.destination);
+
+  osc1.start(now);
+  osc2.start(now);
+  osc1.stop(now + 0.15);
+  osc2.stop(now + 0.13);
+}

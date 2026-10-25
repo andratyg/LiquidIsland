@@ -2,8 +2,11 @@
 //! Provides native Windows taskbar override (auto-hide safe), real running apps enumerator,
 //! app focus/toggle switcher, hardware start menu/terminal launch actions, and smart dock auto-hide.
 
+use base64::Engine;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewUrl,
@@ -11,21 +14,29 @@ use tauri::{
 };
 
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM, POINT, RECT};
+use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM, POINT, RECT};
 #[cfg(windows)]
 use windows_sys::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 #[cfg(windows)]
+use windows_sys::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+};
+#[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, FindWindowW, GetCursorPos, GetDesktopWindow, GetForegroundWindow, GetShellWindow,
-    GetWindowLongW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic,
-    IsWindowVisible, SetForegroundWindow, ShowWindow, GWL_EXSTYLE, SW_HIDE, SW_MINIMIZE,
-    SW_RESTORE, SW_SHOW, WS_EX_TOOLWINDOW,
+    BringWindowToTop, DestroyIcon, EnumWindows, FindWindowW, GetCursorPos, GetDesktopWindow,
+    GetForegroundWindow, GetIconInfo, GetShellWindow, GetWindowLongW, GetWindowRect,
+    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
+    ShowWindow, GWL_EXSTYLE, ICONINFO, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
+    WS_EX_TOOLWINDOW,
 };
 
 pub static TASKBAR_MODIFIED: AtomicBool = AtomicBool::new(false);
 pub static NATIVE_TASKBAR_HIDDEN: AtomicBool = AtomicBool::new(false);
 pub static DOCK_LOOP_STARTED: AtomicBool = AtomicBool::new(false);
 pub static DOCK_HOVERED: AtomicBool = AtomicBool::new(false);
+pub static FLYOUT_OPEN: AtomicBool = AtomicBool::new(false);
+
+static ICON_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RunningAppInfo {
@@ -34,6 +45,150 @@ pub struct RunningAppInfo {
     pub process_name: String,
     pub is_focused: bool,
     pub icon_hint: String, // "chrome", "edge", "code", "terminal", "explorer", "spotify", "discord", "slack", "generic"
+    pub icon_data: Option<String>,
+}
+
+#[cfg(windows)]
+unsafe fn extract_exe_icon_base64(exe_path: &str) -> Option<String> {
+    if let Ok(mut cache_guard) = ICON_CACHE.lock() {
+        let cache = cache_guard.get_or_insert_with(HashMap::new);
+        if let Some(cached) = cache.get(exe_path) {
+            return Some(cached.clone());
+        }
+    }
+
+    use windows_sys::Win32::Graphics::Gdi::{
+        CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, BITMAPINFO, BITMAPINFOHEADER,
+        BI_RGB, DIB_RGB_COLORS,
+    };
+
+    #[repr(C)]
+    struct SHFILEINFOW {
+        h_icon: HWND,
+        i_icon: i32,
+        dw_attributes: u32,
+        sz_display_name: [u16; 260],
+        sz_type_name: [u16; 80],
+    }
+
+    const SHGFI_ICON: u32 = 0x000000100;
+    const SHGFI_LARGEICON: u32 = 0x000000000;
+
+    #[link(name = "shell32")]
+    extern "system" {
+        fn SHGetFileInfoW(
+            pszpath: *const u16,
+            dwfileattributes: u32,
+            psfi: *mut SHFILEINFOW,
+            cbfileinfo: u32,
+            uflags: u32,
+        ) -> usize;
+    }
+
+    let mut path_wide: Vec<u16> = exe_path.encode_utf16().collect();
+    path_wide.push(0);
+
+    let mut shfi: SHFILEINFOW = std::mem::zeroed();
+    let res = SHGetFileInfoW(
+        path_wide.as_ptr(),
+        0,
+        &mut shfi,
+        std::mem::size_of::<SHFILEINFOW>() as u32,
+        SHGFI_ICON | SHGFI_LARGEICON,
+    );
+
+    if res == 0 || shfi.h_icon.is_null() {
+        return None;
+    }
+
+    let hicon = shfi.h_icon;
+    let mut icon_info: ICONINFO = std::mem::zeroed();
+    if GetIconInfo(hicon, &mut icon_info) == 0 {
+        DestroyIcon(hicon);
+        return None;
+    }
+
+    let hbm = if !icon_info.hbmColor.is_null() {
+        icon_info.hbmColor
+    } else {
+        icon_info.hbmMask
+    };
+
+    let hdc = CreateCompatibleDC(std::ptr::null_mut());
+    let width = 32i32;
+    let height = 32i32;
+
+    let mut bmi: BITMAPINFO = std::mem::zeroed();
+    bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+    bmi.bmiHeader.biWidth = width;
+    bmi.bmiHeader.biHeight = -height; // top-down
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    let mut pixels = vec![0u8; (width * height * 4) as usize];
+    let lines = GetDIBits(
+        hdc,
+        hbm,
+        0,
+        height as u32,
+        pixels.as_mut_ptr() as *mut _,
+        &mut bmi,
+        DIB_RGB_COLORS,
+    );
+
+    DeleteDC(hdc);
+    if !icon_info.hbmColor.is_null() {
+        DeleteObject(icon_info.hbmColor);
+    }
+    if !icon_info.hbmMask.is_null() {
+        DeleteObject(icon_info.hbmMask);
+    }
+    DestroyIcon(hicon);
+
+    if lines == 0 {
+        return None;
+    }
+
+    // Assemble 32-bit BMP header & pixels in memory
+    let file_header_size = 14u32;
+    let info_header_size = 40u32;
+    let image_size = (width * height * 4) as u32;
+    let file_size = file_header_size + info_header_size + image_size;
+
+    let mut bmp_bytes = Vec::with_capacity(file_size as usize);
+    // BITMAPFILEHEADER
+    bmp_bytes.extend_from_slice(b"BM");
+    bmp_bytes.extend_from_slice(&file_size.to_le_bytes());
+    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // reserved
+    let off_bits = file_header_size + info_header_size;
+    bmp_bytes.extend_from_slice(&off_bits.to_le_bytes());
+
+    // BITMAPINFOHEADER
+    bmp_bytes.extend_from_slice(&info_header_size.to_le_bytes());
+    bmp_bytes.extend_from_slice(&width.to_le_bytes());
+    bmp_bytes.extend_from_slice(&(-height).to_le_bytes()); // top-down
+    bmp_bytes.extend_from_slice(&1u16.to_le_bytes()); // planes
+    bmp_bytes.extend_from_slice(&32u16.to_le_bytes()); // bit count
+    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // BI_RGB
+    bmp_bytes.extend_from_slice(&image_size.to_le_bytes());
+    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biXPelsPerMeter
+    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biYPelsPerMeter
+    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biClrUsed
+    bmp_bytes.extend_from_slice(&0u32.to_le_bytes()); // biClrImportant
+
+    bmp_bytes.extend_from_slice(&pixels);
+
+    let base64_str = base64::engine::general_purpose::STANDARD.encode(&bmp_bytes);
+    let data_url = format!("data:image/bmp;base64,{}", base64_str);
+
+    if let Ok(mut cache_guard) = ICON_CACHE.lock() {
+        if let Some(ref mut cache) = *cache_guard {
+            cache.insert(exe_path.to_string(), data_url.clone());
+        }
+    }
+
+    Some(data_url)
 }
 
 #[cfg(windows)]
@@ -306,14 +461,40 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
 
     let fg = GetForegroundWindow();
     let is_focused = hwnd == fg;
-    let icon_hint = determine_icon_hint(&title, "");
+
+    // Query executable path for real application icon
+    let mut exe_path = String::new();
+    let proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+    if !proc.is_null() {
+        let mut path_buf = [0u16; 1024];
+        let mut path_len = path_buf.len() as u32;
+        if QueryFullProcessImageNameW(proc, 0, path_buf.as_mut_ptr(), &mut path_len) != 0 {
+            exe_path = String::from_utf16_lossy(&path_buf[..path_len as usize]).to_string();
+        }
+        CloseHandle(proc);
+    }
+
+    let icon_data = if !exe_path.is_empty() {
+        extract_exe_icon_base64(&exe_path)
+    } else {
+        None
+    };
+
+    let proc_file_name = if !exe_path.is_empty() {
+        exe_path.split('\\').last().unwrap_or("").to_string()
+    } else {
+        String::new()
+    };
+
+    let icon_hint = determine_icon_hint(&title, &proc_file_name);
 
     list.push(RunningAppInfo {
         hwnd: hwnd as isize,
         title,
-        process_name: String::new(),
+        process_name: proc_file_name,
         is_focused,
         icon_hint,
+        icon_data,
     });
 
     1
@@ -341,6 +522,7 @@ pub fn get_running_apps() -> Vec<RunningAppInfo> {
                 process_name: "chrome.exe".to_string(),
                 is_focused: true,
                 icon_hint: "chrome".to_string(),
+                icon_data: None,
             },
             RunningAppInfo {
                 hwnd: 102,
@@ -348,6 +530,7 @@ pub fn get_running_apps() -> Vec<RunningAppInfo> {
                 process_name: "code.exe".to_string(),
                 is_focused: false,
                 icon_hint: "code".to_string(),
+                icon_data: None,
             },
             RunningAppInfo {
                 hwnd: 103,
@@ -355,6 +538,7 @@ pub fn get_running_apps() -> Vec<RunningAppInfo> {
                 process_name: "wt.exe".to_string(),
                 is_focused: false,
                 icon_hint: "terminal".to_string(),
+                icon_data: None,
             },
         ]
     }
@@ -373,12 +557,27 @@ pub fn focus_or_toggle_app(hwnd: isize) -> bool {
         let fg = GetForegroundWindow();
         if target == fg {
             ShowWindow(target, SW_MINIMIZE);
-        } else {
-            if IsIconic(target) != 0 {
-                ShowWindow(target, SW_RESTORE);
-            }
-            SetForegroundWindow(target);
+            return true;
         }
+
+        if IsIconic(target) != 0 {
+            ShowWindow(target, SW_RESTORE);
+        } else {
+            ShowWindow(target, SW_SHOW);
+        }
+
+        // Win32 Foreground Activation Bypass:
+        // Windows prevents background applications from claiming foreground focus.
+        // We simulate a benign ALT keydown/keyup sequence which grants the calling thread
+        // the right to set the foreground window.
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            keybd_event, KEYEVENTF_KEYUP, VK_MENU,
+        };
+        keybd_event(VK_MENU as u8, 0, 0, 0);
+        keybd_event(VK_MENU as u8, 0, KEYEVENTF_KEYUP, 0);
+
+        SetForegroundWindow(target);
+        BringWindowToTop(target);
         true
     }
 
@@ -387,6 +586,12 @@ pub fn focus_or_toggle_app(hwnd: isize) -> bool {
         let _ = hwnd;
         true
     }
+}
+
+/// Dynamic toggle for taskbar flyout open state (enables full 360px click zone)
+#[tauri::command]
+pub fn set_taskbar_flyout_open(open: bool) {
+    FLYOUT_OPEN.store(open, Ordering::Relaxed);
 }
 
 /// Launches standard Windows tools or simulates the Start Menu keypress
@@ -493,7 +698,7 @@ pub fn spawn_or_update_taskbar_window(app: &AppHandle) -> Result<(), Box<dyn std
         let pos = monitor.position();
         let size = monitor.size();
         let scale = monitor.scale_factor();
-        let height_px = (68.0 * scale).round() as u32;
+        let height_px = (360.0 * scale).round() as u32;
 
         let win_x = pos.x;
         let win_y = pos.y + size.height as i32 - height_px as i32;
@@ -537,19 +742,25 @@ pub fn start_dock_hit_test_loop(window: Window) {
                     if let Ok(pos) = window.outer_position() {
                         if let Ok(size) = window.outer_size() {
                             let monitor_bottom = pos.y + size.height as i32;
+                            let is_flyout = FLYOUT_OPEN.load(Ordering::Relaxed);
+                            let scale = window.scale_factor().unwrap_or(1.0);
 
-                            // Near bottom edge of the monitor (within 12px)
-                            let near_edge = pt.y >= (monitor_bottom - 12) && pt.y <= (monitor_bottom + 6);
+                            let inside = if is_flyout || hover_forced {
+                                // Full 360px window clickable when flyout open or dock hovered
+                                let flyout_top = monitor_bottom - (360.0 * scale).round() as i32;
+                                pt.y >= flyout_top && pt.y <= (monitor_bottom + 6)
+                            } else {
+                                // Idle: only bottom 68px dock area is clickable
+                                let dock_top = monitor_bottom - (68.0 * scale).round() as i32;
+                                let in_dock_y = pt.y >= dock_top && pt.y <= (monitor_bottom + 6);
+                                let center_x = pos.x + (size.width as i32 / 2);
+                                let half_dock_w = 520;
+                                let in_capsule_x =
+                                    (pt.x >= center_x - half_dock_w) && (pt.x <= center_x + half_dock_w);
+                                let near_edge = pt.y >= (monitor_bottom - 12) && pt.y <= (monitor_bottom + 6);
 
-                            // Inside the centered dock bounds (~960px centered)
-                            let center_x = pos.x + (size.width as i32 / 2);
-                            let half_dock_w = 480;
-                            let in_capsule_x =
-                                (pt.x >= center_x - half_dock_w) && (pt.x <= center_x + half_dock_w);
-                            let in_dock_y =
-                                pt.y >= (monitor_bottom - 72) && pt.y <= (monitor_bottom + 6);
-
-                            let inside = hover_forced || near_edge || (in_capsule_x && in_dock_y);
+                                near_edge || (in_capsule_x && in_dock_y)
+                            };
 
                             if inside != prev_inside {
                                 prev_inside = inside;

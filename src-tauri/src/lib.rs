@@ -72,6 +72,7 @@ pub fn run() {
             taskbar::get_running_apps,
             taskbar::focus_or_toggle_app,
             taskbar::launch_system_action,
+            taskbar::set_taskbar_flyout_open,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LiquidIsland application")

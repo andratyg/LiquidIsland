@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tauri::{Emitter, Window};
+use tauri::{Emitter, Manager, Window};
 
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::{BOOL, HWND, RECT};
@@ -15,7 +15,7 @@ use windows_sys::Win32::Graphics::Gdi::{
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_CONTROL, VK_LEFT, VK_LWIN, VK_RIGHT, VK_RWIN,
+    GetAsyncKeyState, VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RIGHT, VK_RWIN,
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -31,6 +31,12 @@ pub struct WorkspaceActivityPayload {
     pub tab_title: String,         // Cleaned tab or document title
     pub direction: Option<String>, // "left" | "right" for desktop-switch
     pub accent_color: String,      // Color token
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct HudChangePayload {
+    pub kind: String,              // "volume" | "brightness" | "mute"
+    pub delta: i32,                // step delta e.g. +4, -4, +5, -5
 }
 
 pub static WORKSPACE_LISTENER_STARTED: AtomicBool = AtomicBool::new(false);
@@ -162,6 +168,8 @@ pub fn start_workspace_activity_listener(window: Window) {
         return;
     }
 
+    let app_handle = window.app_handle().clone();
+
     std::thread::spawn(move || {
         #[cfg(windows)]
         unsafe {
@@ -169,9 +177,105 @@ pub fn start_workspace_activity_listener(window: Window) {
             let mut last_title = String::new();
             let mut last_left_down = false;
             let mut last_right_down = false;
+            let mut last_alt_s_down = false;
+            let mut last_vol_up = false;
+            let mut last_vol_down = false;
+            let mut last_mute = false;
+            let mut last_bright_up = false;
+            let mut last_bright_down = false;
+            let mut tick_count: u32 = 0;
 
             loop {
-                std::thread::sleep(Duration::from_millis(200));
+                std::thread::sleep(Duration::from_millis(40));
+                tick_count = tick_count.wrapping_add(1);
+
+                // -----------------------------------------------------------
+                // Global Hotkey: Alt + S (Toggle Spotlight Search)
+                // -----------------------------------------------------------
+                let alt_down = (GetAsyncKeyState(VK_MENU as i32) as u16 & 0x8000) != 0;
+                let s_down = (GetAsyncKeyState(0x53) as u16 & 0x8000) != 0; // 0x53 = 'S'
+
+                if alt_down && s_down {
+                    if !last_alt_s_down {
+                        last_alt_s_down = true;
+                        let _ = app_handle.emit("open-spotlight", ());
+                    }
+                } else {
+                    last_alt_s_down = false;
+                }
+
+                // -----------------------------------------------------------
+                // Dedicated Volume & Screen Brightness Hardware HUD Keys
+                // -----------------------------------------------------------
+                let vol_up_down = (GetAsyncKeyState(0xAF) as u16 & 0x8000) != 0; // VK_VOLUME_UP
+                let vol_down_down = (GetAsyncKeyState(0xAE) as u16 & 0x8000) != 0; // VK_VOLUME_DOWN
+                let mute_down = (GetAsyncKeyState(0xAD) as u16 & 0x8000) != 0; // VK_VOLUME_MUTE
+
+                let arrow_up_down = (GetAsyncKeyState(0x26) as u16 & 0x8000) != 0; // VK_UP
+                let arrow_down_down = (GetAsyncKeyState(0x28) as u16 & 0x8000) != 0; // VK_DOWN
+
+                let bright_up_down = alt_down && arrow_up_down;
+                let bright_down_down = alt_down && arrow_down_down;
+
+                if vol_up_down {
+                    if !last_vol_up {
+                        last_vol_up = true;
+                        let _ = app_handle.emit("hud-change", HudChangePayload {
+                            kind: "volume".to_string(),
+                            delta: 4,
+                        });
+                    }
+                } else {
+                    last_vol_up = false;
+                }
+
+                if vol_down_down {
+                    if !last_vol_down {
+                        last_vol_down = true;
+                        let _ = app_handle.emit("hud-change", HudChangePayload {
+                            kind: "volume".to_string(),
+                            delta: -4,
+                        });
+                    }
+                } else {
+                    last_vol_down = false;
+                }
+
+                if mute_down {
+                    if !last_mute {
+                        last_mute = true;
+                        let _ = app_handle.emit("hud-change", HudChangePayload {
+                            kind: "mute".to_string(),
+                            delta: 0,
+                        });
+                    }
+                } else {
+                    last_mute = false;
+                }
+
+                if bright_up_down {
+                    if !last_bright_up {
+                        last_bright_up = true;
+                        let _ = app_handle.emit("hud-change", HudChangePayload {
+                            kind: "brightness".to_string(),
+                            delta: 5,
+                        });
+                    }
+                } else {
+                    last_bright_up = false;
+                }
+
+                if bright_down_down {
+                    if !last_bright_down {
+                        last_bright_down = true;
+                        let _ = app_handle.emit("hud-change", HudChangePayload {
+                            kind: "brightness".to_string(),
+                            delta: -5,
+                        });
+                    }
+                } else {
+                    last_bright_down = false;
+                }
 
                 // -----------------------------------------------------------
                 // Case 3: Virtual Desktop Switch (Ctrl + Win + Left/Right)
@@ -191,7 +295,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                             direction: Some("left".to_string()),
                             accent_color: "#38bdf8".to_string(),
                         };
-                        let _ = window.emit("workspace-activity", payload);
+                        let _ = app_handle.emit("workspace-activity", payload);
                     }
                     if right_down && !last_right_down {
                         let payload = WorkspaceActivityPayload {
@@ -201,11 +305,16 @@ pub fn start_workspace_activity_listener(window: Window) {
                             direction: Some("right".to_string()),
                             accent_color: "#38bdf8".to_string(),
                         };
-                        let _ = window.emit("workspace-activity", payload);
+                        let _ = app_handle.emit("workspace-activity", payload);
                     }
                 }
                 last_left_down = left_down;
                 last_right_down = right_down;
+
+                // Only check foreground window every 5 ticks (~200ms) to conserve CPU
+                if tick_count % 5 != 0 {
+                    continue;
+                }
 
                 // -----------------------------------------------------------
                 // Cases 1 & 2: Foreground Window Query for Tab & App Switches
@@ -254,7 +363,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                             direction: None,
                             accent_color,
                         };
-                        let _ = window.emit("workspace-activity", payload);
+                        let _ = app_handle.emit("workspace-activity", payload);
                     } else if hwnd != last_hwnd && current_title != last_title {
                         // Case 2: App Switch to a different foreground application
                         let (app_name, tab_title, accent_color) = parse_window_activity(&current_title);
@@ -265,7 +374,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                             direction: None,
                             accent_color,
                         };
-                        let _ = window.emit("workspace-activity", payload);
+                        let _ = app_handle.emit("workspace-activity", payload);
                     }
                 }
 

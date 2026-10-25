@@ -138,20 +138,13 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       e.preventDefault();
       dragCounter++;
       isDraggingRef.current = true;
-
-      const hasFiles =
-        e.dataTransfer &&
-        (e.dataTransfer.types.includes('Files') ||
-          e.dataTransfer.types.includes('text/uri-list'));
-
-      if (hasFiles) {
-        systemStore.wakeShelfForDrop();
-      }
+      systemStore.wakeShelfForDrop();
     };
 
     const onWindowDragOver = (e: DragEvent) => {
       e.preventDefault();
       isDraggingRef.current = true;
+      systemStore.wakeShelfForDrop();
     };
 
     const onWindowDragLeave = (e: DragEvent) => {
@@ -168,16 +161,23 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       isDraggingRef.current = false;
     };
 
+    const onWindowMouseUp = () => {
+      dragCounter = 0;
+      isDraggingRef.current = false;
+    };
+
     window.addEventListener('dragenter', onWindowDragEnter);
     window.addEventListener('dragover', onWindowDragOver);
     window.addEventListener('dragleave', onWindowDragLeave);
     window.addEventListener('drop', onWindowDrop);
+    window.addEventListener('mouseup', onWindowMouseUp);
 
     // Tauri Native Window Drag-Drop Listener for OS-level Explorer drags
     let unlistenTauriDrag: (() => void) | null = null;
+    let unlistenApproach: (() => void) | null = null;
     let isMounted = true;
 
-    async function initTauriDragListener() {
+    async function initDragListeners() {
       const isTauri =
         typeof window !== 'undefined' &&
         ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
@@ -185,6 +185,16 @@ export const IslandShell: React.FC<IslandShellProps> = ({
 
       try {
         const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+        const { listen } = await import('@tauri-apps/api/event');
+        if (!isMounted) return;
+
+        // Listen for hardware-level cursor drag approach from window_manager.rs
+        const subApproach = await listen('drag-approach-shelf', () => {
+          isDraggingRef.current = true;
+          systemStore.wakeShelfForDrop();
+        });
+        unlistenApproach = subApproach;
+
         const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
           if (!isMounted) return;
           const payload = event.payload;
@@ -225,7 +235,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       }
     }
 
-    initTauriDragListener();
+    initDragListeners();
 
     return () => {
       isMounted = false;
@@ -233,7 +243,9 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       window.removeEventListener('dragover', onWindowDragOver);
       window.removeEventListener('dragleave', onWindowDragLeave);
       window.removeEventListener('drop', onWindowDrop);
+      window.removeEventListener('mouseup', onWindowMouseUp);
       if (unlistenTauriDrag) unlistenTauriDrag();
+      if (unlistenApproach) unlistenApproach();
     };
   }, []);
 
@@ -258,34 +270,23 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   }, []);
 
   // Mouse Wheel: Scroll gesture to adjust Volume or Brightness via Toast Mode C HUD
+  // Left half of Island = Screen Brightness; Right half = Volume
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
       e.stopPropagation();
       const step = e.deltaY < 0 ? 4 : -4;
-      const isBrightness = e.shiftKey || e.altKey;
+
+      let isBrightness = e.shiftKey || e.altKey;
+      if (!isBrightness && shellRef.current) {
+        const rect = shellRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        isBrightness = mouseX < rect.width / 2;
+      }
 
       if (isBrightness) {
-        systemStore.setBrightness((prev) => {
-          const next = Math.max(0, Math.min(100, prev + step));
-          systemStore.triggerToast('hud', {
-            hudType: 'brightness',
-            hudValue: next,
-            title: 'Brightness',
-            subtitle: `${next}%`,
-          });
-          return next;
-        });
+        systemStore.adjustBrightness(step);
       } else {
-        systemStore.setVolume((prev) => {
-          const next = Math.max(0, Math.min(100, prev + step));
-          systemStore.triggerToast('hud', {
-            hudType: 'volume',
-            hudValue: next,
-            title: 'Volume',
-            subtitle: `${next}%`,
-          });
-          return next;
-        });
+        systemStore.adjustVolume(step);
       }
     },
     []
@@ -494,6 +495,205 @@ export const IslandShell: React.FC<IslandShellProps> = ({
           </>
         )}
       </motion.div>
+
+      {/* ==================================================================== */}
+      {/* 3. 600px Top Edge Liquid Aurora Sweep on Desktop Switch               */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {isDesktopSwitch && (
+          <motion.div
+            key={`aurora-top-${workspaceActivity?.timestamp}`}
+            initial={{
+              x: desktopDirection === 'right' ? '-100%' : '100%',
+              opacity: 0,
+            }}
+            animate={{
+              x: desktopDirection === 'right' ? '100%' : '-100%',
+              opacity: [0, 1, 0.9, 0],
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '600px',
+              height: '5px',
+              background: 'linear-gradient(90deg, transparent, #38bdf8, #818cf8, transparent)',
+              boxShadow: '0 0 16px 4px rgba(56, 189, 248, 0.65)',
+              pointerEvents: 'none',
+              zIndex: 9999,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================================== */}
+      {/* 4. Floating Workspace Switcher Banner ([● ○ ○] Workspace 1/2)        */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {isDesktopSwitch && (
+          <motion.div
+            key={`workspace-banner-${workspaceActivity?.timestamp}`}
+            initial={{
+              opacity: 0,
+              y: -12,
+              scale: 0.92,
+              x: desktopDirection === 'right' ? 24 : -24,
+            }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: 0 }}
+            exit={{
+              opacity: 0,
+              y: -10,
+              scale: 0.94,
+              x: desktopDirection === 'right' ? -20 : 20,
+            }}
+            transition={{ type: 'spring', stiffness: 450, damping: 28 }}
+            style={{
+              marginTop: '8px',
+              width: '260px',
+              height: '44px',
+              borderRadius: '22px',
+              backgroundColor: 'rgba(15, 23, 42, 0.92)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 16px',
+              boxSizing: 'border-box',
+              color: '#ffffff',
+              zIndex: 40,
+              pointerEvents: 'none',
+            }}
+          >
+            {/* Animated Workspace Dots */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{
+                  width: desktopDirection === 'left' ? '8px' : '6px',
+                  height: desktopDirection === 'left' ? '8px' : '6px',
+                  borderRadius: '50%',
+                  backgroundColor:
+                    desktopDirection === 'left' ? '#38bdf8' : 'rgba(255, 255, 255, 0.25)',
+                  boxShadow: desktopDirection === 'left' ? '0 0 8px #38bdf8' : 'none',
+                  transition: 'all 0.2s ease',
+                }}
+              />
+              <span
+                style={{
+                  width: desktopDirection === 'right' ? '8px' : '6px',
+                  height: desktopDirection === 'right' ? '8px' : '6px',
+                  borderRadius: '50%',
+                  backgroundColor:
+                    desktopDirection === 'right' ? '#818cf8' : 'rgba(255, 255, 255, 0.25)',
+                  boxShadow: desktopDirection === 'right' ? '0 0 8px #818cf8' : 'none',
+                  transition: 'all 0.2s ease',
+                }}
+              />
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                }}
+              />
+            </div>
+
+            {/* Workspace Title */}
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                letterSpacing: '0.3px',
+                color: '#f8fafc',
+              }}
+            >
+              {desktopDirection === 'left' ? 'Workspace 1' : 'Workspace 2'}
+            </span>
+
+            {/* Directional Arrow Badge */}
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#38bdf8',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+              }}
+            >
+              {desktopDirection === 'left' ? '← DESK 1' : 'DESK 2 →'}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ==================================================================== */}
+      {/* 5. Floating Tab / App Switch Ticker below Island                      */}
+      {/* ==================================================================== */}
+      <AnimatePresence>
+        {isTabSwitch && !isDesktopSwitch && workspaceActivity && (
+          <motion.div
+            key={`tab-ticker-${workspaceActivity.timestamp}`}
+            initial={{ opacity: 0, y: -6, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 480, damping: 26 }}
+            style={{
+              marginTop: '6px',
+              padding: '3px 12px',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(15, 23, 42, 0.88)',
+              backdropFilter: 'blur(16px)',
+              border: `1px solid ${workspaceActivity.accent_color || 'rgba(255, 255, 255, 0.16)'}`,
+              boxShadow: `0 6px 16px rgba(0, 0, 0, 0.4), 0 0 10px ${
+                workspaceActivity.accent_color || '#38bdf8'
+              }33`,
+              color: '#ffffff',
+              fontSize: '10.5px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              pointerEvents: 'none',
+              maxWidth: '320px',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+              zIndex: 40,
+            }}
+          >
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: workspaceActivity.accent_color || '#38bdf8',
+                boxShadow: `0 0 6px ${workspaceActivity.accent_color || '#38bdf8'}`,
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ color: '#94a3b8', fontWeight: 500 }}>
+              {workspaceActivity.app_name} &mdash;
+            </span>
+            <span
+              style={{
+                color: '#ffffff',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {workspaceActivity.tab_title}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -274,10 +274,12 @@ export const App: React.FC = () => {
     let unlistenMedia: (() => void) | null = null;
     let unlistenHardware: (() => void) | null = null;
     let unlistenStoreSync: (() => void) | null = null;
+    let unlistenSettingsUpdated: (() => void) | null = null;
     let unlistenSpotlight: (() => void) | null = null;
     let unlistenSettings: (() => void) | null = null;
     let unlistenSlide: (() => void) | null = null;
     let unlistenWorkspace: (() => void) | null = null;
+    let unlistenHud: (() => void) | null = null;
     let isMounted = true;
 
     async function registerTrayListeners() {
@@ -335,6 +337,13 @@ export const App: React.FC = () => {
         });
         unlistenStoreSync = sub5;
 
+        const sub5b = await listen('settings-updated', (event) => {
+          if (event.payload) {
+            systemStore.syncFromExternal(event.payload as any);
+          }
+        });
+        unlistenSettingsUpdated = sub5b;
+
         const sub6 = await listen('open-spotlight', () => {
           systemStore.toggleSpotlight();
         });
@@ -357,6 +366,20 @@ export const App: React.FC = () => {
           }
         });
         unlistenWorkspace = sub9;
+
+        const sub10 = await listen<{ kind: 'volume' | 'brightness' | 'mute'; delta: number }>('hud-change', (event) => {
+          if (event.payload) {
+            const { kind, delta } = event.payload;
+            if (kind === 'volume') {
+              systemStore.adjustVolume(delta);
+            } else if (kind === 'brightness') {
+              systemStore.adjustBrightness(delta);
+            } else if (kind === 'mute') {
+              systemStore.toggleMute();
+            }
+          }
+        });
+        unlistenHud = sub10;
       } catch (err) {
         console.warn('[Tauri Event Listener] Failed to subscribe to tray/media/hardware events:', err);
       }
@@ -371,10 +394,12 @@ export const App: React.FC = () => {
       if (unlistenMedia) unlistenMedia();
       if (unlistenHardware) unlistenHardware();
       if (unlistenStoreSync) unlistenStoreSync();
+      if (unlistenSettingsUpdated) unlistenSettingsUpdated();
       if (unlistenSpotlight) unlistenSpotlight();
       if (unlistenSettings) unlistenSettings();
       if (unlistenSlide) unlistenSlide();
       if (unlistenWorkspace) unlistenWorkspace();
+      if (unlistenHud) unlistenHud();
     };
   }, [handleTrayAction]);
 
@@ -485,11 +510,11 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Global Hotkey Listener: Alt + Space (Spotlight), Ctrl + Alt + B (Boss Key Privacy Blur), Esc
+  // Global Hotkey Listener: Alt + S (Spotlight), Ctrl + Alt + B (Boss Key Privacy Blur), Esc
   useEffect(() => {
     async function handleKeyDown(e: KeyboardEvent) {
-      // 1. Alt + Space: Toggle Spotlight Search & Command Launcher
-      if (e.altKey && (e.code === 'Space' || e.key === ' ')) {
+      // 1. Alt + S: Toggle Spotlight Search & Command Launcher
+      if (e.altKey && (e.code === 'KeyS' || e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         playGlassPop();
         systemStore.toggleSpotlight();
@@ -645,11 +670,13 @@ export const App: React.FC = () => {
     await safeInvoke('set_click_through', { ignore: true });
   }, []);
 
-  // Determine active dimensions: widen to 360x44 in Companion mode when music is playing
+  // Determine active dimensions: widen to 360x44 in Companion mode when music is playing, or 360x62 for HUD
   const activeDimensions = !islandEnabled
     ? { width: 140, height: 26 }
     : islandState === 'eyes' && isAudioPlaying
     ? { width: 360, height: 44 }
+    : islandState === 'toast' && toastPayload?.type === 'hud'
+    ? { width: 360, height: 62 }
     : ISLAND_DIMENSIONS[islandState] || ISLAND_DIMENSIONS['compact'];
 
   // Bottom Window Render Branch: Dedicated Taskbar Window
@@ -659,16 +686,17 @@ export const App: React.FC = () => {
         className={`liquidisland-app theme-${theme}`}
         style={{
           width: '100vw',
-          height: '68px',
+          height: '360px',
           background: 'transparent',
           position: 'fixed',
           bottom: 0,
           left: 0,
           right: 0,
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
+          justifyContent: 'flex-end',
+          overflow: 'visible',
           pointerEvents: 'none',
         }}
       >
@@ -678,8 +706,11 @@ export const App: React.FC = () => {
             width: '100%',
             height: '100%',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'flex-end',
+            paddingBottom: '8px',
+            boxSizing: 'border-box',
           }}
         >
           <TaskbarPreviewDock
@@ -819,7 +850,7 @@ export const App: React.FC = () => {
       </IslandShell>
 
       {/* ==================================================================== */}
-      {/* Spotlight Command Launcher (Alt + Space)                             */}
+      {/* Spotlight Command Launcher (Alt + S)                                 */}
       {/* ==================================================================== */}
       <AnimatePresence>
         {spotlightOpen && (

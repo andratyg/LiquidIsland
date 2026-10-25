@@ -23,6 +23,7 @@ import {
   playScrollTick,
   playWaterDrop,
   playToggleClick,
+  playOvershootChime,
 } from '../utils/sfx';
 
 export const STORAGE_KEY = 'liquidisland_os_state_v1';
@@ -203,6 +204,7 @@ async function syncToOtherWindows(updated: SystemSettings) {
     if (!isTauri) return;
     const { emit } = await import('@tauri-apps/api/event');
     await emit('store-sync', updated);
+    await emit('settings-updated', updated);
   } catch {
     // Non-fatal
   }
@@ -365,6 +367,74 @@ export const systemStore = {
     const nextVal = typeof brightnessOrUpdater === 'function' ? brightnessOrUpdater(currentSettings.brightness) : brightnessOrUpdater;
     const clamped = Math.max(0, Math.min(100, Math.round(nextVal)));
     saveSettings({ ...currentSettings, brightness: clamped });
+  },
+  adjustVolume(delta: number) {
+    const prev = currentSettings.volume;
+    const rawNext = prev + delta;
+    const isOvershoot = (prev === 100 && delta > 0) || (prev === 0 && delta < 0);
+    const nextVal = Math.max(0, Math.min(100, Math.round(rawNext)));
+
+    if (isOvershoot) {
+      playOvershootChime();
+    } else {
+      playScrollTick();
+    }
+
+    saveSettings({ ...currentSettings, volume: nextVal });
+
+    this.triggerToast('hud', {
+      hudType: 'volume',
+      hudValue: nextVal,
+      value: nextVal,
+      title: 'Volume',
+      subtitle: isOvershoot ? (nextVal === 100 ? '100% MAXIMUM' : '0% MUTED') : `${nextVal}%`,
+      isOvershoot,
+    });
+  },
+  adjustBrightness(delta: number) {
+    const prev = currentSettings.brightness;
+    const rawNext = prev + delta;
+    const isOvershoot = (prev === 100 && delta > 0) || (prev === 0 && delta < 0);
+    const nextVal = Math.max(0, Math.min(100, Math.round(rawNext)));
+
+    if (isOvershoot) {
+      playOvershootChime();
+    } else {
+      playScrollTick();
+    }
+
+    saveSettings({ ...currentSettings, brightness: nextVal });
+
+    this.triggerToast('hud', {
+      hudType: 'brightness',
+      hudValue: nextVal,
+      value: nextVal,
+      title: 'Brightness',
+      subtitle: isOvershoot ? (nextVal === 100 ? '100% MAXIMUM' : '0% MINIMUM') : `${nextVal}%`,
+      isOvershoot,
+    });
+  },
+  toggleMute() {
+    const prev = currentSettings.volume;
+    let nextVal = 0;
+    if (prev === 0) {
+      nextVal = (systemStore as any)._lastUnmutedVolume || 50;
+    } else {
+      (systemStore as any)._lastUnmutedVolume = prev;
+      nextVal = 0;
+    }
+
+    playToggleClick();
+    saveSettings({ ...currentSettings, volume: nextVal });
+
+    this.triggerToast('hud', {
+      hudType: 'volume',
+      hudValue: nextVal,
+      value: nextVal,
+      title: 'Volume',
+      subtitle: nextVal === 0 ? 'Muted' : `${nextVal}%`,
+      isMuted: nextVal === 0,
+    });
   },
   setIsAudioPlaying(isAudioPlaying: boolean) {
     saveSettings({ ...currentSettings, isAudioPlaying, mediaIsPlaying: isAudioPlaying });

@@ -83,6 +83,8 @@ export interface ToastPayload {
   batteryStatus?: BatteryStatus;
   pinnedTitle?: string;
   isPinned?: boolean;
+  isOvershoot?: boolean;
+  isMuted?: boolean;
 }
 
 export interface HardwareToastPayload {
@@ -182,6 +184,7 @@ export interface RunningAppInfo {
   process_name: string;
   is_focused: boolean;
   icon_hint: string;
+  icon_data?: string;
 }
 
 export interface ClipboardSnippetItem {

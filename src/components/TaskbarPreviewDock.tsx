@@ -11,27 +11,21 @@ import {
   ChevronUp,
   Wifi,
   Volume2,
+  VolumeX,
+  SunMedium,
   BatteryCharging,
   Sliders,
-  Folder,
-  Music,
-  Code2,
-  Terminal,
-  Globe,
-  Settings,
   Power,
   Eye,
-  Radio,
   Cpu,
-  ShieldCheck,
-  Cloud,
-  Bluetooth,
+  RefreshCw,
+  Moon,
+  Sun,
   Maximize2,
   Minimize2,
-  Layers,
-  Zap,
+  X,
 } from 'lucide-react';
-import { RunningAppInfo } from '../types/liquid';
+import { RunningAppInfo, CompanionMode } from '../types/liquid';
 
 interface TaskbarPreviewDockProps {
   onOpenSettings?: () => void;
@@ -67,6 +61,185 @@ async function safeEmit(event: string, payload?: unknown) {
   }
 }
 
+/* ==========================================================================
+   High-Precision Full-Color Vector Logos for Authentic Taskbar Icons
+   ========================================================================== */
+
+const ChromeLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <circle cx="24" cy="24" r="20" fill="#fbbc05" />
+    <path d="M24 4c7.3 0 13.7 4 17.1 10H24v10l-8.6 15A20 20 0 0 1 4 24C4 13 13 4 24 4z" fill="#ea4335" />
+    <path d="M41.1 14A20 20 0 0 1 24 44l8.6-15H44c0-5.3-1.1-10.4-2.9-15z" fill="#34a853" />
+    <circle cx="24" cy="24" r="9.5" fill="#ffffff" />
+    <circle cx="24" cy="24" r="7.5" fill="#4285f4" />
+  </svg>
+);
+
+const EdgeLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <path
+      d="M24 4C13 4 4 13 4 24c0 8.5 5.3 15.7 12.8 18.5-1.8-3.5-2.8-7.5-2.8-11.5 0-9.4 7.6-17 17-17h10c-4-6-10-10-17-10z"
+      fill="url(#edgeGrad1)"
+    />
+    <path
+      d="M24 20c-7.7 0-14 6.3-14 14 0 5.5 3.2 10.2 7.8 12.5C20.2 47.4 22 48 24 48c13.3 0 24-10.7 24-24 0-1.4-.1-2.7-.4-4H34c0 4.4-3.6 8-8 8-3.3 0-6.1-2-7.3-4.9.4-.1.9-.1 1.3-.1h20z"
+      fill="url(#edgeGrad2)"
+    />
+    <defs>
+      <linearGradient id="edgeGrad1" x1="4" y1="4" x2="34" y2="24" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#0078d7" />
+        <stop offset="1" stopColor="#00c8f8" />
+      </linearGradient>
+      <linearGradient id="edgeGrad2" x1="10" y1="48" x2="48" y2="20" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#00c8f8" />
+        <stop offset="1" stopColor="#10b981" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const BraveLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <path
+      d="M24 4l12 7-3 18-9 15-9-15-3-18 12-7z"
+      fill="#fb542b"
+      stroke="#ffffff"
+      strokeWidth="1.5"
+    />
+    <path d="M24 14l6 4-2 9-4 8-4-8-2-9 6-4z" fill="#ff7a00" />
+  </svg>
+);
+
+const FirefoxLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <circle cx="24" cy="24" r="20" fill="url(#ffGrad1)" />
+    <path
+      d="M38 12c-3.5-3.5-9-5.5-14-4.5 4 2.5 6 6 5 10.5-2-1.5-4.5-2.5-7-2.5-7.7 0-14 6.3-14 14 0 6 3.8 11.2 9.2 13.2-3.8-3.2-5.2-8.7-3.2-13.7 2 4.5 6.5 7.5 11.5 7.5 7.2 0 13-5.8 13-13 0-4.4-2.2-8.3-5.5-10.7 2.5 1 4.5 2.8 5 4.7 1-2.2 1-4.2 0-5.5z"
+      fill="url(#ffGrad2)"
+    />
+    <defs>
+      <linearGradient id="ffGrad1" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#2563eb" />
+        <stop offset="1" stopColor="#7c3aed" />
+      </linearGradient>
+      <linearGradient id="ffGrad2" x1="10" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#f59e0b" />
+        <stop offset="1" stopColor="#ef4444" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const VSCodeLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <path d="M36 4l-14 13-8-6-4 3 6 10-6 10 4 3 8-6 14 13 8-4V8l-8-4z" fill="#007acc" />
+    <path d="M36 4l-14 13 14 13 8-4V8l-8-4z" fill="#1f9cf0" opacity="0.85" />
+    <path d="M36 30L22 17l-8 6 8 7 14 0z" fill="#0065a9" />
+  </svg>
+);
+
+const CursorLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <rect x="6" y="6" width="36" height="36" rx="8" fill="#18181b" stroke="#8b5cf6" strokeWidth="2" />
+    <path d="M16 14l18 10-18 10V14z" fill="url(#cursorGrad)" />
+    <defs>
+      <linearGradient id="cursorGrad" x1="16" y1="14" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#8b5cf6" />
+        <stop offset="1" stopColor="#c084fc" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const AntigravityLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <circle cx="24" cy="24" r="20" fill="url(#antiGrad)" />
+    <circle cx="24" cy="24" r="8" fill="#ffffff" />
+    <path d="M24 8v8M24 32v8M8 24h8M32 24h8" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
+    <defs>
+      <linearGradient id="antiGrad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#6366f1" />
+        <stop offset="1" stopColor="#a855f7" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const SpotifyLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <circle cx="24" cy="24" r="21" fill="#1ed760" />
+    <path
+      d="M34 18c-6.8-4-17.5-4.4-23.7-2.5a2 2 0 1 0 1.2 3.8c5.4-1.6 14.8-1.3 20.8 2.2a2 2 0 1 0 1.7-3.5zm-1.8 7.3c-5.7-3.5-14.4-4.5-21.2-2.4a1.7 1.7 0 1 0 1 3.2c5.8-1.8 13.5-.9 18.5 2.2a1.7 1.7 0 1 0 1.7-3zm-2.4 7.2c-4.9-3-11.2-3.7-16.5-2.1a1.4 1.4 0 0 0 .8 2.7c4.5-1.4 10.2-.8 14.4 1.8a1.4 1.4 0 0 0 1.3-2.4z"
+      fill="#000000"
+    />
+  </svg>
+);
+
+const ExplorerLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <path d="M6 10h14l4 5h18a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3z" fill="#f59e0b" />
+    <rect x="3" y="18" width="42" height="22" rx="3" fill="#fbbf24" />
+    <path d="M12 24h24v2H12z" fill="#38bdf8" />
+  </svg>
+);
+
+const TerminalLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <rect x="4" y="8" width="40" height="32" rx="6" fill="#0f172a" stroke="#334155" strokeWidth="2" />
+    <path d="M14 18l8 6-8 6" stroke="#4ade80" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    <line x1="26" y1="30" x2="34" y2="30" stroke="#f8fafc" strokeWidth="3" strokeLinecap="round" />
+  </svg>
+);
+
+const SettingsLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <circle cx="24" cy="24" r="19" fill="#1e293b" stroke="#a855f7" strokeWidth="2" />
+    <circle cx="24" cy="24" r="6" fill="#a855f7" />
+    <path
+      d="M24 9v4M24 35v4M9 24h4M35 24h4M13.4 13.4l2.8 2.8M31.8 31.8l2.8 2.8M13.4 34.6l2.8-2.8M31.8 16.2l2.8-2.8"
+      stroke="#a855f7"
+      strokeWidth="3"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+const DiscordLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <rect x="4" y="4" width="40" height="40" rx="10" fill="#5865f2" />
+    <path
+      d="M34 16c-2.4-1.1-5-1.9-7.7-2.1l-.3.6c2.9.8 4.2 2.1 4.2 2.1-2.6-1.4-5.2-2.1-7.8-2.1s-5.2.7-7.8 2.1c0 0 1.3-1.3 4.2-2.1l-.3-.6C16 14.1 13.4 14.9 11 16 7.6 21 6.8 26 7.2 31c3.1 2.3 6.1 2.2 6.1 2.2l1.3-1.8c-2.4-.7-3.4-2.2-3.4-2.2.3.2 2.7 1.7 7.8 1.7s7.5-1.5 7.8-1.7c0 0-1 1.5-3.4 2.2l1.3 1.8s3 .1 6.1-2.2c.4-5-.4-10-3.7-15zM17 26.5c-1.4 0-2.5-1.3-2.5-2.8s1.1-2.8 2.5-2.8 2.5 1.3 2.5 2.8-1.1 2.8-2.5 2.8zm11 0c-1.4 0-2.5-1.3-2.5-2.8s1.1-2.8 2.5-2.8 2.5 1.3 2.5 2.8-1.1 2.8-2.5 2.8z"
+      fill="#ffffff"
+    />
+  </svg>
+);
+
+const SlackLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <rect x="4" y="4" width="40" height="40" rx="10" fill="#1e1e24" />
+    <path d="M14 26a3 3 0 1 1-3-3h3v3zm2 0a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0v-7z" fill="#e01e5a" />
+    <path d="M22 14a3 3 0 1 1 3-3v3h-3zm0 2a3 3 0 0 1 0 6h-7a3 3 0 0 1 0-6h7z" fill="#36c5f0" />
+    <path d="M34 22a3 3 0 1 1 3 3h-3v-3zm-2 0a3 3 0 0 1-6 0v-7a3 3 0 0 1 6 0v7z" fill="#2eb67d" />
+    <path d="M26 34a3 3 0 1 1-3 3v-3h3zm0-2a3 3 0 0 1 0-6h7a3 3 0 0 1 0 6h-7z" fill="#ecb22e" />
+  </svg>
+);
+
+// High-Fidelity Default Fallback: Clean application window (NEVER a lightning bolt!)
+const DefaultAppLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+    <rect x="4" y="8" width="40" height="32" rx="7" fill="#1e222a" stroke="rgba(255,255,255,0.18)" strokeWidth="2" />
+    <path d="M4 17h40" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
+    <circle cx="10" cy="12.5" r="2.2" fill="#ef4444" />
+    <circle cx="16.5" cy="12.5" r="2.2" fill="#f59e0b" />
+    <circle cx="23" cy="12.5" r="2.2" fill="#10b981" />
+    <rect x="12" y="24" width="24" height="10" rx="3" fill="rgba(56, 189, 248, 0.22)" stroke="#38bdf8" strokeWidth="1.5" />
+  </svg>
+);
+
+/* ==========================================================================
+   Master TaskbarPreviewDock Component
+   ========================================================================== */
+
 export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   onOpenSettings,
   onOpenSpotlight,
@@ -74,17 +247,17 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 }) => {
   const taskbarMode = useSystemStore((s) => s.taskbarMode);
   const theme = useSystemStore((s) => s.theme);
-  const islandEnabled = useSystemStore((s) => s.islandEnabled);
   const companionMode = useSystemStore((s) => s.companionMode);
-  const enableOptionalLofi = useSystemStore((s) => s.enableOptionalLofi);
-  const isWindowMaximizedSimulated = useSystemStore((s) => s.isWindowMaximizedSimulated);
   const workspaceActivity = useSystemStore((s) => s.workspaceActivity);
+  const volume = useSystemStore((s) => s.volume);
+  const brightness = useSystemStore((s) => s.brightness);
 
   // Real Windows Battery & Hardware Status
   const batteryLevel = useSystemStore((s) => s.batteryLevel ?? 84);
   const isCharging = useSystemStore((s) => s.isCharging ?? true);
 
   const [showTrayFlyout, setShowTrayFlyout] = useState(false);
+  const [showControlCenter, setShowControlCenter] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
@@ -142,7 +315,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
   useEffect(() => {
     fetchRunningApps();
-    const interval = setInterval(fetchRunningApps, 1500);
+    const interval = setInterval(fetchRunningApps, 1400);
     return () => clearInterval(interval);
   }, [fetchRunningApps]);
 
@@ -160,8 +333,10 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   }, []);
 
   const handleDockMouseLeave = useCallback(() => {
-    safeInvoke('set_dock_click_through', { ignore: true });
-  }, []);
+    if (!showTrayFlyout && !showControlCenter && !showContextMenu) {
+      safeInvoke('set_dock_click_through', { ignore: true });
+    }
+  }, [showTrayFlyout, showControlCenter, showContextMenu]);
 
   // Synchronized Win32 Digital Clock & Date
   useEffect(() => {
@@ -179,110 +354,146 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       );
     }
     updateClock();
-    const interval = setInterval(updateClock, 1000);
-    return () => clearInterval(interval);
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  // Close flyout and context menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        flyoutRef.current &&
-        !flyoutRef.current.contains(e.target as Node)
-      ) {
-        setShowTrayFlyout(false);
-        setShowContextMenu(false);
-      }
-    }
-    window.addEventListener('mousedown', handleClickOutside);
-    return () => window.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const effectiveMode =
-    taskbarMode === 'C'
-      ? isWindowMaximizedSimulated
-        ? 'A'
-        : 'B'
-      : taskbarMode;
-
-  const handleAction = (act: string) => {
-    if (onTrayAction) {
-      onTrayAction(act);
-    } else {
-      switch (act) {
-        case 'toggle_power':
-          systemStore.toggleIslandEnabled();
-          break;
-        case 'stealth_bezel':
-          systemStore.setIslandState('bezel-line');
-          break;
-        case 'switch_theme':
-          systemStore.toggleTheme();
-          break;
-        case 'switch_companion':
-          systemStore.cycleCompanionMode();
-          break;
-        case 'toggle_lofi':
-          systemStore.toggleOptionalLofi();
-          break;
-        case 'open_settings':
-          if (onOpenSettings) onOpenSettings();
-          else safeEmit('open-settings');
-          break;
-        case 'trim_ram':
-          playWaterDrop();
-          safeInvoke('trim_ram_working_set');
-          break;
-      }
-    }
+  // Flyout Open/Close Helpers with Hit-Box Synchronization
+  const toggleTrayFlyout = useCallback(() => {
+    playToggleClick();
+    const next = !showTrayFlyout;
+    setShowTrayFlyout(next);
+    setShowControlCenter(false);
     setShowContextMenu(false);
+    safeInvoke('set_taskbar_flyout_open', { open: next });
+  }, [showTrayFlyout]);
+
+  const toggleControlCenter = useCallback(() => {
+    playGlassPop();
+    const next = !showControlCenter;
+    setShowControlCenter(next);
     setShowTrayFlyout(false);
+    setShowContextMenu(false);
+    safeInvoke('set_taskbar_flyout_open', { open: next });
+  }, [showControlCenter]);
+
+  const closeAllFlyouts = useCallback(() => {
+    setShowTrayFlyout(false);
+    setShowControlCenter(false);
+    setShowContextMenu(false);
+    safeInvoke('set_taskbar_flyout_open', { open: false });
+  }, []);
+
+  // Quick Action Handler for Tray Flyout
+  const handleAction = (actionKey: string) => {
+    switch (actionKey) {
+      case 'settings':
+        triggerOpenSettings();
+        break;
+      case 'spotlight':
+        triggerOpenSpotlight();
+        break;
+      case 'switch_companion': {
+        playToggleClick();
+        const modes: CompanionMode[] = ['slime', 'cat', 'eyes'];
+        const currentIdx = modes.indexOf(companionMode);
+        const next = modes[(currentIdx + 1) % modes.length];
+        systemStore.setCompanionMode(next);
+        break;
+      }
+      case 'toggle_theme': {
+        playToggleClick();
+        const nextTheme = theme === 'dark' ? 'light' : 'dark';
+        systemStore.setTheme(nextTheme);
+        break;
+      }
+      case 'toggle_stealth': {
+        playGlassPop();
+        const current = systemStore.getState().islandState;
+        if (current === 'bezel-line') {
+          systemStore.setIslandState('compact');
+        } else {
+          systemStore.setIslandState('bezel-line');
+        }
+        break;
+      }
+      case 'restore_taskbar': {
+        playWaterDrop();
+        safeInvoke('restore_default_taskbar');
+        break;
+      }
+      case 'trim_ram': {
+        playWaterDrop();
+        safeInvoke('trim_ram_working_set');
+        break;
+      }
+      case 'restart_explorer': {
+        playWaterDrop();
+        safeInvoke('restart_windows_explorer');
+        break;
+      }
+      case 'quit': {
+        playGlassPop();
+        if (onTrayAction) onTrayAction('quit');
+        safeEmit('tray-menu-action', { action: 'quit' });
+        break;
+      }
+    }
   };
 
   const triggerOpenSpotlight = () => {
     playGlassPop();
+    closeAllFlyouts();
     if (onOpenSpotlight) onOpenSpotlight();
     safeEmit('open-spotlight');
   };
 
   const triggerOpenSettings = () => {
     playGlassPop();
+    closeAllFlyouts();
     if (onOpenSettings) onOpenSettings();
     safeEmit('open-settings');
   };
 
-  // Helper for dynamic app icon rendering
-  const renderAppIconGraphic = (hint: string) => {
-    switch (hint) {
-      case 'chrome':
-        return <Globe size={17} style={{ color: '#4285f4' }} />;
-      case 'edge':
-        return <Globe size={17} style={{ color: '#0078d7' }} />;
-      case 'brave':
-        return <Globe size={17} style={{ color: '#fb542b' }} />;
-      case 'firefox':
-        return <Globe size={17} style={{ color: '#ff7139' }} />;
-      case 'code':
-        return <Code2 size={17} style={{ color: '#007acc' }} />;
-      case 'cursor':
-        return <Code2 size={17} style={{ color: '#8b5cf6' }} />;
-      case 'antigravity':
-        return <Zap size={17} style={{ color: '#6366f1' }} />;
-      case 'terminal':
-        return <Terminal size={16} style={{ color: '#4ade80' }} />;
-      case 'explorer':
-        return <Folder size={17} style={{ color: '#f59e0b' }} />;
-      case 'spotify':
-        return <Music size={17} style={{ color: '#22c55e' }} />;
-      case 'youtube':
-        return <Music size={17} style={{ color: '#ef4444' }} />;
-      case 'discord':
-        return <Layers size={17} style={{ color: '#5865f2' }} />;
-      case 'slack':
-        return <Layers size={17} style={{ color: '#e01e5a' }} />;
-      default:
-        return <Zap size={16} style={{ color: '#38bdf8' }} />;
+  // Helper for dynamic app icon rendering (real .exe icon or vector logo)
+  const renderAppIconGraphic = (hint: string, title?: string, iconData?: string) => {
+    if (iconData && iconData.startsWith('data:image/')) {
+      return (
+        <img
+          src={iconData}
+          alt={title || 'App'}
+          style={{
+            width: '26px',
+            height: '26px',
+            objectFit: 'contain',
+            borderRadius: '4px',
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))',
+          }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      );
     }
+
+    const h = (hint || '').toLowerCase();
+    const t = (title || '').toLowerCase();
+
+    if (h === 'chrome' || t.includes('chrome')) return <ChromeLogo />;
+    if (h === 'edge' || t.includes('edge')) return <EdgeLogo />;
+    if (h === 'brave' || t.includes('brave')) return <BraveLogo />;
+    if (h === 'firefox' || t.includes('firefox')) return <FirefoxLogo />;
+    if (h === 'code' || t.includes('visual studio code')) return <VSCodeLogo />;
+    if (h === 'cursor' || t.includes('cursor')) return <CursorLogo />;
+    if (h === 'antigravity' || t.includes('antigravity')) return <AntigravityLogo />;
+    if (h === 'spotify' || t.includes('spotify')) return <SpotifyLogo />;
+    if (h === 'terminal' || t.includes('terminal') || t.includes('powershell')) return <TerminalLogo />;
+    if (h === 'explorer' || t.includes('explorer')) return <ExplorerLogo />;
+    if (h === 'settings' || t.includes('settings')) return <SettingsLogo />;
+    if (h === 'discord' || t.includes('discord')) return <DiscordLogo />;
+    if (h === 'slack' || t.includes('slack')) return <SlackLogo />;
+
+    return <DefaultAppLogo />;
   };
 
   // Main Dock Section: Windows 11 Start, Search Pill, Divider, Live Running Apps & Tools
@@ -297,15 +508,15 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           safeInvoke('launch_system_action', { action: 'start_menu' });
         }}
         title="Windows 11 Start Menu"
-        style={{ width: '38px', height: '38px' }}
+        style={{ width: '40px', height: '40px', borderRadius: '10px' }}
       >
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
             gap: '2.5px',
-            width: '14px',
-            height: '14px',
+            width: '15px',
+            height: '15px',
           }}
         >
           <div style={{ background: '#38bdf8', borderRadius: '1.5px', boxShadow: '0 0 5px rgba(56, 189, 248, 0.55)' }} />
@@ -323,8 +534,8 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
-          height: '34px',
-          padding: '0 10px',
+          height: '36px',
+          padding: '0 11px',
           borderRadius: '9999px',
           background: 'rgba(255, 255, 255, 0.06)',
           border: '1px solid rgba(255, 255, 255, 0.09)',
@@ -333,7 +544,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           cursor: 'pointer',
           transition: 'background-color 0.15s ease',
         }}
-        title="Quick Search & Omni Spotlight (Alt + Space)"
+        title="Quick Search & Omni Spotlight (Alt + S)"
       >
         <Search size={13} style={{ color: '#38bdf8' }} />
         <span style={{ fontWeight: 500 }}>Search</span>
@@ -347,7 +558,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             fontWeight: 600,
           }}
         >
-          Alt+Space
+          Alt+S
         </span>
       </button>
 
@@ -355,33 +566,104 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       <div
         style={{
           width: '1px',
-          height: '22px',
+          height: '24px',
           backgroundColor: 'rgba(255, 255, 255, 0.12)',
           margin: '0 2px',
         }}
       />
 
       {/* 4. Live Running Windows Apps List */}
-      {runningApps.map((app) => (
-        <button
-          key={`running-app-${app.hwnd}`}
-          type="button"
-          className={`dock-app-icon ${app.is_focused ? 'active' : ''}`}
-          onClick={() => {
-            playGlassPop();
-            safeInvoke('focus_or_toggle_app', { hwnd: app.hwnd });
-            fetchRunningApps();
-          }}
-          title={app.title}
-        >
-          {renderAppIconGraphic(app.icon_hint)}
-          {app.is_focused ? (
-            <span className="dock-app-dot-active" />
-          ) : (
-            <span className="dock-app-dot-running" />
-          )}
-        </button>
-      ))}
+      {runningApps.map((app) => {
+        const isThisAppActive =
+          app.is_focused &&
+          (workspaceActivity?.kind === 'tab-switch' || workspaceActivity?.kind === 'app-switch');
+
+        return (
+          <div key={`running-app-${app.hwnd}`} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className={`dock-app-icon ${app.is_focused ? 'active' : ''}`}
+              onClick={() => {
+                playGlassPop();
+                safeInvoke('focus_or_toggle_app', { hwnd: app.hwnd });
+                fetchRunningApps();
+              }}
+              title={app.title}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+              }}
+            >
+              {renderAppIconGraphic(app.icon_hint, app.title, app.icon_data)}
+              {app.is_focused ? (
+                <span className="dock-app-dot-active" />
+              ) : (
+                <span className="dock-app-dot-running" />
+              )}
+            </button>
+
+            {/* Floating Tab-Title Badge right above the focused running app icon */}
+            <AnimatePresence>
+              {isThisAppActive && workspaceActivity && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.9 }}
+                  animate={{ opacity: 1, y: -44, scale: 1 }}
+                  exit={{ opacity: 0, y: -38, scale: 0.9 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 9999,
+                    padding: '3px 10px',
+                    borderRadius: '9999px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+                    backdropFilter: 'blur(16px)',
+                    border: `1px solid ${workspaceActivity.accent_color || '#38bdf8'}`,
+                    boxShadow: `0 8px 20px rgba(0, 0, 0, 0.5), 0 0 10px ${
+                      workspaceActivity.accent_color || '#38bdf8'
+                    }40`,
+                    color: '#ffffff',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    maxWidth: '220px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '5px',
+                      height: '5px',
+                      borderRadius: '50%',
+                      backgroundColor: workspaceActivity.accent_color || '#38bdf8',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {workspaceActivity.tab_title}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
 
       {/* Fallback default launch icons if no user apps are active */}
       {runningApps.length === 0 && (
@@ -391,24 +673,27 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             className="dock-app-icon"
             onClick={() => safeInvoke('launch_system_action', { action: 'browser' })}
             title="Launch Web Browser"
+            style={{ width: '40px', height: '40px', borderRadius: '10px' }}
           >
-            <Globe size={17} style={{ color: '#38bdf8' }} />
+            <ChromeLogo />
           </button>
           <button
             type="button"
             className="dock-app-icon"
             onClick={() => safeInvoke('launch_system_action', { action: 'explorer' })}
             title="Launch File Explorer"
+            style={{ width: '40px', height: '40px', borderRadius: '10px' }}
           >
-            <Folder size={17} style={{ color: '#f59e0b' }} />
+            <ExplorerLogo />
           </button>
           <button
             type="button"
             className="dock-app-icon"
             onClick={() => safeInvoke('launch_system_action', { action: 'terminal' })}
             title="Launch Windows Terminal"
+            style={{ width: '40px', height: '40px', borderRadius: '10px' }}
           >
-            <Terminal size={16} style={{ color: '#4ade80' }} />
+            <TerminalLogo />
           </button>
         </>
       )}
@@ -417,7 +702,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       <div
         style={{
           width: '1px',
-          height: '22px',
+          height: '24px',
           backgroundColor: 'rgba(255, 255, 255, 0.12)',
           margin: '0 2px',
         }}
@@ -429,8 +714,9 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         className="dock-app-icon"
         onClick={triggerOpenSettings}
         title="Settings Dashboard & Character Studio"
+        style={{ width: '40px', height: '40px', borderRadius: '10px' }}
       >
-        <Settings size={16} style={{ color: '#a855f7' }} />
+        <SettingsLogo />
       </button>
     </>
   );
@@ -442,119 +728,121 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       <button
         type="button"
         className="dock-app-icon"
-        style={{ width: '28px', height: '34px', borderRadius: '8px' }}
-        onClick={() => {
-          playToggleClick();
-          setShowTrayFlyout((prev) => !prev);
-          setShowContextMenu(false);
-        }}
-        title="Show Hidden Icons (^)"
+        style={{ width: '30px', height: '36px', borderRadius: '8px' }}
+        onClick={toggleTrayFlyout}
+        title="Show Hidden Icons & System Tray (^)"
       >
         <ChevronUp
-          size={14}
+          size={15}
           style={{
             transform: showTrayFlyout ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 0.2s ease',
+            color: showTrayFlyout ? '#38bdf8' : 'var(--text-primary)',
           }}
         />
       </button>
 
-      {/* Wi-Fi Icon */}
+      {/* Wi-Fi Icon (Click opens Control Center) */}
       <button
         type="button"
         style={{
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          padding: '4px',
+          padding: '5px',
           color: 'var(--text-primary)',
           display: 'flex',
           alignItems: 'center',
         }}
-        title="Wi-Fi: Connected (High Speed)"
+        onClick={toggleControlCenter}
+        title="Wi-Fi: Connected (Click for Control Center)"
       >
         <Wifi size={14} style={{ color: '#38bdf8' }} />
       </button>
 
-      {/* Volume Indicator */}
+      {/* Volume Indicator (Click = Control Center, Wheel = Adjust Volume) */}
       <button
         type="button"
         style={{
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          padding: '4px',
+          padding: '5px',
           color: 'var(--text-primary)',
           display: 'flex',
           alignItems: 'center',
         }}
-        onClick={() => {
-          playGlassPop();
-          systemStore.triggerToast('hud', {
-            hudType: 'volume',
-            hudValue: 75,
-            title: 'Volume',
-            subtitle: '75%',
-          });
+        onClick={toggleControlCenter}
+        onWheel={(e) => {
+          e.stopPropagation();
+          const step = e.deltaY < 0 ? 4 : -4;
+          systemStore.adjustVolume(step);
         }}
-        title="Volume: 75%"
+        title={`Volume: ${volume}% (Scroll to adjust, click for Control Center)`}
       >
-        <Volume2 size={14} />
+        {volume === 0 ? (
+          <VolumeX size={15} style={{ color: '#ef4444' }} />
+        ) : (
+          <Volume2 size={15} style={{ color: '#38bdf8' }} />
+        )}
       </button>
 
-      {/* Real Windows Battery Indicator */}
+      {/* Real Windows Battery Indicator (Click opens Control Center) */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '3px',
-          fontSize: '10.5px',
+          fontSize: '11px',
           fontWeight: 600,
           color: 'var(--text-primary)',
           cursor: 'pointer',
-          padding: '2px 5px',
+          padding: '3px 6px',
           borderRadius: '6px',
           background: 'rgba(255, 255, 255, 0.06)',
         }}
-        onClick={() => {
-          playGlassPop();
-          if (isCharging) {
-            systemStore.showChargingToast(batteryLevel);
-          } else {
-            systemStore.showUnpluggedToast(batteryLevel);
-          }
-        }}
+        onClick={toggleControlCenter}
         title={`Battery: ${batteryLevel}% (${isCharging ? 'Charging' : 'On Battery'})`}
       >
         <BatteryCharging size={13} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>{batteryLevel}%</span>
       </div>
 
-      {/* Digital Clock & Date */}
+      {/* Digital Clock & Date: 100% Legible Bright White (#ffffff, 13px) */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-end',
           justifyContent: 'center',
-          paddingLeft: '6px',
-          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
-          lineHeight: 1.15,
           cursor: 'pointer',
+          padding: '2px 8px',
+          borderRadius: '8px',
+          lineHeight: 1.25,
+          userSelect: 'none',
         }}
-        onClick={() => {
-          playToggleClick();
-          systemStore.triggerToast('hud', {
-            title: 'Notification Center',
-            subtitle: `${dateStr} · LiquidIsland Active`,
-          });
-        }}
-        title="Windows Notification Center"
+        onClick={toggleControlCenter}
+        title="Windows Notification & Control Center"
       >
-        <span style={{ fontSize: '11px', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+        <span
+          style={{
+            fontSize: '13px',
+            fontWeight: 600,
+            color: '#ffffff',
+            fontVariantNumeric: 'tabular-nums',
+            letterSpacing: '-0.2px',
+          }}
+        >
           {timeStr || '13:00'}
         </span>
-        <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 500,
+            color: '#a1a1aa',
+            letterSpacing: '0.1px',
+          }}
+        >
           {dateStr || 'Sun, 25 Oct'}
         </span>
       </div>
@@ -574,10 +862,41 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         pointerEvents: 'none',
       }}
     >
+      {/* 600px Bottom Edge Liquid Aurora Sweep on Desktop Switch */}
+      <AnimatePresence>
+        {workspaceActivity?.kind === 'desktop-switch' && (
+          <motion.div
+            key={`aurora-bottom-${workspaceActivity.timestamp}`}
+            initial={{
+              x: workspaceActivity.direction === 'right' ? '-100%' : '100%',
+              opacity: 0,
+            }}
+            animate={{
+              x: workspaceActivity.direction === 'right' ? '100%' : '-100%',
+              opacity: [0, 1, 0.9, 0],
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '600px',
+              height: '5px',
+              background: 'linear-gradient(90deg, transparent, #38bdf8, #818cf8, transparent)',
+              boxShadow: '0 0 16px 4px rgba(56, 189, 248, 0.65)',
+              pointerEvents: 'none',
+              zIndex: 9999,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ================================================================== */}
       {/* TASKBAR MODE RENDERING: OPTION A vs OPTION B (CENTERED LUXURY)     */}
       {/* ================================================================== */}
-      {effectiveMode === 'A' ? (
+      {taskbarMode === 'A' ? (
         /* OPTION A: Full-Width Bottom Crystal Bar */
         <motion.div
           key="taskbar-full-width"
@@ -594,35 +913,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             {renderMainDockCapsule()}
           </div>
 
-          <div
-            style={{
-              fontSize: '10px',
-              color: 'var(--text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            {taskbarMode === 'C' && (
-              <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '2px 8px',
-                  borderRadius: '9999px',
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  color: '#60a5fa',
-                  fontSize: '9.5px',
-                  fontWeight: 600,
-                }}
-              >
-                <Maximize2 size={10} />
-                <span>Maximized Morph (Option C)</span>
-              </span>
-            )}
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {renderTrayCapsule()}
           </div>
@@ -634,14 +924,38 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: isDockHovered ? 0 : 38, opacity: isDockHovered ? 1 : 0.85 }}
           transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-          style={{ pointerEvents: 'none' }}
+          style={{ pointerEvents: 'none', position: 'relative' }}
         >
           {/* Main App Dock Capsule */}
           <div
             onMouseEnter={handleDockMouseEnter}
             onMouseLeave={handleDockMouseLeave}
             className="liquid-dock-capsule"
+            style={{ position: 'relative', overflow: 'hidden' }}
           >
+            {/* Traveling Specular Rim Sweep on Tab/App Switch */}
+            <AnimatePresence>
+              {(workspaceActivity?.kind === 'tab-switch' || workspaceActivity?.kind === 'app-switch') && (
+                <motion.div
+                  key={`dock-sweep-${workspaceActivity.timestamp}`}
+                  className="liquid-rim-sweep"
+                  initial={{ x: '-100%', opacity: 0 }}
+                  animate={{ x: '250%', opacity: [0, 1, 0.8, 0] }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: 10,
+                  }}
+                />
+              )}
+            </AnimatePresence>
+
             {renderMainDockCapsule()}
           </div>
 
@@ -655,7 +969,9 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               {renderTrayCapsule()}
             </div>
 
-            {/* Interactive 3x3 Glass System Tray Flyout */}
+            {/* ============================================================== */}
+            {/* 1. Interactive 3x3 Glass System Tray Flyout (^)                 */}
+            {/* ============================================================== */}
             <AnimatePresence>
               {showTrayFlyout && (
                 <motion.div
@@ -667,135 +983,305 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                   className="tray-flyout-panel"
                   style={{
                     position: 'absolute',
-                    bottom: '60px',
+                    bottom: '72px',
                     right: 0,
+                    width: '280px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.14)',
+                    borderRadius: '16px',
+                    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+                    padding: '12px',
+                    boxSizing: 'border-box',
                     pointerEvents: 'auto',
+                    zIndex: 99999,
                   }}
                 >
                   <div
                     style={{
-                      fontSize: '10.5px',
-                      fontWeight: 600,
+                      fontSize: '11px',
+                      fontWeight: 700,
                       color: 'var(--text-secondary)',
-                      marginBottom: '8px',
+                      marginBottom: '10px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                     }}
                   >
-                    <span>Hidden Icons</span>
-                    <span style={{ fontSize: '9px', color: '#38bdf8' }}>Windows 11 Glass</span>
+                    <span>System Tray & Quick Actions</span>
+                    <button
+                      type="button"
+                      onClick={closeAllFlyouts}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: '2px',
+                      }}
+                      title="Close flyout"
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
 
-                  {/* 3x3 Tray Grid */}
-                  <div className="tray-grid-3x3">
-                    <div
-                      className="tray-grid-item active"
-                      onClick={() => {
-                        playGlassPop();
-                        setShowContextMenu((prev) => !prev);
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        playGlassPop();
-                        setShowContextMenu(true);
-                      }}
-                      title="LiquidIsland OS — Click or Right-Click for Full Context Menu"
-                    >
-                      <div
-                        style={{
-                          width: '18px',
-                          height: '18px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 0 8px rgba(59, 130, 246, 0.7)',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '50%',
-                            background: '#ffffff',
-                          }}
-                        />
-                      </div>
-                      <span style={{ fontWeight: 600 }}>LiquidOS</span>
-                    </div>
-
-                    <div
+                  {/* 3x3 Working Actions Grid */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '8px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleAction('settings')}
                       className="tray-grid-item"
-                      onClick={() => handleAction('onedrive')}
-                      title="OneDrive: Up to date"
-                    >
-                      <Cloud size={16} style={{ color: '#60a5fa' }} />
-                      <span>Cloud</span>
-                    </div>
-
-                    <div
-                      className="tray-grid-item"
-                      onClick={() => handleAction('bluetooth')}
-                      title="Bluetooth: Devices Paired"
-                    >
-                      <Bluetooth size={16} style={{ color: '#3b82f6' }} />
-                      <span>Bluetooth</span>
-                    </div>
-
-                    <div
-                      className="tray-grid-item"
-                      onClick={() => handleAction('security')}
-                      title="Windows Defender: Protected"
-                    >
-                      <ShieldCheck size={16} style={{ color: '#10b981' }} />
-                      <span>Security</span>
-                    </div>
-
-                    <div
-                      className="tray-grid-item"
-                      onClick={() => handleAction('gpu')}
-                      title="GPU: High Performance Profile"
-                    >
-                      <Cpu size={16} style={{ color: '#22c55e' }} />
-                      <span>NVIDIA</span>
-                    </div>
-
-                    <div
-                      className="tray-grid-item"
-                      onClick={triggerOpenSettings}
                       title="Open Settings Dashboard"
                     >
-                      <Sliders size={16} style={{ color: '#a855f7' }} />
+                      <Sliders size={18} style={{ color: '#a855f7' }} />
                       <span>Settings</span>
-                    </div>
+                    </button>
 
-                    <div
+                    <button
+                      type="button"
+                      onClick={() => handleAction('spotlight')}
                       className="tray-grid-item"
+                      title="Open Spotlight Search (Alt+S)"
+                    >
+                      <Search size={18} style={{ color: '#38bdf8' }} />
+                      <span>Spotlight</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => handleAction('switch_companion')}
-                      title={`Companion: ${companionMode.toUpperCase()}`}
-                    >
-                      <Eye size={16} style={{ color: '#ec4899' }} />
-                      <span>{companionMode}</span>
-                    </div>
-
-                    <div
                       className="tray-grid-item"
-                      onClick={() => handleAction('toggle_lofi')}
-                      title={`Lofi Focus: ${enableOptionalLofi ? 'ON' : 'OFF'}`}
+                      title={`Switch Companion (Current: ${companionMode.toUpperCase()})`}
                     >
-                      <Radio size={16} style={{ color: '#f59e0b' }} />
-                      <span>Lofi</span>
-                    </div>
+                      <Eye size={18} style={{ color: '#ec4899' }} />
+                      <span style={{ textTransform: 'capitalize' }}>{companionMode}</span>
+                    </button>
 
-                    <div
+                    <button
+                      type="button"
+                      onClick={() => handleAction('toggle_theme')}
                       className="tray-grid-item"
+                      title={`Toggle Theme (Current: ${theme.toUpperCase()})`}
+                    >
+                      {theme === 'dark' ? (
+                        <Moon size={18} style={{ color: '#818cf8' }} />
+                      ) : (
+                        <Sun size={18} style={{ color: '#f59e0b' }} />
+                      )}
+                      <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAction('toggle_stealth')}
+                      className="tray-grid-item"
+                      title="Toggle Stealth Mode (Bezel-line)"
+                    >
+                      <Minimize2 size={18} style={{ color: '#10b981' }} />
+                      <span>Stealth</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAction('restore_taskbar')}
+                      className="tray-grid-item"
+                      title="Restore Native Windows Taskbar"
+                    >
+                      <Maximize2 size={18} style={{ color: '#60a5fa' }} />
+                      <span>Taskbar</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => handleAction('trim_ram')}
-                      title="Flush Working Set (~10 MB RAM)"
+                      className="tray-grid-item"
+                      title="Trim System RAM Working Set"
                     >
-                      <Zap size={16} style={{ color: '#38bdf8' }} />
+                      <Cpu size={18} style={{ color: '#22c55e' }} />
                       <span>Trim RAM</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAction('restart_explorer')}
+                      className="tray-grid-item"
+                      title="Restart Windows Explorer"
+                    >
+                      <RefreshCw size={18} style={{ color: '#f59e0b' }} />
+                      <span>Explorer</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAction('quit')}
+                      className="tray-grid-item"
+                      style={{ color: '#f87171' }}
+                      title="Quit LiquidIsland"
+                    >
+                      <Power size={18} style={{ color: '#ef4444' }} />
+                      <span>Quit</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* ============================================================== */}
+            {/* 2. Interactive Quick Control Center Flyout                     */}
+            {/* ============================================================== */}
+            <AnimatePresence>
+              {showControlCenter && (
+                <motion.div
+                  key="control-center"
+                  initial={{ opacity: 0, scale: 0.92, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.92, y: 12 }}
+                  transition={{ duration: 0.16 }}
+                  style={{
+                    position: 'absolute',
+                    bottom: '72px',
+                    right: 0,
+                    width: '300px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.14)',
+                    borderRadius: '16px',
+                    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08)',
+                    padding: '14px',
+                    boxSizing: 'border-box',
+                    pointerEvents: 'auto',
+                    zIndex: 99999,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                      paddingBottom: '8px',
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff' }}>
+                      Quick Control Center
+                    </span>
+                    <button
+                      type="button"
+                      onClick={closeAllFlyouts}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: '2px',
+                      }}
+                      title="Close Control Center"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+
+                  {/* Volume Slider Card */}
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      padding: '8px 10px',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Volume2 size={14} style={{ color: '#38bdf8' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>Volume</span>
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8' }}>
+                        {volume}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={volume}
+                      onChange={(e) => systemStore.setVolume(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: '#38bdf8', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  {/* Brightness Slider Card */}
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      padding: '8px 10px',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <SunMedium size={14} style={{ color: '#f59e0b' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>Brightness</span>
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b' }}>
+                        {brightness}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={brightness}
+                      onChange={(e) => systemStore.setBrightness(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  {/* Hardware Status Dual Badges */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div
+                      style={{
+                        padding: '6px 8px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '10px',
+                        color: '#94a3b8',
+                      }}
+                    >
+                      <BatteryCharging size={13} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
+                      <span>{isCharging ? 'Charging' : 'Battery'} ({batteryLevel}%)</span>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '6px 8px',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '10px',
+                        color: '#94a3b8',
+                      }}
+                    >
+                      <Wifi size={13} style={{ color: '#38bdf8' }} />
+                      <span>5GHz Ultra</span>
                     </div>
                   </div>
                 </motion.div>
@@ -820,7 +1306,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             transition={{ duration: 0.15 }}
             className="tray-context-menu"
             style={{
-              bottom: '68px',
+              bottom: '72px',
               right: 'calc(50% - 140px)',
               pointerEvents: 'auto',
             }}
@@ -832,92 +1318,30 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                 marginBottom: '4px',
                 fontSize: '10px',
                 color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                fontWeight: 600,
               }}
             >
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                LiquidIsland OS v1.0
-              </span>
-              <span style={{ color: '#10b981' }}>● Active</span>
+              LiquidIsland Quick Actions
             </div>
-
-            <div
-              className="tray-menu-item"
-              onClick={() => handleAction('toggle_power')}
-            >
-              <Power
-                size={13}
-                style={{ color: islandEnabled ? '#10b981' : '#ef4444' }}
-              />
-              <span>
-                {islandEnabled ? 'Nonaktifkan Island (Standby)' : 'Aktifkan Island (On)'}
-              </span>
+            <div className="tray-menu-item" onClick={triggerOpenSettings}>
+              <Sliders size={13} />
+              <span>Settings Dashboard</span>
             </div>
-
-            <div
-              className="tray-menu-item"
-              onClick={() => handleAction('stealth_bezel')}
-            >
-              <Minimize2 size={13} style={{ color: '#38bdf8' }} />
-              <span>Sembunyikan ke Garis Bezel (Stealth)</span>
+            <div className="tray-menu-item" onClick={triggerOpenSpotlight}>
+              <Search size={13} />
+              <span>Omni Search (Alt+S)</span>
             </div>
-
-            <div
-              className="tray-menu-item"
-              onClick={() => handleAction('switch_theme')}
-            >
-              <Layers size={13} style={{ color: '#60a5fa' }} />
-              <span>
-                Ganti Tema: {theme === 'dark' ? 'Light Quartz' : 'Dark Obsidian'}
-              </span>
+            <div className="tray-menu-item" onClick={() => handleAction('switch_companion')}>
+              <Eye size={13} />
+              <span>Switch Companion Mode</span>
             </div>
-
-            <div
-              className="tray-menu-item"
-              onClick={() => handleAction('switch_companion')}
-            >
-              <Eye size={13} style={{ color: '#ec4899' }} />
-              <span>Ganti Karakter: Slime / Cat / Eyes</span>
+            <div className="tray-menu-item" onClick={() => handleAction('restore_taskbar')}>
+              <Maximize2 size={13} />
+              <span>Restore Native Taskbar</span>
             </div>
-
-            <div
-              className="tray-menu-item"
-              onClick={() => handleAction('toggle_lofi')}
-            >
-              <Radio size={13} style={{ color: '#f59e0b' }} />
-              <span>
-                Fitur Lofi Focus: {enableOptionalLofi ? 'Matikan' : 'Aktifkan'}
-              </span>
-            </div>
-
-            <div
-              style={{
-                height: '1px',
-                background: 'var(--glass-border)',
-                margin: '4px 6px',
-              }}
-            />
-
-            <div
-              className="tray-menu-item"
-              onClick={() => {
-                triggerOpenSettings();
-                setShowContextMenu(false);
-                setShowTrayFlyout(false);
-              }}
-            >
-              <Sliders size={13} style={{ color: '#a855f7' }} />
-              <span style={{ fontWeight: 600 }}>Buka Settings Dashboard...</span>
-            </div>
-
-            <div
-              className="tray-menu-item"
-              onClick={() => handleAction('trim_ram')}
-            >
-              <Cpu size={13} style={{ color: '#10b981' }} />
-              <span>Optimize RAM Now (~10 MB Trimmer)</span>
+            <div className="tray-menu-item danger" onClick={() => handleAction('quit')}>
+              <Power size={13} />
+              <span>Quit LiquidIsland</span>
             </div>
           </motion.div>
         )}
