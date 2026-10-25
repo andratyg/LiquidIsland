@@ -1,34 +1,71 @@
 /**
- * LiquidIsland OS - Live Synced Lyrics Engine
- * Fetches timestamped synced lyrics from LRCLib API (https://lrclib.net)
- * for Spotify, YouTube, and YouTube Music active playback, with optional
- * Indonesian dual-subtitle translations.
+ * LiquidIsland OS - Live Synced Lyrics Engine (Stage 1 Enhanced)
+ * High-accuracy multi-tier lyrics fetcher for YouTube, YouTube Music, and Spotify.
+ * Supports smart noise cleaning, "Artist - Track" splitting, dual-tier LRCLib search,
+ * and automatic Indonesian language detection with dual-subtitle translations.
  */
 
 export interface LiveLyricLine {
-  time: number;       // Timestamp in seconds (floating point or integer)
-  text: string;       // Original lyric text (e.g. English / Japanese / Korean)
-  textId?: string;    // Indonesian subtitle translation
+  time: number;       // Timestamp in seconds (e.g. 14.5)
+  text: string;       // Original lyric line
+  textId?: string;    // Indonesian subtitle translation (if original is non-Indonesian)
 }
 
 // In-memory cache to prevent duplicate queries for the same track
 const lyricsCache = new Map<string, LiveLyricLine[]>();
 
 /**
- * Normalizes title string by stripping noisy video tags, remaster labels, and feature tags
+ * Strips YouTube / MV noise tags, video resolution tags, and feature tags
  */
 export function cleanTrackTitle(title: string): string {
   if (!title) return '';
 
   return title
     // Strip parenthesized / bracketed video tags
-    .replace(/\((?:official\s*(?:music\s*)?video|video|audio|lyric(?:s)?(?:\s*video)?|official|remastered|mv|hd|4k)\)/gi, '')
-    .replace(/\[(?:official\s*(?:music\s*)?video|video|audio|lyric(?:s)?(?:\s*video)?|mv|hd|4k)\]/gi, '')
-    // Strip trailing tags like " - Official Video" or " - MV"
-    .replace(/\s*-\s*(?:official\s*(?:music\s*)?video|video|audio|mv|remastered).*$/gi, '')
+    .replace(/\((?:official\s*(?:music\s*)?video|video|audio|lyric(?:s)?(?:\s*video)?|official|remastered|mv|hd|4k|lirik(?:\s*video)?|terjemahan(?:\s*indonesia)?|audio\s*visualizer|visualizer)\)/gi, '')
+    .replace(/\[(?:official\s*(?:music\s*)?video|video|audio|lyric(?:s)?(?:\s*video)?|official|remastered|mv|hd|4k|lirik|terjemahan)\]/gi, '')
+    // Strip trailing tags like " | Official Video", " - MV", " | Lyric Video"
+    .replace(/\s*\|\s*(?:official\s*(?:music\s*)?video|video|audio|mv|remastered|lirik|lyrics).*$/gi, '')
+    .replace(/\s*-\s*(?:official\s*(?:music\s*)?video|video|audio|mv|remastered|lirik|lyrics).*$/gi, '')
     // Strip "ft." or "feat." if present
     .replace(/\s*(?:\(feat\.?|\(ft\.?|feat\.?|ft\.?).*?(?:\)|$)/gi, '')
+    .replace(/["“”'’]/g, '')
     .trim();
+}
+
+/**
+ * Deconstructs raw title and artist into parsed [Artist, Track]
+ */
+export function parseArtistAndTrack(
+  rawTitle: string,
+  rawArtist: string
+): { parsedArtist: string; parsedTrack: string } {
+  const cleanTitle = cleanTrackTitle(rawTitle);
+  const cleanArtist = (rawArtist || '').trim();
+
+  // If title contains " - ", prioritize splitting the title
+  // e.g., "Perunggu - Ini Abadi" or "Hindia - Evaluasi"
+  if (cleanTitle.includes(' - ')) {
+    const parts = cleanTitle.split(' - ');
+    const artist = parts[0].trim();
+    const track = parts.slice(1).join(' - ').trim();
+    return {
+      parsedArtist: artist,
+      parsedTrack: track,
+    };
+  }
+
+  // If title doesn't have " - " but artist is valid (not generic "YouTube" / "Browser")
+  const isGenericArtist =
+    !cleanArtist ||
+    cleanArtist.toLowerCase().includes('youtube') ||
+    cleanArtist.toLowerCase().includes('browser') ||
+    cleanArtist.toLowerCase() === 'media player';
+
+  return {
+    parsedArtist: isGenericArtist ? '' : cleanArtist,
+    parsedTrack: cleanTitle,
+  };
 }
 
 /**
@@ -64,15 +101,68 @@ export function parseLrcLyrics(lrcContent: string): LiveLyricLine[] {
     }
   }
 
-  // Sort chronologically by time
   result.sort((a, b) => a.time - b.time);
   return result;
 }
 
 /**
- * Provides contextual Indonesian translations for lyrics
+ * Detects whether the lyric text is predominantly Indonesian
+ */
+export function isIndonesianSong(lyrics: LiveLyricLine[]): boolean {
+  if (!lyrics || lyrics.length === 0) return false;
+
+  const indonesianTokens = new Set([
+    'yang', 'dan', 'di', 'ke', 'dari', 'aku', 'kau', 'kamu', 'kita', 'ini',
+    'itu', 'tak', 'bisa', 'ada', 'hati', 'cinta', 'mata', 'lagi', 'sudah',
+    'jangan', 'hanya', 'rasa', 'terlalu', 'sendiri', 'kembali', 'selalu',
+    'mimpi', 'malam', 'hari', 'bayang', 'waktu', 'bukan', 'saat', 'sudut',
+    'langit', 'abadi', 'tumbuh', 'menunggu', 'berlari', 'dalam', 'mereka'
+  ]);
+
+  let totalWords = 0;
+  let idMatches = 0;
+
+  for (const line of lyrics.slice(0, 20)) {
+    const words = line.text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+    for (const word of words) {
+      if (word.length > 1) {
+        totalWords++;
+        if (indonesianTokens.has(word)) {
+          idMatches++;
+        }
+      }
+    }
+  }
+
+  return totalWords > 0 && idMatches / totalWords >= 0.12;
+}
+
+/**
+ * Checks if a title or artist name indicates an Indonesian song
+ */
+export function isIndonesianTitle(text: string): boolean {
+  if (!text) return false;
+  const indonesianTokens = new Set([
+    'yang', 'dan', 'di', 'ke', 'dari', 'aku', 'kau', 'kamu', 'kita', 'ini',
+    'itu', 'tak', 'bisa', 'ada', 'hati', 'cinta', 'mata', 'lagi', 'sudah',
+    'jangan', 'hanya', 'rasa', 'terlalu', 'sendiri', 'kembali', 'selalu',
+    'mimpi', 'malam', 'hari', 'bayang', 'waktu', 'bukan', 'saat', 'sudut',
+    'langit', 'abadi', 'tumbuh', 'menunggu', 'berlari', 'dalam', 'mereka',
+    'hindia', 'tulus', 'perunggu', 'feast', 'bernadya', 'pamungkas', 'sal'
+  ]);
+  const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+  return words.some((w) => indonesianTokens.has(w));
+}
+
+/**
+ * Provides contextual Indonesian translations for English lyric lines
  */
 function attachIndonesianSubtitles(lyrics: LiveLyricLine[]): LiveLyricLine[] {
+  // If song is already in Indonesian, render clean single-line lyrics without redundant subtitles
+  if (isIndonesianSong(lyrics)) {
+    return lyrics;
+  }
+
   const dictionary: Record<string, string> = {
     "don't wake me up": "jangan bangunkan aku",
     "paper sky": "langit kertas",
@@ -99,6 +189,12 @@ function attachIndonesianSubtitles(lyrics: LiveLyricLine[]): LiveLyricLine[] {
     "never let me go": "jangan pernah lepaskan aku",
     "dancing in the moonlight": "menari di bawah cahaya bulan",
     "until the morning comes": "hingga pagi menjelang",
+    "just the two of us": "hanya kita berdua",
+    "i want you to know": "kuharap kau mengerti",
+    "nothing lasts forever": "tiada yang abadi",
+    "look at the stars": "pandanglah bintang-bintang",
+    "shine for you": "bersinar untukmu",
+    "sweet dreams": "mimpi yang indah",
   };
 
   return lyrics.map((line) => {
@@ -125,6 +221,9 @@ function attachIndonesianSubtitles(lyrics: LiveLyricLine[]): LiveLyricLine[] {
       else if (lower.includes('dream')) translated = 'merajut angan dan mimpi';
       else if (lower.includes('sky')) translated = 'menatap birunya angkasa';
       else if (lower.includes('rain')) translated = 'di bawah rintik hujan';
+      else if (lower.includes('sun') || lower.includes('shine')) translated = 'sinar hangat mentari';
+      else if (lower.includes('time')) translated = 'seiring berjalannya waktu';
+      else if (lower.includes('fly') || lower.includes('wind')) translated = 'terbang bersama angin';
       else translated = `— ${line.text} —`;
     }
 
@@ -156,73 +255,114 @@ export const PAPER_SKY_LYRICS: LiveLyricLine[] = [
 ];
 
 /**
- * Fetches synchronized lyrics from LRCLib for an active song title and artist
+ * Helper to query LRCLib API with a timeout budget
+ */
+async function queryLrcLib(queryStr: string): Promise<LiveLyricLine[] | null> {
+  const url = `https://lrclib.net/api/search?q=${encodeURIComponent(queryStr)}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+
+    // Find first item with synced lyrics
+    const matchWithSynced = data.find((item: { syncedLyrics?: string }) => Boolean(item.syncedLyrics));
+    const chosen = matchWithSynced || data[0];
+
+    if (chosen.syncedLyrics) {
+      const parsed = parseLrcLyrics(chosen.syncedLyrics);
+      if (parsed.length > 0) {
+        return attachIndonesianSubtitles(parsed);
+      }
+    } else if (chosen.plainLyrics) {
+      const plainLines = (chosen.plainLyrics as string)
+        .split(/\r?\n/)
+        .map((l: string) => l.trim())
+        .filter(Boolean);
+
+      if (plainLines.length > 0) {
+        const generated: LiveLyricLine[] = plainLines.map((text: string, idx: number) => ({
+          time: idx * 5,
+          text,
+        }));
+        return attachIndonesianSubtitles(generated);
+      }
+    }
+  } catch {
+    // Network / abort error
+  }
+  return null;
+}
+
+/**
+ * Fetches synchronized lyrics from LRCLib for active song title and artist
+ * using two-tier query strategy:
+ * Tier 1: query with [parsedArtist + parsedTrack]
+ * Tier 2: query with [parsedTrack] alone if Tier 1 returned no results
  */
 export async function fetchLiveLyrics(
   rawTitle: string,
   rawArtist: string
 ): Promise<LiveLyricLine[]> {
-  const cleanTitle = cleanTrackTitle(rawTitle);
-  const cleanArtist = (rawArtist || '').trim();
+  const { parsedArtist, parsedTrack } = parseArtistAndTrack(rawTitle, rawArtist);
 
-  if (!cleanTitle) {
+  if (!parsedTrack) {
     return PAPER_SKY_LYRICS;
   }
 
-  const cacheKey = `${cleanArtist.toLowerCase()}::${cleanTitle.toLowerCase()}`;
+  const cacheKey = `${parsedArtist.toLowerCase()}::${parsedTrack.toLowerCase()}`;
   if (lyricsCache.has(cacheKey)) {
     return lyricsCache.get(cacheKey)!;
   }
 
-  try {
-    // 1. Try exact search on LRCLib
-    const query = cleanArtist ? `${cleanArtist} ${cleanTitle}` : cleanTitle;
-    const url = `https://lrclib.net/api/search?q=${encodeURIComponent(query)}`;
+  // Tier 1 Query: Artist + Track
+  const tier1Query = parsedArtist ? `${parsedArtist} ${parsedTrack}` : parsedTrack;
+  const tier1Result = await queryLrcLib(tier1Query);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second network budget
-
-    const resp = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (resp.ok) {
-      const data = await resp.json();
-      if (Array.isArray(data) && data.length > 0) {
-        // Find best match with syncedLyrics
-        const matchWithSynced = data.find((item: { syncedLyrics?: string }) => Boolean(item.syncedLyrics));
-        const chosen = matchWithSynced || data[0];
-
-        if (chosen.syncedLyrics) {
-          const parsed = parseLrcLyrics(chosen.syncedLyrics);
-          if (parsed.length > 0) {
-            const enriched = attachIndonesianSubtitles(parsed);
-            lyricsCache.set(cacheKey, enriched);
-            return enriched;
-          }
-        } else if (chosen.plainLyrics) {
-          // Fallback evenly distributed timestamps from plain lyrics
-          const plainLines = (chosen.plainLyrics as string)
-            .split(/\r?\n/)
-            .map((l: string) => l.trim())
-            .filter(Boolean);
-
-          if (plainLines.length > 0) {
-            const generated: LiveLyricLine[] = plainLines.map((text: string, idx: number) => ({
-              time: idx * 5,
-              text,
-            }));
-            const enriched = attachIndonesianSubtitles(generated);
-            lyricsCache.set(cacheKey, enriched);
-            return enriched;
-          }
-        }
-      }
-    }
-  } catch (err) {
-    // Offline or network error; fall back silently
-    console.warn('[LiveLyrics] Could not fetch live lyrics:', err);
+  if (tier1Result && tier1Result.length > 0) {
+    lyricsCache.set(cacheKey, tier1Result);
+    return tier1Result;
   }
 
-  // Fallback to Paper Sky lyrics for demo/offline
+  // Tier 2 Query (Fallback): Track name alone
+  if (parsedArtist) {
+    const tier2Result = await queryLrcLib(parsedTrack);
+    if (tier2Result && tier2Result.length > 0) {
+      lyricsCache.set(cacheKey, tier2Result);
+      return tier2Result;
+    }
+  }
+
+  // Fallback to dynamic track card if not found on LRCLib (or offline)
+  if (parsedTrack && parsedTrack.toLowerCase() !== 'paper sky') {
+    const isId = isIndonesianTitle(parsedTrack) || isIndonesianTitle(parsedArtist);
+    const fallbackLines: LiveLyricLine[] = [
+      {
+        time: 0,
+        text: `${parsedTrack} • ${parsedArtist || 'Now Playing'}`,
+        textId: isId ? undefined : `Sedang memutar: ${parsedTrack}`,
+      },
+      {
+        time: 8,
+        text: `♪ ${parsedTrack} ♪`,
+        textId: isId ? undefined : (parsedArtist ? `Artis: ${parsedArtist}` : '♪ Instrumental ♪'),
+      },
+      {
+        time: 24,
+        text: `${parsedTrack}`,
+        textId: isId ? undefined : '♪ Menikmati Alunan Musik ♪',
+      },
+    ];
+    lyricsCache.set(cacheKey, fallbackLines);
+    return fallbackLines;
+  }
+
+  // Fallback to built-in Paper Sky lyrics for demo / offline
   return PAPER_SKY_LYRICS;
 }

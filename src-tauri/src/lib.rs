@@ -36,6 +36,8 @@ pub fn run() {
                 media_session::start_media_session_listener(window.as_ref().window().clone());
                 // Start Windows Hardware Power/Battery monitor thread (800ms)
                 hardware_monitor::start_hardware_monitor(window.as_ref().window().clone());
+                // Start Windows Tab/App Switch & Virtual Desktop activity monitor thread (200ms)
+                window_hooks::start_workspace_activity_listener(window.as_ref().window().clone());
             }
 
             // Spawn the dedicated bottom Liquid Glass Taskbar window ("taskbar-dock")
@@ -66,6 +68,10 @@ pub fn run() {
             media_session::media_prev_track,
             hardware_monitor::get_battery_hardware_status,
             taskbar::set_dock_click_through,
+            taskbar::set_native_taskbar_hidden,
+            taskbar::get_running_apps,
+            taskbar::focus_or_toggle_app,
+            taskbar::launch_system_action,
         ])
         .build(tauri::generate_context!())
         .expect("error while building LiquidIsland application")

@@ -9,7 +9,6 @@ import { FocusGlasses } from './accessories/FocusGlasses';
 import { getCurrentLyricLine } from '../../utils/lyricsData';
 import { fetchLiveLyrics, type LiveLyricLine } from '../../utils/liveLyricsFetcher';
 import { playJellyBounce, playPetPurr, playGlassPop, playToggleClick } from '../../utils/sfx';
-import { Music } from 'lucide-react';
 
 interface CompanionStageProps {
   testHeadphones?: boolean;
@@ -36,6 +35,18 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
   const batteryStatus = useSystemStore((s) => s.batteryStatus);
   const mediaTitle = useSystemStore((s) => s.mediaTitle || 'Paper Sky');
   const mediaArtist = useSystemStore((s) => s.mediaArtist || 'Sora & The Clouds');
+  const mediaSourceApp = useSystemStore((s) => s.mediaSourceApp || 'Spotify');
+  const workspaceActivity = useSystemStore((s) => s.workspaceActivity);
+
+  // Compute source app badge (Spotify = Green, YouTube = Red, YouTube Music = Crimson)
+  const sourceAppNormalized = (mediaSourceApp || '').toLowerCase();
+  const sourceBadge = sourceAppNormalized.includes('youtube music')
+    ? { label: 'YT Music', bg: 'rgba(220, 38, 38, 0.22)', border: 'rgba(239, 68, 68, 0.45)', textCol: '#f87171' }
+    : sourceAppNormalized.includes('youtube')
+    ? { label: 'YouTube', bg: 'rgba(239, 68, 68, 0.22)', border: 'rgba(239, 68, 68, 0.45)', textCol: '#ef4444' }
+    : sourceAppNormalized.includes('spotify')
+    ? { label: 'Spotify', bg: 'rgba(34, 197, 94, 0.22)', border: 'rgba(34, 197, 94, 0.45)', textCol: '#22c55e' }
+    : { label: mediaSourceApp || 'Music', bg: 'rgba(56, 189, 248, 0.22)', border: 'rgba(56, 189, 248, 0.45)', textCol: '#38bdf8' };
 
   const [liveLyrics, setLiveLyrics] = useState<LiveLyricLine[]>([]);
 
@@ -312,26 +323,76 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
           }}
         >
           <AnimatePresence mode="wait">
-            <motion.div
-              key={`mini-lyric-${activeLyric.time}`}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                minWidth: 0,
-                width: '100%',
-              }}
-            >
-              {/* Primary English lyric line with glowing musical note badge */}
+            {workspaceActivity ? (
+              <motion.div
+                key={`companion-ws-${workspaceActivity.timestamp}`}
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -8, opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  minWidth: 0,
+                  width: '100%',
+                }}
+              >
+                <span
+                  style={{
+                    width: '6.5px',
+                    height: '6.5px',
+                    borderRadius: '50%',
+                    backgroundColor: workspaceActivity.accent_color,
+                    boxShadow: `0 0 8px ${workspaceActivity.accent_color}`,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: workspaceActivity.accent_color,
+                    flexShrink: 0,
+                  }}
+                >
+                  {workspaceActivity.app_name}
+                </span>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>•</span>
+                <span
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 600,
+                    color: '#ffffff',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {workspaceActivity.tab_title}
+                </span>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`mini-lyric-${activeLyric.time}`}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minWidth: 0,
+                  width: '100%',
+                }}
+              >
+              {/* Primary lyric line with Source App Badge (YouTube / Spotify / YT Music) */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '11.5px',
+                  gap: '5px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   color: '#ffffff',
                   whiteSpace: 'nowrap',
@@ -340,7 +401,23 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
                   lineHeight: 1.25,
                 }}
               >
-                <Music size={11} strokeWidth={2} style={{ color: '#38bdf8', flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontSize: '8px',
+                    fontWeight: 700,
+                    padding: '1.5px 5px',
+                    borderRadius: '4px',
+                    backgroundColor: sourceBadge.bg,
+                    border: `1px solid ${sourceBadge.border}`,
+                    color: sourceBadge.textCol,
+                    flexShrink: 0,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.4px',
+                    lineHeight: 1,
+                  }}
+                >
+                  {sourceBadge.label}
+                </span>
                 <span
                   style={{
                     overflow: 'hidden',
@@ -363,8 +440,8 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     lineHeight: 1.2,
-                    marginTop: '1px',
-                    paddingLeft: '11px',
+                    marginTop: '1.5px',
+                    paddingLeft: '2px',
                     opacity: 0.95,
                     textShadow: '0 0 6px rgba(56, 189, 248, 0.4)',
                   }}
@@ -373,6 +450,7 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
                 </div>
               )}
             </motion.div>
+          )}
           </AnimatePresence>
         </div>
 
@@ -429,16 +507,76 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Active Companion Renderer (Slime / Cat / Cyber-Eyes) */}
+      {/* Active Companion Renderer (Slime / Cat / Cyber-Eyes) OR Transient Workspace Activity Morph */}
       <AnimatePresence mode="wait">
-        {companionMode === 'slime' && (
-          <SlimeCompanion key="slime-companion" {...sharedProps} />
-        )}
-        {companionMode === 'cat' && (
-          <CatCompanion key="cat-companion" {...sharedProps} />
-        )}
-        {companionMode === 'eyes' && (
-          <CyberEyes key="cyber-eyes-companion" {...sharedProps} />
+        {workspaceActivity ? (
+          <motion.div
+            key={`companion-idle-ws-${workspaceActivity.timestamp}`}
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -8, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              width: '100%',
+              padding: '0 12px',
+              overflow: 'hidden',
+            }}
+          >
+            <span
+              style={{
+                width: '6.5px',
+                height: '6.5px',
+                borderRadius: '50%',
+                backgroundColor: workspaceActivity.accent_color,
+                boxShadow: `0 0 8px ${workspaceActivity.accent_color}`,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              title={`${workspaceActivity.app_name} • ${workspaceActivity.tab_title}`}
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#ffffff',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif",
+                letterSpacing: '-0.1px',
+              }}
+            >
+              {workspaceActivity.tab_title || workspaceActivity.app_name}
+            </span>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="companion-character-container"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.18 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              height: '100%',
+            }}
+          >
+            {companionMode === 'slime' && (
+              <SlimeCompanion key="slime-companion" {...sharedProps} />
+            )}
+            {companionMode === 'cat' && (
+              <CatCompanion key="cat-companion" {...sharedProps} />
+            )}
+            {companionMode === 'eyes' && (
+              <CyberEyes key="cyber-eyes-companion" {...sharedProps} />
+            )}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

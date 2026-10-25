@@ -39,6 +39,7 @@ fn resolve_source_app(app_id: &str, title: &str) -> String {
         || app_lower.contains("brave")
         || app_lower.contains("firefox")
         || app_lower.contains("opera")
+        || app_lower.contains("vivaldi")
     {
         if title_lower.contains("youtube") {
             "YouTube".to_string()
@@ -54,15 +55,78 @@ fn resolve_source_app(app_id: &str, title: &str) -> String {
     }
 }
 
-/// Queries current SMTC media state on Windows
+/// Helper: Strips common web browser suffixes from window titles
 #[cfg(windows)]
-pub fn query_system_media() -> Result<SystemMediaPayload, Box<dyn std::error::Error>> {
+fn strip_browser_suffix(s: &str) -> String {
+    let mut text = s.to_string();
+    let suffixes = [
+        " - Google Chrome",
+        " - Microsoft Edge",
+        " - Brave",
+        " - Opera",
+        " - Vivaldi",
+        " — Mozilla Firefox",
+        " - Mozilla Firefox",
+        " - Chromium",
+    ];
+    for suf in suffixes {
+        if let Some(stripped) = text.strip_suffix(suf) {
+            text = stripped.to_string();
+            break;
+        }
+    }
+    text.trim().to_string()
+}
+
+/// Helper: Splits "Artist - Song Title" into (Artist, Song Title)
+#[cfg(windows)]
+fn parse_artist_track(raw: &str, default_artist: &str) -> (String, String) {
+    if let Some((artist, track)) = raw.split_once(" - ") {
+        (artist.trim().to_string(), track.trim().to_string())
+    } else {
+        (default_artist.to_string(), raw.trim().to_string())
+    }
+}
+
+/// Engine A: WinRT SMTC (Session Manager)
+#[cfg(windows)]
+fn query_engine_a_smtc() -> Result<SystemMediaPayload, Box<dyn std::error::Error>> {
     let manager_op = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?;
     let manager = manager_op.join()?;
 
-    let session: GlobalSystemMediaTransportControlsSession = match manager.GetCurrentSession() {
-        Ok(s) => s,
-        Err(_) => {
+    let mut best_session: Option<GlobalSystemMediaTransportControlsSession> = None;
+    let mut fallback_session: Option<GlobalSystemMediaTransportControlsSession> = None;
+
+    if let Ok(sessions) = manager.GetSessions() {
+        for session in sessions {
+            if let Ok(playback_info) = session.GetPlaybackInfo() {
+                if let Ok(status) = playback_info.PlaybackStatus() {
+                    if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+                        best_session = Some(session);
+                        break;
+                    }
+                }
+            }
+            if fallback_session.is_none() {
+                if let Ok(props_op) = session.TryGetMediaPropertiesAsync() {
+                    if let Ok(props) = props_op.join() {
+                        if let Ok(title) = props.Title() {
+                            if !title.is_empty() {
+                                fallback_session = Some(session);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let session: GlobalSystemMediaTransportControlsSession = match best_session
+        .or(fallback_session)
+        .or_else(|| manager.GetCurrentSession().ok())
+    {
+        Some(s) => s,
+        None => {
             return Ok(SystemMediaPayload {
                 has_media: false,
                 ..Default::default()
@@ -84,7 +148,10 @@ pub fn query_system_media() -> Result<SystemMediaPayload, Box<dyn std::error::Er
     let source_app = resolve_source_app(&app_id, &title);
 
     let (position_secs, duration_secs) = if let Ok(timeline) = session.GetTimelineProperties() {
-        let pos = timeline.Position().map(|p| (p.Duration / 10_000_000) as u64).unwrap_or(0);
+        let pos = timeline
+            .Position()
+            .map(|p| (p.Duration / 10_000_000) as u64)
+            .unwrap_or(0);
         let start = timeline.StartTime().map(|s| s.Duration).unwrap_or(0);
         let end = timeline.EndTime().map(|e| e.Duration).unwrap_or(0);
         let dur = if end > start {
@@ -97,6 +164,31 @@ pub fn query_system_media() -> Result<SystemMediaPayload, Box<dyn std::error::Er
         (0, 0)
     };
 
+    // Extract stream thumbnail if available
+    let thumbnail_base64 = (|| -> Option<String> {
+        let stream_ref = media_props.Thumbnail().ok()?;
+        let stream_op = stream_ref.OpenReadAsync().ok()?;
+        let stream = stream_op.join().ok()?;
+        let size = stream.Size().ok()?;
+        if size == 0 || size > 5 * 1024 * 1024 {
+            return None;
+        }
+        let reader = windows::Storage::Streams::DataReader::CreateDataReader(&stream).ok()?;
+        let load_op = reader.LoadAsync(size as u32).ok()?;
+        load_op.join().ok()?;
+        let mut buffer = vec![0u8; size as usize];
+        reader.ReadBytes(&mut buffer).ok()?;
+
+        use base64::Engine;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&buffer);
+        let mime = if buffer.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            "image/png"
+        } else {
+            "image/jpeg"
+        };
+        Some(format!("data:{};base64,{}", mime, encoded))
+    })();
+
     let has_media = !title.is_empty() || !artist.is_empty();
 
     Ok(SystemMediaPayload {
@@ -107,8 +199,140 @@ pub fn query_system_media() -> Result<SystemMediaPayload, Box<dyn std::error::Er
         position_secs,
         duration_secs,
         source_app,
-        thumbnail_base64: None,
+        thumbnail_base64,
         has_media,
+    })
+}
+
+/// Helper struct for Window Media Scanning
+#[cfg(windows)]
+struct WindowMediaScan {
+    title: String,
+    artist: String,
+    source_app: String,
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn enum_window_callback(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+) -> windows_sys::Win32::Foundation::BOOL {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetClassNameW, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible,
+    };
+
+    if IsWindowVisible(hwnd) == 0 {
+        return 1;
+    }
+
+    let len = GetWindowTextLengthW(hwnd);
+    if len <= 0 || len > 512 {
+        return 1;
+    }
+
+    let mut buf = vec![0u16; (len + 1) as usize];
+    let read = GetWindowTextW(hwnd, buf.as_mut_ptr(), len + 1);
+    if read <= 0 {
+        return 1;
+    }
+
+    let title_full = String::from_utf16_lossy(&buf[..read as usize]);
+
+    // Check YouTube Music
+    if title_full.contains(" - YouTube Music") {
+        let mut clean = title_full.replace(" - YouTube Music", "");
+        clean = strip_browser_suffix(&clean);
+        let (artist, track) = parse_artist_track(&clean, "YouTube Music");
+        let result_ptr = lparam as *mut Option<WindowMediaScan>;
+        *result_ptr = Some(WindowMediaScan {
+            title: track,
+            artist,
+            source_app: "YouTube Music".to_string(),
+        });
+        return 0; // Stop enumeration
+    }
+
+    // Check YouTube video in browser
+    if title_full.contains(" - YouTube") {
+        let mut clean = title_full.replace(" - YouTube", "");
+        clean = strip_browser_suffix(&clean);
+        let (artist, track) = parse_artist_track(&clean, "YouTube");
+        let result_ptr = lparam as *mut Option<WindowMediaScan>;
+        *result_ptr = Some(WindowMediaScan {
+            title: track,
+            artist,
+            source_app: "YouTube".to_string(),
+        });
+        return 0; // Stop enumeration
+    }
+
+    // Check Spotify client window (Class name: Chrome_WidgetWin_0)
+    let mut class_buf = [0u16; 64];
+    let class_len = GetClassNameW(hwnd, class_buf.as_mut_ptr(), class_buf.len() as i32);
+    if class_len > 0 {
+        let class_name = String::from_utf16_lossy(&class_buf[..class_len as usize]);
+        if class_name == "Chrome_WidgetWin_0"
+            && title_full.contains(" - ")
+            && !title_full.starts_with("Spotify")
+        {
+            let (artist, track) = parse_artist_track(&title_full, "Spotify");
+            let result_ptr = lparam as *mut Option<WindowMediaScan>;
+            *result_ptr = Some(WindowMediaScan {
+                title: track,
+                artist,
+                source_app: "Spotify".to_string(),
+            });
+            return 0; // Stop enumeration
+        }
+    }
+
+    1 // Continue enumeration
+}
+
+/// Engine B: Win32 Window Title Fallback
+#[cfg(windows)]
+fn query_engine_b_window_titles() -> Option<SystemMediaPayload> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumWindows;
+
+    let mut scanned: Option<WindowMediaScan> = None;
+    unsafe {
+        EnumWindows(
+            Some(enum_window_callback),
+            &mut scanned as *mut Option<WindowMediaScan> as isize,
+        );
+    }
+
+    scanned.map(|scan| SystemMediaPayload {
+        title: scan.title,
+        artist: scan.artist,
+        album_title: String::new(),
+        is_playing: true,
+        position_secs: 0,
+        duration_secs: 240,
+        source_app: scan.source_app,
+        thumbnail_base64: None,
+        has_media: true,
+    })
+}
+
+/// Dual-Engine query: Combines Engine A (WinRT SMTC) with Engine B (Win32 Window Title Fallback)
+#[cfg(windows)]
+pub fn query_system_media() -> Result<SystemMediaPayload, Box<dyn std::error::Error>> {
+    // 1. Try Engine A (WinRT SMTC)
+    if let Ok(payload) = query_engine_a_smtc() {
+        if payload.has_media && !payload.title.is_empty() {
+            return Ok(payload);
+        }
+    }
+
+    // 2. Fallback to Engine B (Win32 Window Title Scanning)
+    if let Some(payload) = query_engine_b_window_titles() {
+        return Ok(payload);
+    }
+
+    Ok(SystemMediaPayload {
+        has_media: false,
+        ..Default::default()
     })
 }
 
@@ -120,23 +344,40 @@ pub fn query_system_media() -> Result<SystemMediaPayload, Box<dyn std::error::Er
     })
 }
 
-/// Spawns a background thread polling SMTC every 1000ms and emitting "system-media-update" to React
+/// Spawns a background thread polling media state every 1000ms with CoInitializeEx
 pub fn start_media_session_listener(window: Window) {
     if MEDIA_LOOP_STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
 
     std::thread::spawn(move || {
+        // Initialize COM for this thread
+        #[cfg(windows)]
+        unsafe {
+            use windows_sys::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+            CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED as u32);
+        }
+
         let mut last_title = String::new();
         let mut last_playing = false;
         let mut last_pos = 0u64;
+        let mut tick_counter = 0u64;
 
         loop {
             std::thread::sleep(Duration::from_millis(1000));
 
             #[cfg(windows)]
-            if let Ok(payload) = query_system_media() {
-                // Emit if track changed, playback toggled, or playing position advanced
+            if let Ok(mut payload) = query_system_media() {
+                // If detected via Engine B (position_secs == 0 && duration_secs == 240), tick position smoothly
+                if payload.has_media && payload.thumbnail_base64.is_none() && payload.duration_secs == 240 {
+                    if payload.title == last_title && payload.is_playing {
+                        tick_counter += 1;
+                    } else {
+                        tick_counter = 0;
+                    }
+                    payload.position_secs = tick_counter;
+                }
+
                 let changed = payload.title != last_title
                     || payload.is_playing != last_playing
                     || (payload.is_playing && payload.position_secs != last_pos);
@@ -153,56 +394,94 @@ pub fn start_media_session_listener(window: Window) {
     });
 }
 
-/// Tauri Command: Toggle Play/Pause on the active Windows media player (Spotify, YouTube, etc.)
+/// Tauri Command: Toggle Play/Pause on the active Windows media player (SMTC + Virtual Media Key)
 #[tauri::command]
 pub fn media_play_pause() -> bool {
     #[cfg(windows)]
     {
+        // 1. Try WinRT SMTC
         if let Ok(manager_op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = manager_op.join() {
-                if let Ok(session) = manager.GetCurrentSession() {
-                    if let Ok(async_op) = session.TryTogglePlayPauseAsync() {
-                        return async_op.join().unwrap_or(false);
+                let session = manager.GetCurrentSession().ok().or_else(|| {
+                    manager.GetSessions().ok().and_then(|s| {
+                        let mut it = s.into_iter();
+                        it.next()
+                    })
+                });
+                if let Some(s) = session {
+                    if let Ok(async_op) = s.TryTogglePlayPauseAsync() {
+                        let _ = async_op.join();
                     }
                 }
             }
         }
+
+        // 2. Fallback: Virtual Media Key event
+        unsafe {
+            use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+                keybd_event, KEYEVENTF_KEYUP, VK_MEDIA_PLAY_PAUSE,
+            };
+            keybd_event(VK_MEDIA_PLAY_PAUSE as u8, 0, 0, 0);
+            keybd_event(VK_MEDIA_PLAY_PAUSE as u8, 0, KEYEVENTF_KEYUP, 0);
+        }
+        true
     }
+    #[cfg(not(windows))]
     false
 }
 
-/// Tauri Command: Skip to next track on the active Windows media player
+/// Tauri Command: Skip to next track (SMTC + Virtual Media Key)
 #[tauri::command]
 pub fn media_next_track() -> bool {
     #[cfg(windows)]
     {
+        // 1. Try WinRT SMTC
         if let Ok(manager_op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = manager_op.join() {
                 if let Ok(session) = manager.GetCurrentSession() {
-                    if let Ok(async_op) = session.TrySkipNextAsync() {
-                        return async_op.join().unwrap_or(false);
-                    }
+                    let _ = session.TrySkipNextAsync().and_then(|op| op.join());
                 }
             }
         }
+
+        // 2. Fallback: Virtual Media Key event
+        unsafe {
+            use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+                keybd_event, KEYEVENTF_KEYUP, VK_MEDIA_NEXT_TRACK,
+            };
+            keybd_event(VK_MEDIA_NEXT_TRACK as u8, 0, 0, 0);
+            keybd_event(VK_MEDIA_NEXT_TRACK as u8, 0, KEYEVENTF_KEYUP, 0);
+        }
+        true
     }
+    #[cfg(not(windows))]
     false
 }
 
-/// Tauri Command: Skip to previous track on the active Windows media player
+/// Tauri Command: Skip to previous track (SMTC + Virtual Media Key)
 #[tauri::command]
 pub fn media_prev_track() -> bool {
     #[cfg(windows)]
     {
+        // 1. Try WinRT SMTC
         if let Ok(manager_op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = manager_op.join() {
                 if let Ok(session) = manager.GetCurrentSession() {
-                    if let Ok(async_op) = session.TrySkipPreviousAsync() {
-                        return async_op.join().unwrap_or(false);
-                    }
+                    let _ = session.TrySkipPreviousAsync().and_then(|op| op.join());
                 }
             }
         }
+
+        // 2. Fallback: Virtual Media Key event
+        unsafe {
+            use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+                keybd_event, KEYEVENTF_KEYUP, VK_MEDIA_PREV_TRACK,
+            };
+            keybd_event(VK_MEDIA_PREV_TRACK as u8, 0, 0, 0);
+            keybd_event(VK_MEDIA_PREV_TRACK as u8, 0, KEYEVENTF_KEYUP, 0);
+        }
+        true
     }
+    #[cfg(not(windows))]
     false
 }

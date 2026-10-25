@@ -123,6 +123,7 @@ export interface SystemSettings {
   mediaDuration?: number;
   mediaPosition?: number;
   mediaIsPlaying?: boolean;
+  mediaThumbnail?: string | null;
   hasSystemMedia?: boolean;
 
   // Phase 4 Extensions (backward compatible)
@@ -161,6 +162,26 @@ export interface SystemSettings {
   companionSensitivity?: 'playful' | 'calm'; // Companion behavior sensitivity
   showTaskbarDock?: boolean;             // Show/hide bottom liquid glass taskbar dock
   isWindowMaximizedSimulated?: boolean;  // For Taskbar Option C adaptive morphing
+
+  // Stage 2 Extensions (Fluid Tab-Switch & Workspace Activity Morph)
+  workspaceActivity?: WorkspaceActivityPayload | null;
+}
+
+export interface WorkspaceActivityPayload {
+  kind: 'tab-switch' | 'app-switch' | 'desktop-switch';
+  app_name: string;
+  tab_title: string;
+  direction?: 'left' | 'right';
+  accent_color: string;
+  timestamp?: number;
+}
+
+export interface RunningAppInfo {
+  hwnd: number;
+  title: string;
+  process_name: string;
+  is_focused: boolean;
+  icon_hint: string;
 }
 
 export interface ClipboardSnippetItem {

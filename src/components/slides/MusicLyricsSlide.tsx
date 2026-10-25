@@ -58,6 +58,7 @@ export const MusicLyricsSlide: React.FC = () => {
   const mediaArtist = useSystemStore((s) => s.mediaArtist || 'Sora & The Clouds');
   const mediaAlbum = useSystemStore((s) => s.mediaAlbum || 'Tokyo Lo-Fi');
   const mediaSourceApp = useSystemStore((s) => s.mediaSourceApp || 'Spotify');
+  const mediaThumbnail = useSystemStore((s) => s.mediaThumbnail);
   const totalDuration = useSystemStore((s) => (s.mediaDuration && s.mediaDuration > 0 ? s.mediaDuration : TOTAL_DURATION));
 
   const [deviceIndex, setDeviceIndex] = useState<number>(0);
@@ -271,26 +272,42 @@ export const MusicLyricsSlide: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
+              overflow: 'hidden',
+              position: 'relative',
+              backgroundColor: mediaThumbnail ? '#000000' : 'rgba(255, 255, 255, 0.05)',
             }}
           >
-            {/* SVG Minimalist Graphic */}
-            <svg width="36" height="36" viewBox="0 0 42 42" fill="none">
-              <circle
-                cx="21"
-                cy="21"
-                r="16"
-                stroke={sourceStyle.dotColor}
-                strokeWidth="2.6"
-                fill="rgba(255, 255, 255, 0.04)"
+            {mediaThumbnail ? (
+              <img
+                src={mediaThumbnail}
+                alt={`${mediaArtist} - ${mediaTitle}`}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  borderRadius: '12px',
+                }}
               />
-              <path
-                d="M 12 30 L 30 12"
-                stroke={sourceStyle.dotColor}
-                strokeWidth="2.6"
-                strokeLinecap="round"
-              />
-              <circle cx="21" cy="21" r="3" fill={sourceStyle.dotColor} />
-            </svg>
+            ) : (
+              /* SVG Minimalist Graphic */
+              <svg width="36" height="36" viewBox="0 0 42 42" fill="none">
+                <circle
+                  cx="21"
+                  cy="21"
+                  r="16"
+                  stroke={sourceStyle.dotColor}
+                  strokeWidth="2.6"
+                  fill="rgba(255, 255, 255, 0.04)"
+                />
+                <path
+                  d="M 12 30 L 30 12"
+                  stroke={sourceStyle.dotColor}
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                />
+                <circle cx="21" cy="21" r="3" fill={sourceStyle.dotColor} />
+              </svg>
+            )}
           </div>
 
           {/* Track Metadata & Audio Output Device Switcher */}

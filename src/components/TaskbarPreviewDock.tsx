@@ -31,6 +31,7 @@ import {
   Layers,
   Zap,
 } from 'lucide-react';
+import { RunningAppInfo } from '../types/liquid';
 
 interface TaskbarPreviewDockProps {
   onOpenSettings?: () => void;
@@ -76,10 +77,10 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   const islandEnabled = useSystemStore((s) => s.islandEnabled);
   const companionMode = useSystemStore((s) => s.companionMode);
   const enableOptionalLofi = useSystemStore((s) => s.enableOptionalLofi);
-  const activeSlide = useSystemStore((s) => s.activeSlide);
   const isWindowMaximizedSimulated = useSystemStore((s) => s.isWindowMaximizedSimulated);
+  const workspaceActivity = useSystemStore((s) => s.workspaceActivity);
 
-  // Real Windows Hardware Status
+  // Real Windows Battery & Hardware Status
   const batteryLevel = useSystemStore((s) => s.batteryLevel ?? 84);
   const isCharging = useSystemStore((s) => s.isCharging ?? true);
 
@@ -87,11 +88,74 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
+  const [isDockHovered, setIsDockHovered] = useState(true);
+  const [runningApps, setRunningApps] = useState<RunningAppInfo[]>([]);
 
   const flyoutRef = useRef<HTMLDivElement>(null);
 
+  // 1. Hide Native Windows Taskbar on mount, restore on unmount
+  useEffect(() => {
+    safeInvoke('set_native_taskbar_hidden', { hidden: true });
+    return () => {
+      safeInvoke('set_native_taskbar_hidden', { hidden: false });
+    };
+  }, []);
+
+  // 2. Listen to background cursor proximity auto-hide events from taskbar.rs
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let isMounted = true;
+
+    async function initDockListener() {
+      const isTauri =
+        typeof window !== 'undefined' &&
+        ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+      if (!isTauri) return;
+
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        if (!isMounted) return;
+        const sub = await listen<boolean>('dock-hover-state', (event) => {
+          setIsDockHovered(event.payload);
+        });
+        unlisten = sub;
+      } catch (err) {
+        console.warn('[Dock Proximity] Listener error:', err);
+      }
+    }
+
+    initDockListener();
+
+    return () => {
+      isMounted = false;
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  // 3. Poll and synchronize real running Windows apps
+  const fetchRunningApps = useCallback(async () => {
+    const apps = await safeInvoke<RunningAppInfo[]>('get_running_apps');
+    if (apps && Array.isArray(apps)) {
+      setRunningApps(apps);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRunningApps();
+    const interval = setInterval(fetchRunningApps, 1500);
+    return () => clearInterval(interval);
+  }, [fetchRunningApps]);
+
+  // Re-fetch running apps immediately on workspace tab/app switch
+  useEffect(() => {
+    if (workspaceActivity) {
+      fetchRunningApps();
+    }
+  }, [workspaceActivity, fetchRunningApps]);
+
   // Click-Through toggle helper for bottom dock
   const handleDockMouseEnter = useCallback(() => {
+    setIsDockHovered(true);
     safeInvoke('set_dock_click_through', { ignore: false });
   }, []);
 
@@ -99,7 +163,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     safeInvoke('set_dock_click_through', { ignore: true });
   }, []);
 
-  // Synchronized Win32 Digital Clock
+  // Synchronized Win32 Digital Clock & Date
   useEffect(() => {
     function updateClock() {
       const now = new Date();
@@ -108,8 +172,9 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       );
       setDateStr(
         now.toLocaleDateString([], {
-          month: 'short',
+          weekday: 'short',
           day: 'numeric',
+          month: 'short',
         })
       );
     }
@@ -118,7 +183,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Close flyout when clicking outside
+  // Close flyout and context menu when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -133,7 +198,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     return () => window.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Effective layout mode: Option C adapts to simulated window maximization
   const effectiveMode =
     taskbarMode === 'C'
       ? isWindowMaximizedSimulated
@@ -187,40 +251,71 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     safeEmit('open-settings');
   };
 
-  const triggerOpenSlide = (slideIndex: number) => {
-    playGlassPop();
-    systemStore.setActiveSlide(slideIndex as any);
-    systemStore.setIslandState('expanded');
-    safeEmit('open-slide', slideIndex);
+  // Helper for dynamic app icon rendering
+  const renderAppIconGraphic = (hint: string) => {
+    switch (hint) {
+      case 'chrome':
+        return <Globe size={17} style={{ color: '#4285f4' }} />;
+      case 'edge':
+        return <Globe size={17} style={{ color: '#0078d7' }} />;
+      case 'brave':
+        return <Globe size={17} style={{ color: '#fb542b' }} />;
+      case 'firefox':
+        return <Globe size={17} style={{ color: '#ff7139' }} />;
+      case 'code':
+        return <Code2 size={17} style={{ color: '#007acc' }} />;
+      case 'cursor':
+        return <Code2 size={17} style={{ color: '#8b5cf6' }} />;
+      case 'antigravity':
+        return <Zap size={17} style={{ color: '#6366f1' }} />;
+      case 'terminal':
+        return <Terminal size={16} style={{ color: '#4ade80' }} />;
+      case 'explorer':
+        return <Folder size={17} style={{ color: '#f59e0b' }} />;
+      case 'spotify':
+        return <Music size={17} style={{ color: '#22c55e' }} />;
+      case 'youtube':
+        return <Music size={17} style={{ color: '#ef4444' }} />;
+      case 'discord':
+        return <Layers size={17} style={{ color: '#5865f2' }} />;
+      case 'slack':
+        return <Layers size={17} style={{ color: '#e01e5a' }} />;
+      default:
+        return <Zap size={16} style={{ color: '#38bdf8' }} />;
+    }
   };
 
-  // Reusable Dock App Items
-  const renderAppIcons = () => (
+  // Main Dock Section: Windows 11 Start, Search Pill, Divider, Live Running Apps & Tools
+  const renderMainDockCapsule = () => (
     <>
-      {/* Start Button */}
+      {/* 1. Real Windows 11 Start Button */}
       <button
         type="button"
         className="dock-app-icon"
-        onClick={triggerOpenSpotlight}
-        title="Start Menu & Spotlight (Alt + Space)"
+        onClick={() => {
+          playToggleClick();
+          safeInvoke('launch_system_action', { action: 'start_menu' });
+        }}
+        title="Windows 11 Start Menu"
+        style={{ width: '38px', height: '38px' }}
       >
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '2px',
-            width: '13px',
-            height: '13px',
+            gap: '2.5px',
+            width: '14px',
+            height: '14px',
           }}
         >
-          <div style={{ background: '#38bdf8', borderRadius: '1.5px' }} />
-          <div style={{ background: '#38bdf8', borderRadius: '1.5px' }} />
-          <div style={{ background: '#38bdf8', borderRadius: '1.5px' }} />
-          <div style={{ background: '#38bdf8', borderRadius: '1.5px' }} />
+          <div style={{ background: '#38bdf8', borderRadius: '1.5px', boxShadow: '0 0 5px rgba(56, 189, 248, 0.55)' }} />
+          <div style={{ background: '#38bdf8', borderRadius: '1.5px', boxShadow: '0 0 5px rgba(56, 189, 248, 0.55)' }} />
+          <div style={{ background: '#38bdf8', borderRadius: '1.5px', boxShadow: '0 0 5px rgba(56, 189, 248, 0.55)' }} />
+          <div style={{ background: '#38bdf8', borderRadius: '1.5px', boxShadow: '0 0 5px rgba(56, 189, 248, 0.55)' }} />
         </div>
       </button>
 
-      {/* Search Pill */}
+      {/* 2. Compact Search Pill */}
       <button
         type="button"
         onClick={triggerOpenSpotlight}
@@ -228,101 +323,107 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
-          height: '32px',
+          height: '34px',
           padding: '0 10px',
           borderRadius: '9999px',
-          background: 'var(--pill-bg)',
-          border: '1px solid var(--glass-border)',
+          background: 'rgba(255, 255, 255, 0.06)',
+          border: '1px solid rgba(255, 255, 255, 0.09)',
           color: 'var(--text-secondary)',
           fontSize: '11px',
           cursor: 'pointer',
+          transition: 'background-color 0.15s ease',
         }}
-        title="Quick Search & Apps (Alt + Space)"
+        title="Quick Search & Omni Spotlight (Alt + Space)"
       >
         <Search size={13} style={{ color: '#38bdf8' }} />
         <span style={{ fontWeight: 500 }}>Search</span>
         <span
           style={{
             fontSize: '9px',
-            padding: '1px 5px',
+            padding: '1.5px 5.5px',
             borderRadius: '4px',
-            background: 'rgba(255,255,255,0.12)',
+            background: 'rgba(255, 255, 255, 0.12)',
             color: 'var(--text-secondary)',
+            fontWeight: 600,
           }}
         >
           Alt+Space
         </span>
       </button>
 
-      {/* Pinned App 1: Browser */}
-      <button
-        type="button"
-        className="dock-app-icon"
-        onClick={() => {
-          playToggleClick();
-          systemStore.triggerToast('hud', {
-            title: 'Browser Launched',
-            subtitle: 'Microsoft Edge / Chromium Ready',
-          });
+      {/* 3. Subtle Vertical Divider */}
+      <div
+        style={{
+          width: '1px',
+          height: '22px',
+          backgroundColor: 'rgba(255, 255, 255, 0.12)',
+          margin: '0 2px',
         }}
-        title="Browser"
-      >
-        <Globe size={16} style={{ color: '#38bdf8' }} />
-      </button>
+      />
 
-      {/* Pinned App 2: Code Editor */}
-      <button
-        type="button"
-        className="dock-app-icon"
-        onClick={() => {
-          playToggleClick();
-          systemStore.triggerToast('hud', {
-            title: 'VS Code Editor',
-            subtitle: 'Active Workspace: LiquidIsland',
-          });
+      {/* 4. Live Running Windows Apps List */}
+      {runningApps.map((app) => (
+        <button
+          key={`running-app-${app.hwnd}`}
+          type="button"
+          className={`dock-app-icon ${app.is_focused ? 'active' : ''}`}
+          onClick={() => {
+            playGlassPop();
+            safeInvoke('focus_or_toggle_app', { hwnd: app.hwnd });
+            fetchRunningApps();
+          }}
+          title={app.title}
+        >
+          {renderAppIconGraphic(app.icon_hint)}
+          {app.is_focused ? (
+            <span className="dock-app-dot-active" />
+          ) : (
+            <span className="dock-app-dot-running" />
+          )}
+        </button>
+      ))}
+
+      {/* Fallback default launch icons if no user apps are active */}
+      {runningApps.length === 0 && (
+        <>
+          <button
+            type="button"
+            className="dock-app-icon"
+            onClick={() => safeInvoke('launch_system_action', { action: 'browser' })}
+            title="Launch Web Browser"
+          >
+            <Globe size={17} style={{ color: '#38bdf8' }} />
+          </button>
+          <button
+            type="button"
+            className="dock-app-icon"
+            onClick={() => safeInvoke('launch_system_action', { action: 'explorer' })}
+            title="Launch File Explorer"
+          >
+            <Folder size={17} style={{ color: '#f59e0b' }} />
+          </button>
+          <button
+            type="button"
+            className="dock-app-icon"
+            onClick={() => safeInvoke('launch_system_action', { action: 'terminal' })}
+            title="Launch Windows Terminal"
+          >
+            <Terminal size={16} style={{ color: '#4ade80' }} />
+          </button>
+        </>
+      )}
+
+      {/* 5. Subtle Divider before Settings */}
+      <div
+        style={{
+          width: '1px',
+          height: '22px',
+          backgroundColor: 'rgba(255, 255, 255, 0.12)',
+          margin: '0 2px',
         }}
-        title="Visual Studio Code"
-      >
-        <Code2 size={16} style={{ color: '#60a5fa' }} />
-      </button>
+      />
 
-      {/* Pinned App 3: Shelf / File Explorer */}
-      <button
-        type="button"
-        className={`dock-app-icon ${activeSlide === 3 ? 'active' : ''}`}
-        onClick={() => triggerOpenSlide(3)}
-        title="File Shelf (Slide 3)"
-      >
-        <Folder size={16} style={{ color: '#f59e0b' }} />
-      </button>
-
-      {/* Pinned App 4: Music Player */}
-      <button
-        type="button"
-        className={`dock-app-icon ${activeSlide === 0 ? 'active' : ''}`}
-        onClick={() => triggerOpenSlide(0)}
-        title="Music Player & Lyrics (Slide 0)"
-      >
-        <Music size={16} style={{ color: '#ec4899' }} />
-      </button>
-
-      {/* Pinned App 5: Terminal */}
-      <button
-        type="button"
-        className="dock-app-icon"
-        onClick={() => {
-          playToggleClick();
-          systemStore.triggerToast('hud', {
-            title: 'PowerShell / Terminal',
-            subtitle: 'Ready at ~\\LiquidIsland',
-          });
-        }}
-        title="Windows Terminal"
-      >
-        <Terminal size={15} style={{ color: '#10b981' }} />
-      </button>
-
-      {/* Pinned App 6: Settings Dashboard */}
+      {/* 6. Settings Dashboard Launcher */}
       <button
         type="button"
         className="dock-app-icon"
@@ -334,14 +435,14 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
     </>
   );
 
-  // Reusable System Tray Items
-  const renderTrayIcons = () => (
+  // Right System Tray Capsule: Flyout Chevron, Wi-Fi, Audio, Battery & Clock
+  const renderTrayCapsule = () => (
     <>
       {/* Hidden Icons (^) Chevron Button */}
       <button
         type="button"
         className="dock-app-icon"
-        style={{ width: '26px', height: '32px', borderRadius: '8px' }}
+        style={{ width: '28px', height: '34px', borderRadius: '8px' }}
         onClick={() => {
           playToggleClick();
           setShowTrayFlyout((prev) => !prev);
@@ -358,20 +459,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         />
       </button>
 
-      {/* Language Indicator */}
-      <div
-        style={{
-          fontSize: '11px',
-          fontWeight: 600,
-          color: 'var(--text-secondary)',
-          padding: '0 4px',
-          cursor: 'pointer',
-        }}
-        title="Keyboard Layout: English (US)"
-      >
-        ENG
-      </div>
-
       {/* Wi-Fi Icon */}
       <button
         type="button"
@@ -379,23 +466,27 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          padding: '2px',
+          padding: '4px',
           color: 'var(--text-primary)',
+          display: 'flex',
+          alignItems: 'center',
         }}
-        title="Wi-Fi: Connected (LiquidIsland-5G)"
+        title="Wi-Fi: Connected (High Speed)"
       >
-        <Wifi size={14} />
+        <Wifi size={14} style={{ color: '#38bdf8' }} />
       </button>
 
-      {/* Volume Icon */}
+      {/* Volume Indicator */}
       <button
         type="button"
         style={{
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          padding: '2px',
+          padding: '4px',
           color: 'var(--text-primary)',
+          display: 'flex',
+          alignItems: 'center',
         }}
         onClick={() => {
           playGlassPop();
@@ -411,15 +502,19 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         <Volume2 size={14} />
       </button>
 
-      {/* Real Windows Battery Indicator from hardware_monitor.rs */}
+      {/* Real Windows Battery Indicator */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '3px',
-          fontSize: '10px',
+          fontSize: '10.5px',
+          fontWeight: 600,
           color: 'var(--text-primary)',
           cursor: 'pointer',
+          padding: '2px 5px',
+          borderRadius: '6px',
+          background: 'rgba(255, 255, 255, 0.06)',
         }}
         onClick={() => {
           playGlassPop();
@@ -429,13 +524,13 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             systemStore.showUnpluggedToast(batteryLevel);
           }
         }}
-        title={`Battery: ${batteryLevel}% (${isCharging ? 'Plugged In / Charging' : 'On Battery'})`}
+        title={`Battery: ${batteryLevel}% (${isCharging ? 'Charging' : 'On Battery'})`}
       >
-        <BatteryCharging size={14} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
+        <BatteryCharging size={13} style={{ color: isCharging ? '#22c55e' : '#38bdf8' }} />
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>{batteryLevel}%</span>
       </div>
 
-      {/* Date & Time */}
+      {/* Digital Clock & Date */}
       <div
         style={{
           display: 'flex',
@@ -443,7 +538,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           alignItems: 'flex-end',
           justifyContent: 'center',
           paddingLeft: '6px',
-          borderLeft: '1px solid var(--glass-border)',
+          borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
           lineHeight: 1.15,
           cursor: 'pointer',
         }}
@@ -457,10 +552,10 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         title="Windows Notification Center"
       >
         <span style={{ fontSize: '11px', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-          {timeStr || '11:42'}
+          {timeStr || '13:00'}
         </span>
         <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
-          {dateStr || 'Oct 25'}
+          {dateStr || 'Sun, 25 Oct'}
         </span>
       </div>
     </>
@@ -480,27 +575,25 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
       }}
     >
       {/* ================================================================== */}
-      {/* TASKBAR MODE RENDERING: OPTION A vs OPTION B                       */}
+      {/* TASKBAR MODE RENDERING: OPTION A vs OPTION B (CENTERED LUXURY)     */}
       {/* ================================================================== */}
       {effectiveMode === 'A' ? (
-        /* OPTION A: Full-Width Bottom Crystal Bar (100% width, 48px height) */
+        /* OPTION A: Full-Width Bottom Crystal Bar */
         <motion.div
           key="taskbar-full-width"
           onMouseEnter={handleDockMouseEnter}
           onMouseLeave={handleDockMouseLeave}
           initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
+          animate={{ y: isDockHovered ? 0 : 38, opacity: isDockHovered ? 1 : 0.85 }}
           exit={{ y: 50, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
           className="liquid-taskbar-full"
           style={{ pointerEvents: 'auto' }}
         >
-          {/* Left / Center Section: App Dock */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {renderAppIcons()}
+            {renderMainDockCapsule()}
           </div>
 
-          {/* Center Indicator Badge for Option C / A */}
           <div
             style={{
               fontSize: '10px',
@@ -530,206 +623,187 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             )}
           </div>
 
-          {/* Right Section: System Tray */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {renderTrayIcons()}
+            {renderTrayCapsule()}
           </div>
         </motion.div>
       ) : (
-        /* OPTION B: Two Floating Liquid Glass Capsules */
-        <div
+        /* OPTION B: Centered Luxury 2-Capsule Floating OLED Glass Dock */
+        <motion.div
           className="liquid-dock-container"
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: isDockHovered ? 0 : 38, opacity: isDockHovered ? 1 : 0.85 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 30 }}
           style={{ pointerEvents: 'none' }}
         >
-          {/* Left Capsule: App Dock */}
-          <motion.div
-            key="dock-capsule-left"
+          {/* Main App Dock Capsule */}
+          <div
             onMouseEnter={handleDockMouseEnter}
             onMouseLeave={handleDockMouseLeave}
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 30, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
             className="liquid-dock-capsule"
-            style={{ pointerEvents: 'auto' }}
           >
-            {renderAppIcons()}
-          </motion.div>
+            {renderMainDockCapsule()}
+          </div>
 
-          {/* Right Capsule: System Tray */}
-          <motion.div
-            key="dock-capsule-right"
+          {/* Adjacent System Tray Capsule */}
+          <div
+            style={{ position: 'relative' }}
             onMouseEnter={handleDockMouseEnter}
             onMouseLeave={handleDockMouseLeave}
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 30, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="liquid-dock-capsule"
-            style={{ pointerEvents: 'auto' }}
           >
-            {renderTrayIcons()}
-          </motion.div>
-        </div>
-      )}
-
-      {/* ================================================================== */}
-      {/* INTERACTIVE SYSTEM TRAY (^) 3x3 GLASS FLYOUT PANEL                 */}
-      {/* ================================================================== */}
-      <AnimatePresence>
-        {showTrayFlyout && (
-          <motion.div
-            key="tray-flyout"
-            onMouseEnter={handleDockMouseEnter}
-            onMouseLeave={handleDockMouseLeave}
-            initial={{ opacity: 0, scale: 0.92, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 12 }}
-            transition={{ duration: 0.16 }}
-            className="tray-flyout-panel"
-            style={{
-              bottom: effectiveMode === 'A' ? '54px' : '62px',
-              pointerEvents: 'auto',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '10.5px',
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <span>Hidden Icons</span>
-              <span style={{ fontSize: '9px', color: '#38bdf8' }}>Windows 11 Glass</span>
+            <div className="liquid-dock-capsule">
+              {renderTrayCapsule()}
             </div>
 
-            {/* 3x3 Tray Grid */}
-            <div className="tray-grid-3x3">
-              {/* Tile 1: LiquidIsland OS */}
-              <div
-                className="tray-grid-item active"
-                onClick={() => {
-                  playGlassPop();
-                  setShowContextMenu((prev) => !prev);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  playGlassPop();
-                  setShowContextMenu(true);
-                }}
-                title="LiquidIsland OS — Click or Right-Click for Full Context Menu"
-              >
-                <div
+            {/* Interactive 3x3 Glass System Tray Flyout */}
+            <AnimatePresence>
+              {showTrayFlyout && (
+                <motion.div
+                  key="tray-flyout"
+                  initial={{ opacity: 0, scale: 0.92, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.92, y: 12 }}
+                  transition={{ duration: 0.16 }}
+                  className="tray-flyout-panel"
                   style={{
-                    width: '18px',
-                    height: '18px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 0 8px rgba(59, 130, 246, 0.7)',
+                    position: 'absolute',
+                    bottom: '60px',
+                    right: 0,
+                    pointerEvents: 'auto',
                   }}
                 >
                   <div
                     style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      background: '#ffffff',
+                      fontSize: '10.5px',
+                      fontWeight: 600,
+                      color: 'var(--text-secondary)',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                     }}
-                  />
-                </div>
-                <span style={{ fontWeight: 600 }}>LiquidOS</span>
-              </div>
+                  >
+                    <span>Hidden Icons</span>
+                    <span style={{ fontSize: '9px', color: '#38bdf8' }}>Windows 11 Glass</span>
+                  </div>
 
-              {/* Tile 2: OneDrive */}
-              <div
-                className="tray-grid-item"
-                onClick={() => handleAction('onedrive')}
-                title="OneDrive: Up to date"
-              >
-                <Cloud size={16} style={{ color: '#60a5fa' }} />
-                <span>Cloud</span>
-              </div>
+                  {/* 3x3 Tray Grid */}
+                  <div className="tray-grid-3x3">
+                    <div
+                      className="tray-grid-item active"
+                      onClick={() => {
+                        playGlassPop();
+                        setShowContextMenu((prev) => !prev);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        playGlassPop();
+                        setShowContextMenu(true);
+                      }}
+                      title="LiquidIsland OS — Click or Right-Click for Full Context Menu"
+                    >
+                      <div
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 0 8px rgba(59, 130, 246, 0.7)',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: '#ffffff',
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontWeight: 600 }}>LiquidOS</span>
+                    </div>
 
-              {/* Tile 3: Bluetooth */}
-              <div
-                className="tray-grid-item"
-                onClick={() => handleAction('bluetooth')}
-                title="Bluetooth: Devices Paired"
-              >
-                <Bluetooth size={16} style={{ color: '#3b82f6' }} />
-                <span>Bluetooth</span>
-              </div>
+                    <div
+                      className="tray-grid-item"
+                      onClick={() => handleAction('onedrive')}
+                      title="OneDrive: Up to date"
+                    >
+                      <Cloud size={16} style={{ color: '#60a5fa' }} />
+                      <span>Cloud</span>
+                    </div>
 
-              {/* Tile 4: Windows Security */}
-              <div
-                className="tray-grid-item"
-                onClick={() => handleAction('security')}
-                title="Windows Defender: Protected"
-              >
-                <ShieldCheck size={16} style={{ color: '#10b981' }} />
-                <span>Security</span>
-              </div>
+                    <div
+                      className="tray-grid-item"
+                      onClick={() => handleAction('bluetooth')}
+                      title="Bluetooth: Devices Paired"
+                    >
+                      <Bluetooth size={16} style={{ color: '#3b82f6' }} />
+                      <span>Bluetooth</span>
+                    </div>
 
-              {/* Tile 5: GPU Engine */}
-              <div
-                className="tray-grid-item"
-                onClick={() => handleAction('gpu')}
-                title="GPU: High Performance Profile"
-              >
-                <Cpu size={16} style={{ color: '#22c55e' }} />
-                <span>NVIDIA</span>
-              </div>
+                    <div
+                      className="tray-grid-item"
+                      onClick={() => handleAction('security')}
+                      title="Windows Defender: Protected"
+                    >
+                      <ShieldCheck size={16} style={{ color: '#10b981' }} />
+                      <span>Security</span>
+                    </div>
 
-              {/* Tile 6: Settings Dashboard */}
-              <div
-                className="tray-grid-item"
-                onClick={triggerOpenSettings}
-                title="Open Settings Dashboard"
-              >
-                <Sliders size={16} style={{ color: '#a855f7' }} />
-                <span>Settings</span>
-              </div>
+                    <div
+                      className="tray-grid-item"
+                      onClick={() => handleAction('gpu')}
+                      title="GPU: High Performance Profile"
+                    >
+                      <Cpu size={16} style={{ color: '#22c55e' }} />
+                      <span>NVIDIA</span>
+                    </div>
 
-              {/* Tile 7: Companion Switcher */}
-              <div
-                className="tray-grid-item"
-                onClick={() => handleAction('switch_companion')}
-                title={`Companion: ${companionMode.toUpperCase()}`}
-              >
-                <Eye size={16} style={{ color: '#ec4899' }} />
-                <span>{companionMode}</span>
-              </div>
+                    <div
+                      className="tray-grid-item"
+                      onClick={triggerOpenSettings}
+                      title="Open Settings Dashboard"
+                    >
+                      <Sliders size={16} style={{ color: '#a855f7' }} />
+                      <span>Settings</span>
+                    </div>
 
-              {/* Tile 8: Lofi Engine */}
-              <div
-                className="tray-grid-item"
-                onClick={() => handleAction('toggle_lofi')}
-                title={`Lofi Focus: ${enableOptionalLofi ? 'ON' : 'OFF'}`}
-              >
-                <Radio size={16} style={{ color: '#f59e0b' }} />
-                <span>Lofi</span>
-              </div>
+                    <div
+                      className="tray-grid-item"
+                      onClick={() => handleAction('switch_companion')}
+                      title={`Companion: ${companionMode.toUpperCase()}`}
+                    >
+                      <Eye size={16} style={{ color: '#ec4899' }} />
+                      <span>{companionMode}</span>
+                    </div>
 
-              {/* Tile 9: Quick RAM Trim */}
-              <div
-                className="tray-grid-item"
-                onClick={() => handleAction('trim_ram')}
-                title="Flush Working Set (~10 MB RAM)"
-              >
-                <Zap size={16} style={{ color: '#38bdf8' }} />
-                <span>Trim RAM</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                    <div
+                      className="tray-grid-item"
+                      onClick={() => handleAction('toggle_lofi')}
+                      title={`Lofi Focus: ${enableOptionalLofi ? 'ON' : 'OFF'}`}
+                    >
+                      <Radio size={16} style={{ color: '#f59e0b' }} />
+                      <span>Lofi</span>
+                    </div>
+
+                    <div
+                      className="tray-grid-item"
+                      onClick={() => handleAction('trim_ram')}
+                      title="Flush Working Set (~10 MB RAM)"
+                    >
+                      <Zap size={16} style={{ color: '#38bdf8' }} />
+                      <span>Trim RAM</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
 
       {/* ================================================================== */}
       {/* NATIVE-STYLE LIQUIDISLAND CONTEXT MENU                             */}
@@ -746,11 +820,11 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             transition={{ duration: 0.15 }}
             className="tray-context-menu"
             style={{
-              bottom: effectiveMode === 'A' ? '64px' : '72px',
+              bottom: '68px',
+              right: 'calc(50% - 140px)',
               pointerEvents: 'auto',
             }}
           >
-            {/* Header */}
             <div
               style={{
                 padding: '6px 10px 4px',
@@ -769,7 +843,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               <span style={{ color: '#10b981' }}>● Active</span>
             </div>
 
-            {/* Menu Item 1: Enable / Disable Island */}
             <div
               className="tray-menu-item"
               onClick={() => handleAction('toggle_power')}
@@ -783,7 +856,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               </span>
             </div>
 
-            {/* Menu Item 2: Stealth Bezel Mode */}
             <div
               className="tray-menu-item"
               onClick={() => handleAction('stealth_bezel')}
@@ -792,7 +864,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               <span>Sembunyikan ke Garis Bezel (Stealth)</span>
             </div>
 
-            {/* Menu Item 3: Switch Theme */}
             <div
               className="tray-menu-item"
               onClick={() => handleAction('switch_theme')}
@@ -803,7 +874,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               </span>
             </div>
 
-            {/* Menu Item 4: Switch Companion */}
             <div
               className="tray-menu-item"
               onClick={() => handleAction('switch_companion')}
@@ -812,7 +882,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               <span>Ganti Karakter: Slime / Cat / Eyes</span>
             </div>
 
-            {/* Menu Item 5: Toggle Lofi Audio */}
             <div
               className="tray-menu-item"
               onClick={() => handleAction('toggle_lofi')}
@@ -823,7 +892,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               </span>
             </div>
 
-            {/* Separator */}
             <div
               style={{
                 height: '1px',
@@ -832,7 +900,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               }}
             />
 
-            {/* Menu Item 6: Open Settings Dashboard */}
             <div
               className="tray-menu-item"
               onClick={() => {
@@ -845,7 +912,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               <span style={{ fontWeight: 600 }}>Buka Settings Dashboard...</span>
             </div>
 
-            {/* Menu Item 7: Optimize RAM Now */}
             <div
               className="tray-menu-item"
               onClick={() => handleAction('trim_ram')}

@@ -208,6 +208,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     let _ = app.emit("tray-command", &payload);
                 }
                 "quit_app" => {
+                    crate::taskbar::restore_default_taskbar();
                     app.exit(0);
                 }
                 _ => {}

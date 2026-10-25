@@ -24,6 +24,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   const companionMode = useSystemStore((s) => s.companionMode);
   const companionColor = useSystemStore((s) => s.companionColor);
   const theme = useSystemStore((s) => s.theme);
+  const workspaceActivity = useSystemStore((s) => s.workspaceActivity);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -319,6 +320,28 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       ? '4px'
       : '20px';
 
+  const isTabSwitch = workspaceActivity?.kind === 'tab-switch' || workspaceActivity?.kind === 'app-switch';
+  const isDesktopSwitch = workspaceActivity?.kind === 'desktop-switch';
+  const desktopDirection = workspaceActivity?.direction || 'right';
+
+  let scaleXVal: any = 1;
+  let scaleYVal: any = 1;
+  let xVal: any = 0;
+  let skewXVal: any = 0;
+
+  if (isJellyBouncing) {
+    scaleXVal = [1, 1.05, 0.96, 1.02, 1];
+    scaleYVal = [1, 0.94, 1.05, 0.98, 1];
+  } else if (isTabSwitch) {
+    scaleXVal = [1, 1.12, 0.97, 1];
+    scaleYVal = [1, 0.92, 1.03, 1];
+  }
+
+  if (isDesktopSwitch) {
+    xVal = desktopDirection === 'right' ? [0, -18, 6, 0] : [0, 18, -6, 0];
+    skewXVal = desktopDirection === 'right' ? [0, -8, 3, 0] : [0, 8, -3, 0];
+  }
+
   return (
     <div
       id="liquid-island-root"
@@ -345,20 +368,37 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       {/* ==================================================================== */}
       <motion.div
         ref={shellRef}
-        className="liquid-notch-shell"
+        className={`liquid-notch-shell ${
+          isDesktopSwitch
+            ? desktopDirection === 'right'
+              ? 'liquid-edge-trail-right'
+              : 'liquid-edge-trail-left'
+            : ''
+        }`}
         initial={false}
         animate={{
           width: activeDimensions.width,
           height: activeDimensions.height,
-          scaleX: isJellyBouncing ? [1, 1.05, 0.96, 1.02, 1] : 1,
-          scaleY: isJellyBouncing ? [1, 0.94, 1.05, 0.98, 1] : 1,
+          x: xVal,
+          skewX: skewXVal,
+          scaleX: scaleXVal,
+          scaleY: scaleYVal,
         }}
-        transition={{
-          type: 'spring',
-          stiffness: 420,
-          damping: 34,
-          mass: 0.8,
-        }}
+        transition={
+          isTabSwitch || isDesktopSwitch
+            ? {
+                duration: 0.55,
+                ease: [0.22, 1, 0.36, 1],
+                width: { type: 'spring', stiffness: 420, damping: 34, mass: 0.8 },
+                height: { type: 'spring', stiffness: 420, damping: 34, mass: 0.8 },
+              }
+            : {
+                type: 'spring',
+                stiffness: 420,
+                damping: 34,
+                mass: 0.8,
+              }
+        }
         onMouseMove={handleMouseMove}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -369,6 +409,19 @@ export const IslandShell: React.FC<IslandShellProps> = ({
           borderBottomRightRadius: bottomCornerRadius,
         }}
       >
+        {/* Traveling Specular Rim Sweep Highlight */}
+        <AnimatePresence>
+          {isTabSwitch && (
+            <motion.div
+              key={`rim-sweep-${workspaceActivity?.timestamp}`}
+              className="liquid-rim-sweep"
+              initial={{ x: '-100%', opacity: 0 }}
+              animate={{ x: '250%', opacity: [0, 1, 0.8, 0] }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            />
+          )}
+        </AnimatePresence>
         {/* Concave SVG Notch Corner Ears */}
         {!isBezelLine && (
           <>

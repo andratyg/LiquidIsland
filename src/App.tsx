@@ -32,7 +32,7 @@ import {
   Layout,
   Zap,
 } from 'lucide-react';
-import { ISLAND_DIMENSIONS, type SystemMediaPayload, type HardwareToastPayload } from './types/liquid';
+import { ISLAND_DIMENSIONS, type SystemMediaPayload, type HardwareToastPayload, type WorkspaceActivityPayload } from './types/liquid';
 import { fetchLiveLyrics } from './utils/liveLyricsFetcher';
 
 interface TrayActionPayload {
@@ -277,6 +277,7 @@ export const App: React.FC = () => {
     let unlistenSpotlight: (() => void) | null = null;
     let unlistenSettings: (() => void) | null = null;
     let unlistenSlide: (() => void) | null = null;
+    let unlistenWorkspace: (() => void) | null = null;
     let isMounted = true;
 
     async function registerTrayListeners() {
@@ -349,6 +350,13 @@ export const App: React.FC = () => {
           systemStore.setIslandState('expanded');
         });
         unlistenSlide = sub8;
+
+        const sub9 = await listen<WorkspaceActivityPayload>('workspace-activity', (event) => {
+          if (event.payload) {
+            systemStore.triggerWorkspaceActivity(event.payload);
+          }
+        });
+        unlistenWorkspace = sub9;
       } catch (err) {
         console.warn('[Tauri Event Listener] Failed to subscribe to tray/media/hardware events:', err);
       }
@@ -366,6 +374,7 @@ export const App: React.FC = () => {
       if (unlistenSpotlight) unlistenSpotlight();
       if (unlistenSettings) unlistenSettings();
       if (unlistenSlide) unlistenSlide();
+      if (unlistenWorkspace) unlistenWorkspace();
     };
   }, [handleTrayAction]);
 

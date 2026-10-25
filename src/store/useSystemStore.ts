@@ -12,6 +12,7 @@ import {
   type ShelfFileItem,
   type TodoTaskItem,
   type SystemMediaPayload,
+  type WorkspaceActivityPayload,
 } from '../types/liquid';
 import {
   playAirBudsChime,
@@ -55,6 +56,7 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   mediaDuration: 256,
   mediaPosition: 193,
   mediaIsPlaying: true,
+  mediaThumbnail: null,
   hasSystemMedia: false,
 
   // Phase 6 defaults
@@ -96,6 +98,9 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   companionSensitivity: 'playful',
   showTaskbarDock: false,
   isWindowMaximizedSimulated: false,
+
+  // Stage 2 defaults
+  workspaceActivity: null,
 };
 
 function loadInitialSettings(): SystemSettings {
@@ -167,6 +172,9 @@ function loadInitialSettings(): SystemSettings {
       companionSensitivity: parsed.companionSensitivity === 'calm' ? 'calm' : 'playful',
       showTaskbarDock: typeof parsed.showTaskbarDock === 'boolean' ? parsed.showTaskbarDock : false,
       isWindowMaximizedSimulated: typeof parsed.isWindowMaximizedSimulated === 'boolean' ? parsed.isWindowMaximizedSimulated : false,
+
+      // Stage 2: Always start null on fresh boot
+      workspaceActivity: null,
     };
   } catch (err) {
     console.error('[LiquidIsland Store] Failed to parse localStorage state:', err);
@@ -178,6 +186,7 @@ let currentSettings: SystemSettings = loadInitialSettings();
 const listeners = new Set<() => void>();
 
 let toastTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let workspaceActivityTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let previousNonToastState: IslandState = 'compact';
 
 function emitChange() {
@@ -384,6 +393,7 @@ export const systemStore = {
       playbackTime: pos,
       mediaDuration: dur,
       duration: dur,
+      mediaThumbnail: payload.thumbnail_base64 !== undefined ? payload.thumbnail_base64 : currentSettings.mediaThumbnail,
       hasSystemMedia: payload.has_media,
     });
   },
@@ -804,6 +814,35 @@ export const systemStore = {
       title: direction === 'left' ? 'Virtual Desktop 1' : 'Virtual Desktop 2',
       subtitle: `Switched Desktop ${direction === 'left' ? '←' : '→'}`,
     });
+  },
+
+  // Stage 2 Workspace Activity Actions
+  triggerWorkspaceActivity(payload: WorkspaceActivityPayload) {
+    if (workspaceActivityTimeoutId) {
+      clearTimeout(workspaceActivityTimeoutId);
+      workspaceActivityTimeoutId = null;
+    }
+
+    if (payload.kind === 'desktop-switch') {
+      playSlideWaveSound();
+    }
+
+    saveSettings({
+      ...currentSettings,
+      workspaceActivity: {
+        ...payload,
+        timestamp: Date.now(),
+      },
+    });
+
+    // Transient Context Micro-Pill auto-glides back after 1.4 seconds (1400ms)
+    workspaceActivityTimeoutId = setTimeout(() => {
+      saveSettings({
+        ...currentSettings,
+        workspaceActivity: null,
+      });
+      workspaceActivityTimeoutId = null;
+    }, 1400);
   },
 
   // Phase 9 Spotlight Actions
