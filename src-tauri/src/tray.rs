@@ -28,7 +28,9 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .build(app)?;
     let toggle_lofi = MenuItemBuilder::with_id("toggle_lofi", "Fitur Lofi Focus Audio (On/Off)")
         .build(app)?;
-    let cycle_taskbar = MenuItemBuilder::with_id("cycle_taskbar", "Mode Taskbar: Opsi A / B / C")
+    let restore_taskbar = MenuItemBuilder::with_id("restore_native_taskbar", "Pulihkan Default Taskbar Windows")
+        .build(app)?;
+    let restart_explorer = MenuItemBuilder::with_id("restart_explorer", "Restart Windows Explorer (Perbaiki Taskbar Hilang)")
         .build(app)?;
     let toggle_dev = MenuItemBuilder::with_id("toggle_dev_controls", "Developer Controls Toolbar (Ctrl+Shift+D)")
         .build(app)?;
@@ -46,7 +48,8 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             &switch_theme,
             &switch_companion,
             &toggle_lofi,
-            &cycle_taskbar,
+            &restore_taskbar,
+            &restart_explorer,
             &toggle_dev,
             &sep,
             &trim_ram,
@@ -165,9 +168,19 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     let _ = app.emit("tray-menu-action", &payload);
                     let _ = app.emit("tray-command", &payload);
                 }
-                "cycle_taskbar" => {
+                "restore_native_taskbar" => {
+                    crate::taskbar::restore_default_taskbar();
                     let payload = TrayActionPayload {
-                        action: "cycle_taskbar".to_string(),
+                        action: "restore_native_taskbar".to_string(),
+                        ram_mb: None,
+                    };
+                    let _ = app.emit("tray-menu-action", &payload);
+                    let _ = app.emit("tray-command", &payload);
+                }
+                "restart_explorer" => {
+                    crate::taskbar::restart_windows_explorer();
+                    let payload = TrayActionPayload {
+                        action: "restart_explorer".to_string(),
                         ram_mb: None,
                     };
                     let _ = app.emit("tray-menu-action", &payload);

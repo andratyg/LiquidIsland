@@ -5,13 +5,15 @@ pub static TASKBAR_MODIFIED: AtomicBool = AtomicBool::new(false);
 #[cfg(windows)]
 mod win32 {
     use super::*;
-    use windows_sys::Win32::Foundation::{BOOL, HWND, RECT};
+    use windows_sys::Win32::Foundation::{BOOL, HWND};
     use windows_sys::Win32::Graphics::Gdi::{
-        CombineRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, HRGN, RGN_OR,
+        SetWindowRgn, RedrawWindow, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE,
+        RDW_UPDATENOW,
     };
     use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, GetForegroundWindow, GetWindowRect, IsZoomed,
+        FindWindowW, GetForegroundWindow, IsZoomed, SetWindowPos, ShowWindow, SWP_FRAMECHANGED,
+        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_SHOW,
     };
 
     #[repr(C)]
@@ -44,6 +46,41 @@ mod win32 {
         FindWindowW(windows_sys::core::w!("Shell_TrayWnd"), std::ptr::null())
     }
 
+    pub unsafe fn get_secondary_taskbar_hwnd() -> HWND {
+        FindWindowW(windows_sys::core::w!("Shell_SecondaryTrayWnd"), std::ptr::null())
+    }
+
+    /// Resets the window region of the taskbar to NULL and forces Windows to redraw it
+    pub unsafe fn ensure_taskbar_visible_and_unclipped(hwnd: HWND) {
+        if hwnd.is_null() {
+            return;
+        }
+
+        // 1. Reset clipping region to NULL so nothing is clipped
+        SetWindowRgn(hwnd, std::ptr::null_mut(), 1);
+
+        // 2. Ensure taskbar window is shown
+        ShowWindow(hwnd, SW_SHOW);
+
+        // 3. Inform DWM / Shell of frame changes and force redraw
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW,
+        );
+
+        RedrawWindow(
+            hwnd,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW,
+        );
+    }
+
     unsafe fn apply_acrylic_policy(hwnd: HWND, state: u32, color_argb: u32) {
         let user32 = GetModuleHandleA(b"user32.dll\0".as_ptr());
         if user32.is_null() {
@@ -71,8 +108,8 @@ mod win32 {
     }
 
     pub unsafe fn apply_option_a(hwnd: HWND, theme: &str) -> bool {
-        // Option A: Full-Width Liquid Glass (reset clipping region + apply acrylic)
-        SetWindowRgn(hwnd, std::ptr::null_mut(), 1);
+        // Option A: Full-Width Liquid Glass (reset clipping region to NULL + apply acrylic)
+        ensure_taskbar_visible_and_unclipped(hwnd);
 
         let color = if theme.eq_ignore_ascii_case("light") {
             0xB0F8FAFC // Semi-transparent light quartz
@@ -86,38 +123,10 @@ mod win32 {
     }
 
     pub unsafe fn apply_option_b(hwnd: HWND, theme: &str) -> bool {
-        // Option B: Floating 2-Capsule Dock (create rounded region + apply acrylic)
-        let mut rect: RECT = std::mem::zeroed();
-        if GetWindowRect(hwnd, &mut rect) == 0 {
-            return false;
-        }
-
-        let width = rect.right - rect.left;
-        let height = rect.bottom - rect.top;
-
-        if width <= 0 || height <= 0 {
-            return false;
-        }
-
-        // Capsule 1: Left App Dock (Start + Pinned apps)
-        let left_cap_width = (width as f32 * 0.48) as i32;
-        let left_rgn: HRGN = CreateRoundRectRgn(8, 4, left_cap_width, height - 4, 16, 16);
-
-        // Capsule 2: Right System Tray (Tray icons + Clock)
-        let right_cap_width = (width as f32 * 0.32) as i32;
-        let right_rgn: HRGN =
-            CreateRoundRectRgn(width - right_cap_width, 4, width - 8, height - 4, 16, 16);
-
-        if !left_rgn.is_null() && !right_rgn.is_null() {
-            let combined_rgn: HRGN = CreateRoundRectRgn(0, 0, 0, 0, 0, 0);
-            CombineRgn(combined_rgn, left_rgn, right_rgn, RGN_OR);
-            SetWindowRgn(hwnd, combined_rgn, 1);
-
-            DeleteObject(left_rgn);
-            DeleteObject(right_rgn);
-        } else if !left_rgn.is_null() {
-            SetWindowRgn(hwnd, left_rgn, 1);
-        }
+        // Option B: Liquid Glass Dock Styling
+        // IMPORTANT: NEVER clip Shell_TrayWnd with SetWindowRgn as it breaks native Windows taskbar
+        // clickability on DPI-scaled displays. Always reset to NULL region!
+        ensure_taskbar_visible_and_unclipped(hwnd);
 
         let color = if theme.eq_ignore_ascii_case("light") {
             0xCCF8FAFC
@@ -132,6 +141,8 @@ mod win32 {
 
     pub unsafe fn apply_option_c(hwnd: HWND, theme: &str) -> bool {
         // Option C: Adaptive Morph (checks if foreground active window is maximized)
+        ensure_taskbar_visible_and_unclipped(hwnd);
+
         let fg_hwnd = GetForegroundWindow();
         let is_maximized = if !fg_hwnd.is_null() {
             IsZoomed(fg_hwnd) != 0
@@ -148,9 +159,16 @@ mod win32 {
 
     pub unsafe fn restore_default(hwnd: HWND) -> bool {
         // Reset clipping region to default rectangular window
-        SetWindowRgn(hwnd, std::ptr::null_mut(), 1);
+        ensure_taskbar_visible_and_unclipped(hwnd);
         // Reset composition attribute
         apply_acrylic_policy(hwnd, ACCENT_DISABLED, 0);
+
+        let sec_hwnd = get_secondary_taskbar_hwnd();
+        if !sec_hwnd.is_null() {
+            ensure_taskbar_visible_and_unclipped(sec_hwnd);
+            apply_acrylic_policy(sec_hwnd, ACCENT_DISABLED, 0);
+        }
+
         TASKBAR_MODIFIED.store(false, Ordering::Relaxed);
         true
     }
@@ -166,6 +184,9 @@ pub fn apply_taskbar_mode(mode: String, theme: String) -> bool {
             eprintln!("[LiquidIsland Taskbar] Windows Taskbar hwnd (Shell_TrayWnd) not found.");
             return false;
         }
+
+        // Always ensure native taskbar is shown and unclipped
+        win32::ensure_taskbar_visible_and_unclipped(hwnd);
 
         match mode.to_uppercase().as_str() {
             "A" => win32::apply_option_a(hwnd, &theme),
@@ -192,6 +213,35 @@ pub fn restore_default_taskbar() -> bool {
             return win32::restore_default(hwnd);
         }
         false
+    }
+
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
+/// Tauri command to restart Windows Explorer (useful for reviving taskbar if corrupted or stuck)
+#[tauri::command]
+pub fn restart_windows_explorer() -> bool {
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        // Force kill explorer.exe
+        let _ = Command::new("taskkill")
+            .args(&["/F", "/IM", "explorer.exe"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        // Restart explorer.exe
+        let _ = Command::new("explorer.exe").spawn();
+
+        true
     }
 
     #[cfg(not(windows))]

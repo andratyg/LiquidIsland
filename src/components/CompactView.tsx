@@ -80,7 +80,7 @@ export const CompactView: React.FC = () => {
   // Expand into ExpandedContainer on background pill click
   const handleExpandIsland = useCallback(() => {
     playGlassPop();
-    systemStore.expandIsland();
+    systemStore.setIslandState('expanded');
   }, []);
 
   return (

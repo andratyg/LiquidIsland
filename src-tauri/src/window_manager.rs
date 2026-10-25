@@ -1,9 +1,104 @@
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::time::Duration;
 use tauri::{PhysicalPosition, Position, Window};
 
-/// Enables or disables cursor pass-through on transparent window regions.
-/// When `ignore` is true, cursor events pass directly through transparent pixels to underlying windows.
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::POINT;
+#[cfg(windows)]
+use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+pub static HIT_WIDTH: AtomicU32 = AtomicU32::new(210);
+pub static HIT_HEIGHT: AtomicU32 = AtomicU32::new(56);
+pub static HIT_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
+pub static CURRENT_IGNORE_STATE: AtomicBool = AtomicBool::new(false);
+pub static HIT_LOOP_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Updates the dynamic hit box for the Dynamic Island and modals.
+/// Called by React whenever islandState, lyrics, audio, or modals change.
+#[tauri::command]
+pub fn update_hit_box(width: u32, height: u32, modal_open: bool) {
+    HIT_WIDTH.store(width, Ordering::Relaxed);
+    HIT_HEIGHT.store(height, Ordering::Relaxed);
+    HIT_MODAL_OPEN.store(modal_open, Ordering::Relaxed);
+}
+
+/// Spawns a background thread (polling every 35ms) using Win32 GetCursorPos to perform
+/// hardware-level hit testing, switching set_ignore_cursor_events(false/true) dynamically.
+pub fn start_hit_test_loop(window: Window) {
+    if HIT_LOOP_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    std::thread::spawn(move || {
+        #[cfg(windows)]
+        let mut pt: POINT = unsafe { std::mem::zeroed() };
+
+        loop {
+            std::thread::sleep(Duration::from_millis(35));
+
+            let modal_open = HIT_MODAL_OPEN.load(Ordering::Relaxed);
+            let box_w = HIT_WIDTH.load(Ordering::Relaxed);
+            let box_h = HIT_HEIGHT.load(Ordering::Relaxed);
+
+            let should_ignore = if modal_open {
+                // If a modal or dev dock is open, allow interaction across the window
+                false
+            } else {
+                #[cfg(windows)]
+                {
+                    let success = unsafe { GetCursorPos(&mut pt) };
+                    if success == 0 {
+                        false
+                    } else {
+                        let win_pos = match window.outer_position() {
+                            Ok(pos) => pos,
+                            Err(_) => continue,
+                        };
+                        let win_size = match window.outer_size() {
+                            Ok(size) => size,
+                            Err(_) => continue,
+                        };
+                        let scale = window.scale_factor().unwrap_or(1.0);
+
+                        let physical_box_w = (box_w as f64 * scale).round() as i32;
+                        let physical_box_h = (box_h as f64 * scale).round() as i32;
+                        let margin = (16.0 * scale).round() as i32;
+
+                        let win_center_x = win_pos.x + (win_size.width as i32 / 2);
+                        let island_left = win_center_x - (physical_box_w / 2) - margin;
+                        let island_right = win_center_x + (physical_box_w / 2) + margin;
+                        let island_top = win_pos.y;
+                        let island_bottom = win_pos.y + physical_box_h + margin;
+
+                        let is_inside = pt.x >= island_left
+                            && pt.x <= island_right
+                            && pt.y >= island_top
+                            && pt.y <= island_bottom;
+
+                        !is_inside
+                    }
+                }
+
+                #[cfg(not(windows))]
+                {
+                    false
+                }
+            };
+
+            let current_ignore = CURRENT_IGNORE_STATE.load(Ordering::Relaxed);
+            if should_ignore != current_ignore {
+                if window.set_ignore_cursor_events(should_ignore).is_ok() {
+                    CURRENT_IGNORE_STATE.store(should_ignore, Ordering::Relaxed);
+                }
+            }
+        }
+    });
+}
+
+/// Enables or disables cursor pass-through on transparent window regions manually.
 #[tauri::command]
 pub fn set_click_through(window: Window, ignore: bool) -> Result<(), String> {
+    CURRENT_IGNORE_STATE.store(ignore, Ordering::Relaxed);
     window
         .set_ignore_cursor_events(ignore)
         .map_err(|e| format!("Failed to set ignore_cursor_events({}): {}", ignore, e))
@@ -68,15 +163,42 @@ pub fn get_monitors_list(window: Window) -> Vec<String> {
         .collect()
 }
 
-/// Adjusts the overlay window size dynamically (e.g. expanding vertically from 210px to 620px
-/// when Spotlight or Settings modals open so 620px glass panels are never clipped).
+/// Adjusts the overlay window size dynamically (e.g. expanding vertically from 210px to 960px
+/// when Spotlight or Settings modals open so glass panels appear beautifully in the center of the screen).
 #[tauri::command]
 pub fn set_window_size(window: Window, width: u32, height: u32) -> Result<(), String> {
+    let _ = window.set_resizable(true);
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let (target_w, target_h, center_x, top_y) = if let Ok(Some(monitor)) = window.current_monitor() {
+        let mon_w = (monitor.size().width as f64 / scale) as u32;
+        let mon_h = (monitor.size().height as f64 / scale) as u32;
+        let mon_pos = monitor.position();
+
+        let w = width.min(mon_w);
+        let h = height.min(mon_h.saturating_sub(40));
+
+        let phys_w = (w as f64 * scale).round() as i32;
+        let cx = mon_pos.x + ((monitor.size().width as i32 - phys_w) / 2);
+        let cy = mon_pos.y;
+
+        (w, h, cx, cy)
+    } else {
+        (width, height, 0, 0)
+    };
+
     window
         .set_size(tauri::Size::Logical(tauri::LogicalSize {
-            width: width as f64,
-            height: height as f64,
+            width: target_w as f64,
+            height: target_h as f64,
         }))
-        .map_err(|e| format!("Failed to set window size: {}", e))
-}
+        .map_err(|e| format!("Failed to set window size: {}", e))?;
 
+    if target_w > 0 {
+        let _ = window.set_position(Position::Physical(PhysicalPosition {
+            x: center_x,
+            y: top_y,
+        }));
+    }
+
+    Ok(())
+}

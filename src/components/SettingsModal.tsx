@@ -29,8 +29,18 @@ import {
   Sparkles,
   Check,
   Maximize2,
+  ExternalLink,
 } from 'lucide-react';
-import { CompanionMode, TaskbarMode } from '../types/liquid';
+import { CompanionMode } from '../types/liquid';
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  ramWorkingSet: number | null;
+  onTrimRam: () => Promise<number | null>;
+  monitors: string[];
+  onSelectMonitor: (index: number) => void;
+}
 
 // Safe Tauri IPC Invoker with web browser fallback
 async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
@@ -47,15 +57,6 @@ async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
   }
 }
 
-interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  ramWorkingSet: number | null;
-  onTrimRam: () => Promise<number | null>;
-  monitors: string[];
-  onSelectMonitor: (index: number) => void;
-}
-
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
@@ -69,7 +70,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const companionColor = useSystemStore((s) => s.companionColor);
   const autoAccessories = useSystemStore((s) => s.autoAccessories);
   const companionSensitivity = useSystemStore((s) => s.companionSensitivity);
-  const taskbarMode = useSystemStore((s) => s.taskbarMode);
   const selectedMonitor = useSystemStore((s) => s.selectedMonitor);
   const dualSubtitleEnabled = useSystemStore((s) => s.dualSubtitleEnabled);
   const enableOptionalLofi = useSystemStore((s) => s.enableOptionalLofi);
@@ -83,6 +83,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<'companion' | 'appearance' | 'features' | 'memory'>('companion');
   const [isTrimmingLocal, setIsTrimmingLocal] = useState(false);
   const [localRam, setLocalRam] = useState<number | null>(ramWorkingSet);
+  const [taskbarFeedback, setTaskbarFeedback] = useState<string | null>(null);
+
+  const handleRestoreNativeTaskbar = async () => {
+    playWaterDrop();
+    await safeInvoke('restore_default_taskbar');
+    setTaskbarFeedback('Default Taskbar Windows berhasil dipulihkan!');
+    setTimeout(() => setTaskbarFeedback(null), 3500);
+  };
+
+  const handleRestartExplorer = async () => {
+    playWaterDrop();
+    setTaskbarFeedback('Merestart Windows Explorer...');
+    await safeInvoke('restart_windows_explorer');
+    setTimeout(() => {
+      setTaskbarFeedback('Windows Explorer berhasil direstart!');
+      setTimeout(() => setTaskbarFeedback(null), 3500);
+    }, 1500);
+  };
 
   useEffect(() => {
     if (ramWorkingSet !== null) {
@@ -116,8 +134,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         id="settings-modal-root"
         className="settings-modal-overlay"
         onClick={onClose}
-        onMouseEnter={() => safeInvoke('set_click_through', { ignore: false })}
-        onMouseLeave={() => safeInvoke('set_click_through', { ignore: true })}
       >
         <motion.div
           key="settings-card"
@@ -555,63 +571,137 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Taskbar Mode Selector (Options A, B, C) */}
+                {/* Windows 11 Taskbar Integration & TranslucentTB */}
                 <div style={{ paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                  <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Liquid Glass Taskbar Styler
-                  </label>
-                  <p style={{ fontSize: '10px', color: 'var(--text-secondary)', margin: '2px 0 8px' }}>
-                    Controls the synchronized bottom Windows Taskbar & Interactive Dock appearance.
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Taskbar Windows 11 & Transparansi
+                      </label>
+                      <p style={{ fontSize: '10px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                        LiquidIsland fokus 100% pada Dynamic Island Notch di atas layar desktop Anda.
+                      </p>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '9.5px',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        color: '#60a5fa',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Windows 11 Ready
+                    </span>
+                  </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                    {[
-                      {
-                        mode: 'A' as TaskbarMode,
-                        title: 'Option A: Full-Width Glass',
-                        desc: 'Full-width bottom crystal bar (100% width, 48px height) with Acrylic blur',
-                      },
-                      {
-                        mode: 'B' as TaskbarMode,
-                        title: 'Option B: 2-Capsule Dock',
-                        desc: 'Modern floating dual capsules (Left App Dock + Right System Tray)',
-                      },
-                      {
-                        mode: 'C' as TaskbarMode,
-                        title: 'Option C: Adaptive Morph',
-                        desc: 'Automatically morphs from floating dock to full-width when maximized',
-                      },
-                    ].map((item) => {
-                      const isSelected = taskbarMode === item.mode;
-                      return (
+                  {/* TranslucentTB Guide Card */}
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid var(--glass-border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      marginTop: '6px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div
-                          key={item.mode}
-                          onClick={() => {
-                            playGlassPop();
-                            systemStore.setTaskbarMode(item.mode);
-                          }}
                           style={{
-                            padding: '10px',
-                            borderRadius: '10px',
-                            border: '1px solid',
-                            borderColor: isSelected ? '#3b82f6' : 'var(--glass-border)',
-                            background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'var(--pill-bg)',
-                            cursor: 'pointer',
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)',
                             display: 'flex',
-                            flexDirection: 'column',
-                            gap: '4px',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            color: '#ffffff',
+                            boxShadow: '0 2px 10px rgba(56, 189, 248, 0.3)',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 600 }}>{item.title}</span>
-                            {isSelected && <Check size={12} style={{ color: '#3b82f6' }} />}
-                          </div>
-                          <span style={{ fontSize: '9px', color: 'var(--text-secondary)', lineHeight: 1.25 }}>
-                            {item.desc}
-                          </span>
+                          TB
                         </div>
-                      );
-                    })}
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            Rekomendasi Taskbar Kaca: TranslucentTB
+                          </div>
+                          <div style={{ fontSize: '9.5px', color: 'var(--text-secondary)' }}>
+                            Gunakan TranslucentTB resmi dari Microsoft Store untuk efek taskbar bening/acrylic 100% stabil di Windows 11.
+                          </div>
+                        </div>
+                      </div>
+
+                      <a
+                        href="ms-windows-store://pdp/?productid=9PF4KZ2VN4W9"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-pill"
+                        style={{
+                          fontSize: '10px',
+                          padding: '4px 10px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          textDecoration: 'none',
+                          color: '#38bdf8',
+                          borderColor: 'rgba(56, 189, 248, 0.4)',
+                        }}
+                      >
+                        <span>Buka Microsoft Store</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Taskbar Recovery Tools */}
+                  <div
+                    style={{
+                      marginTop: '10px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--glass-border)',
+                    }}
+                  >
+                    <div style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                      🔧 Pemulihan Taskbar Windows
+                    </div>
+                    <p style={{ fontSize: '9.5px', color: 'var(--text-secondary)', margin: '0 0 6px' }}>
+                      Gunakan tombol di bawah jika taskbar Windows bawaan sempat macet atau hilang:
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn-pill"
+                        onClick={handleRestoreNativeTaskbar}
+                        style={{ fontSize: '10px', padding: '4px 8px' }}
+                      >
+                        <RefreshCw size={11} />
+                        <span>Pulihkan Taskbar Windows Default</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-pill"
+                        onClick={handleRestartExplorer}
+                        style={{ fontSize: '10px', padding: '4px 8px', borderColor: '#f59e0b', color: '#fbbf24' }}
+                      >
+                        <RefreshCw size={11} />
+                        <span>Restart Windows Explorer</span>
+                      </button>
+                    </div>
+                    {taskbarFeedback && (
+                      <div style={{ fontSize: '10px', color: '#10b981', marginTop: '6px', fontWeight: 500 }}>
+                        ✓ {taskbarFeedback}
+                      </div>
+                    )}
                   </div>
                 </div>
 

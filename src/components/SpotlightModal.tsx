@@ -694,35 +694,22 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
   const isHexColor = (val: string) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(val.trim());
 
   return (
-    <motion.div
-      key="spotlight-overlay"
-      id="spotlight-modal-root"
-      initial={{ opacity: 0, y: -24, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -24, scale: 0.96 }}
-      transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-      onKeyDown={handleKeyDown}
-      onMouseEnter={() => safeInvoke('set_click_through', { ignore: false })}
-      onMouseLeave={() => safeInvoke('set_click_through', { ignore: true })}
-      style={{
-        position: 'relative',
-        width: '620px',
-        maxHeight: '490px',
-        backgroundColor: 'var(--island-bg)',
-        backgroundImage: 'var(--glass-surface)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '24px',
-        boxShadow: 'var(--glass-shadow)',
-        backdropFilter: 'blur(32px) saturate(190%)',
-        WebkitBackdropFilter: 'blur(32px) saturate(190%)',
-        color: 'var(--text-primary)',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        userSelect: 'none',
-        zIndex: 9999,
-      }}
+    <div
+      id="spotlight-overlay"
+      className="spotlight-modal-overlay"
+      onClick={onClose}
     >
+      <motion.div
+        key="spotlight-modal-card"
+        id="spotlight-modal-root"
+        initial={{ opacity: 0, scale: 0.95, y: -20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: -20 }}
+        transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+        onKeyDown={handleKeyDown}
+        onClick={(e) => e.stopPropagation()}
+        className="spotlight-modal-card"
+      >
       {/* ==================================================================== */}
       {/* 1. Top Specular Border Rim                                           */}
       {/* ==================================================================== */}
@@ -1667,6 +1654,7 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
         </div>
       </div>
     </motion.div>
+  </div>
   );
 };
 

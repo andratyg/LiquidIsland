@@ -6,27 +6,11 @@ import { Volume2, SunMedium } from 'lucide-react';
 import { IslandDimensions } from '../types/liquid';
 import { CatCompanion } from './companions/CatCompanion';
 
-// Safe Tauri IPC invoker with web browser fallback
-async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
-  try {
-    const isTauri =
-      typeof window !== 'undefined' &&
-      ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
-    if (!isTauri) return null;
-    const { invoke } = await import('@tauri-apps/api/core');
-    return await invoke<T>(cmd, args);
-  } catch (err) {
-    console.warn(`[Tauri IPC] "${cmd}" returned:`, err);
-    return null;
-  }
-}
-
 interface IslandShellProps {
   children?: React.ReactNode;
   activeDimensions: IslandDimensions;
   onHoverChange?: (hovered: boolean) => void;
   isJellyBouncing?: boolean;
-  isModalOpen?: boolean;
 }
 
 export const IslandShell: React.FC<IslandShellProps> = ({
@@ -34,7 +18,6 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   activeDimensions,
   onHoverChange,
   isJellyBouncing = false,
-  isModalOpen = false,
 }) => {
   const islandState = useSystemStore((s) => s.islandState);
   const currentVolume = useSystemStore((s) => s.volume);
@@ -75,31 +58,27 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     shellRef.current.style.setProperty('--mouse-y', `${y}px`);
   }, []);
 
-  // Dynamic Cursor Click-Through on Enter
-  const handleMouseEnter = useCallback(async () => {
+  // Dynamic Cursor Tracking on Enter
+  const handleMouseEnter = useCallback(() => {
     if (islandState === 'bezel-line') {
       setIsMagneticHover(true);
     }
     onHoverChange?.(true);
-    await safeInvoke('set_click_through', { ignore: false });
   }, [islandState, onHoverChange]);
 
-  // Dynamic Cursor Click-Through on Leave
-  const handleMouseLeave = useCallback(async () => {
+  // Dynamic Cursor Tracking on Leave
+  const handleMouseLeave = useCallback(() => {
     setIsMagneticHover(false);
     onHoverChange?.(false);
-    if (!isModalOpen) {
-      await safeInvoke('set_click_through', { ignore: true });
-    }
-  }, [onHoverChange, isModalOpen]);
+  }, [onHoverChange]);
 
   // Double-Click Notch to Expand into Dashboard
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     const current = systemStore.getState().islandState;
-    if (current === 'compact' || current === 'eyes') {
+    if (current === 'compact' || current === 'eyes' || current === 'bezel-line') {
       playGlassPop();
-      systemStore.expandIsland();
+      systemStore.setIslandState('expanded');
     }
   }, []);
 
@@ -158,12 +137,12 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     [islandState]
   );
 
-  // Wake Island from Stealth Bezel Line to Compact
+  // Wake Island from Stealth Bezel Line to Expanded Dashboard
   const handleWakeFromBezel = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       playGlassPop();
-      systemStore.setIslandState('compact');
+      systemStore.setIslandState('expanded');
     },
     []
   );
@@ -187,11 +166,13 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       onMouseLeave={handleMouseLeave}
       onDoubleClick={handleDoubleClick}
       style={{
-        position: 'relative',
+        position: 'absolute',
+        top: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        margin: '0 auto',
       }}
     >
       {/* ==================================================================== */}

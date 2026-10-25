@@ -194,11 +194,10 @@ export const CompanionStage: React.FC<CompanionStageProps> = ({
   // Expand into Full Dashboard (Click on Companion)
   const handleStageClick = useCallback(
     (_e: React.MouseEvent) => {
-      if (effectivePetting || effectiveFileDrag) return;
       playGlassPop();
-      systemStore.expandIsland();
+      systemStore.setIslandState('expanded');
     },
-    [effectivePetting, effectiveFileDrag]
+    []
   );
 
   // Expand directly to Slide 1 (Music + Synced Lyrics)

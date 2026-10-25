@@ -21,10 +21,15 @@ pub fn run() {
                 eprintln!("[LiquidIsland Tray] Failed to initialize system tray: {}", e);
             }
 
-            // Center window on primary monitor & set initial click-through
+            // Center window on primary monitor, restore taskbar region & start cursor hit-test loop
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window_manager::center_on_monitor(window.as_ref().window().clone(), 0);
-                let _ = window.set_ignore_cursor_events(true);
+                // Ensure native Windows taskbar region is clean
+                taskbar::restore_default_taskbar();
+                // Default clickable on startup so the Island is always interactive
+                let _ = window.set_ignore_cursor_events(false);
+                // Start background Win32 GetCursorPos hit-test thread (35ms)
+                window_manager::start_hit_test_loop(window.as_ref().window().clone());
             }
 
             Ok(())
@@ -32,6 +37,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             memory::trim_ram_working_set,
             window_manager::set_click_through,
+            window_manager::update_hit_box,
             window_manager::center_on_monitor,
             window_manager::get_monitors_list,
             window_manager::set_window_size,
@@ -41,6 +47,7 @@ pub fn run() {
             window_hooks::check_fullscreen_state,
             taskbar::apply_taskbar_mode,
             taskbar::restore_default_taskbar,
+            taskbar::restart_windows_explorer,
             clipboard_ports::scan_active_dev_ports,
             clipboard_ports::kill_dev_port,
         ])

@@ -8,7 +8,6 @@ import { CompanionStage } from './components/companions/CompanionStage';
 import { ExpandedContainer } from './components/ExpandedContainer';
 import { ToastView } from './components/ToastView';
 import { SpotlightModal } from './components/SpotlightModal';
-import { TaskbarPreviewDock } from './components/TaskbarPreviewDock';
 import { SettingsModal } from './components/SettingsModal';
 import {
   Sun,
@@ -219,6 +218,28 @@ export const App: React.FC = () => {
           break;
         }
 
+        case 'toggle_taskbar_dock': {
+          playToggleClick();
+          systemStore.toggleTaskbarDock();
+          const nextDock = systemStore.getState().showTaskbarDock;
+          setStatusMsg(`Taskbar Dock: ${nextDock ? 'SHOWN' : 'HIDDEN'}`);
+          break;
+        }
+
+        case 'restore_native_taskbar': {
+          playWaterDrop();
+          safeInvoke('restore_default_taskbar');
+          setStatusMsg('Windows Taskbar Restored');
+          break;
+        }
+
+        case 'restart_explorer': {
+          playWaterDrop();
+          safeInvoke('restart_windows_explorer');
+          setStatusMsg('Restarting Windows Explorer...');
+          break;
+        }
+
         case 'quit_app': {
           playToggleClick();
           setStatusMsg('Exiting LiquidIsland...');
@@ -233,10 +254,10 @@ export const App: React.FC = () => {
     [syncTrayTooltip]
   );
 
-  // Synchronize Taskbar Mode with native Win32 backend via Tauri IPC
+  // Ensure native Windows Taskbar region is unclipped and healthy on mount
   useEffect(() => {
-    safeInvoke('apply_taskbar_mode', { mode: taskbarMode, theme });
-  }, [taskbarMode, theme]);
+    safeInvoke('restore_default_taskbar');
+  }, []);
 
   // Subscribe to native Windows Tray events via Tauri IPC
   useEffect(() => {
@@ -432,10 +453,41 @@ export const App: React.FC = () => {
     return () => clearInterval(fsTimer);
   }, [autoFullscreenStealth]);
 
-  // Initial mount: Immediately enable click-through so transparent area never blocks underlying apps
+  // Synchronize dynamic hit-box with native Rust Win32 GetCursorPos tracker (35ms loop)
   useEffect(() => {
-    safeInvoke('set_click_through', { ignore: true });
-  }, []);
+    let width = 210;
+    let height = 56;
+
+    if (islandState === 'bezel-line') {
+      width = 160;
+      height = 28;
+    } else if (islandState === 'eyes') {
+      width = isAudioPlaying ? 380 : 200;
+      height = isAudioPlaying ? 60 : 56;
+    } else if (islandState === 'compact') {
+      width = 210;
+      height = 56;
+    } else if (islandState === 'toast') {
+      width = 350;
+      height = 80;
+    } else if (islandState === 'expanded') {
+      width = 460;
+      height = 195;
+    } else if (islandState === 'expanded-lyrics') {
+      width = 620;
+      height = 195;
+    }
+
+    const modalOpen = Boolean(
+      spotlightOpen || showSettingsModal || showDevControls
+    );
+
+    safeInvoke('update_hit_box', {
+      width,
+      height,
+      modalOpen,
+    });
+  }, [islandState, isAudioPlaying, spotlightOpen, showSettingsModal, showDevControls]);
 
   // Collapse Island when clicking outside #liquid-island-root
   useEffect(() => {
@@ -453,15 +505,13 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
-  // Dynamic Window Resizing for Spotlight & Settings Modals (620px when open, 210px when closed)
+  // Dynamic Window Resizing for Spotlight & Settings Modals (960px when open, 210px when closed)
   useEffect(() => {
     async function updateWindowSize() {
       if (spotlightOpen || showSettingsModal) {
-        await safeInvoke('set_window_size', { width: 640, height: 620 });
-        await safeInvoke('set_click_through', { ignore: false });
+        await safeInvoke('set_window_size', { width: 720, height: 960 });
       } else {
         await safeInvoke('set_window_size', { width: 640, height: 210 });
-        await safeInvoke('set_click_through', { ignore: true });
       }
     }
     updateWindowSize();
@@ -491,7 +541,6 @@ export const App: React.FC = () => {
       <IslandShell
         activeDimensions={activeDimensions}
         isJellyBouncing={isJellyBouncing}
-        isModalOpen={spotlightOpen || showSettingsModal}
       >
         <AnimatePresence mode="wait">
           {!islandEnabled ? (
@@ -609,17 +658,6 @@ export const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* ==================================================================== */}
-      {/* Bottom Liquid Glass Taskbar & System Tray (Options A / B / C)        */}
-      {/* Only rendered in dev mode when enabled                               */}
-      {/* ==================================================================== */}
-      {showDevControls && showTaskbarDock && (
-        <TaskbarPreviewDock
-          onOpenSettings={() => setShowSettingsModal(true)}
-          onOpenSpotlight={() => systemStore.setSpotlightOpen(true)}
-          onTrayAction={(act) => handleTrayAction({ action: act })}
-        />
-      )}
 
       {/* ==================================================================== */}
       {/* Full Settings Dashboard & Companion Character Studio                 */}
