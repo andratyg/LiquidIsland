@@ -20,6 +20,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   isJellyBouncing = false,
 }) => {
   const islandState = useSystemStore((s) => s.islandState);
+  const toastPayload = useSystemStore((s) => s.toastPayload);
   const currentVolume = useSystemStore((s) => s.volume);
   const companionMode = useSystemStore((s) => s.companionMode);
   const companionColor = useSystemStore((s) => s.companionColor);
@@ -344,10 +345,14 @@ export const IslandShell: React.FC<IslandShellProps> = ({
 
   const isBezelLine = islandState === 'bezel-line';
 
+  const isHudToast = islandState === 'toast' && toastPayload?.type === 'hud';
+
   // Dynamic bottom squircle radii
   const bottomCornerRadius =
     islandState === 'expanded' || islandState === 'expanded-lyrics'
       ? '34px'
+      : isHudToast
+      ? '22px'
       : islandState === 'toast'
       ? '32px'
       : islandState === 'bezel-line'

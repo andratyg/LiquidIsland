@@ -220,6 +220,19 @@ function emitChange() {
   }
 }
 
+async function safeEmit(event: string, payload?: unknown) {
+  try {
+    const isTauri =
+      typeof window !== 'undefined' &&
+      ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (!isTauri) return;
+    const { emit } = await import('@tauri-apps/api/event');
+    await emit(event, payload);
+  } catch {
+    // Non-fatal
+  }
+}
+
 async function syncToOtherWindows(updated: SystemSettings) {
   try {
     const isTauri =
@@ -832,6 +845,24 @@ export const systemStore = {
         icon: 'pin',
         ...payload,
       };
+    } else if (type === 'wifi') {
+      playWaterDrop();
+      fullPayload = {
+        type: 'wifi',
+        title: payload?.title ?? 'Wi-Fi Connected',
+        subtitle: payload?.subtitle ?? (currentSettings.networkSsid || 'Home-WiFi-5G'),
+        icon: 'wifi',
+        ...payload,
+      };
+    } else if (type === 'bluetooth') {
+      playWaterDrop();
+      fullPayload = {
+        type: 'bluetooth',
+        title: payload?.title ?? 'Bluetooth Connected',
+        subtitle: payload?.subtitle ?? 'AirBuds Pro Connected',
+        icon: 'bluetooth',
+        ...payload,
+      };
     } else {
       fullPayload = {
         type: 'airbuds',
@@ -846,6 +877,8 @@ export const systemStore = {
       islandState: 'toast',
       toastPayload: fullPayload,
     });
+
+    safeEmit('system-toast', { type, payload: fullPayload });
 
     const autoRevertMs = (type === 'charging' || type === 'unplugged') ? 3000 : (type === 'hud' ? 2000 : 3200);
     toastTimeoutId = setTimeout(() => {
@@ -1079,17 +1112,36 @@ export const systemStore = {
 
   toggleWifi() {
     playToggleClick();
-    saveSettings({ ...currentSettings, isWifiEnabled: !currentSettings.isWifiEnabled });
+    const next = !currentSettings.isWifiEnabled;
+    saveSettings({ ...currentSettings, isWifiEnabled: next });
+    this.triggerToast('wifi', {
+      title: next ? 'Wi-Fi Connected' : 'Wi-Fi Disconnected',
+      subtitle: next ? (currentSettings.networkSsid || 'Home-WiFi-5G') : 'Turned Off',
+    });
   },
 
   toggleBluetooth() {
     playToggleClick();
-    saveSettings({ ...currentSettings, isBluetoothEnabled: !currentSettings.isBluetoothEnabled });
+    const next = !currentSettings.isBluetoothEnabled;
+    saveSettings({ ...currentSettings, isBluetoothEnabled: next });
+    this.triggerToast('bluetooth', {
+      title: next ? 'Bluetooth Connected' : 'Bluetooth Disconnected',
+      subtitle: next ? 'AirBuds Pro Connected' : 'Turned Off',
+    });
   },
 
   toggleAirplaneMode() {
     playToggleClick();
-    saveSettings({ ...currentSettings, isAirplaneMode: !currentSettings.isAirplaneMode });
+    const next = !currentSettings.isAirplaneMode;
+    saveSettings({
+      ...currentSettings,
+      isAirplaneMode: next,
+      ...(next ? { isWifiEnabled: false, isBluetoothEnabled: false } : {}),
+    });
+    this.triggerToast('workspace', {
+      title: next ? 'Airplane Mode Enabled' : 'Airplane Mode Disabled',
+      subtitle: next ? 'All wireless radios off' : 'Wi-Fi & Bluetooth available',
+    });
   },
 
   setPowerMode(powerMode: 'balanced' | 'performance' | 'saver') {

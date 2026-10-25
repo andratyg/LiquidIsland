@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useSystemStore, systemStore } from '../store/useSystemStore';
 import {
   Bluetooth,
+  Wifi,
   Mic,
   MicOff,
   Layers,
@@ -460,6 +461,135 @@ export const ToastView: React.FC = () => {
             }}
           >
             {batteryPct}%
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 2b. Wi-Fi Status Alert                                                */}
+      {/* ==================================================================== */}
+      {type === 'wifi' && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            height: '100%',
+          }}
+        >
+          {/* Left: Glowing Wi-Fi with acoustic arcs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(56, 189, 248, 0.16)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.6))',
+              }}
+            >
+              <Wifi size={16} color="#38bdf8" />
+            </div>
+
+            <svg width="18" height="24" viewBox="0 0 18 24" fill="none" style={{ opacity: 0.9 }}>
+              <path
+                d="M 2 8 A 6 6 0 0 1 2 16"
+                stroke="#38bdf8"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+              <path
+                d="M 7 5 A 11 11 0 0 1 7 19"
+                stroke="#38bdf8"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                opacity="0.75"
+              />
+              <path
+                d="M 12 2 A 16 16 0 0 1 12 22"
+                stroke="#38bdf8"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                opacity="0.45"
+              />
+            </svg>
+          </div>
+
+          {/* Center: Title & Subtitle */}
+          <div
+            style={{
+              flex: 1,
+              marginLeft: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              lineHeight: 1.25,
+            }}
+          >
+            <div
+              style={{
+                fontSize: '13.5px',
+                fontWeight: 600,
+                color: '#ffffff',
+                letterSpacing: '-0.2px',
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span>{subtitle}</span>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '50%',
+                  backgroundColor: '#38bdf8',
+                  opacity: 0.8,
+                }}
+              />
+              <span style={{ fontSize: '10px', opacity: 0.8 }}>Wi-Fi 6</span>
+            </div>
+          </div>
+
+          {/* Right: Sonar Pulse Ring & Dismiss */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            <div className="toast-sonar-ring" title="Connected">
+              <div className="toast-sonar-pulse" style={{ borderColor: 'rgba(56, 189, 248, 0.5)' }} />
+              <div className="toast-sonar-dot" style={{ backgroundColor: '#38bdf8' }} />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDismiss}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '2px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                opacity: 0.6,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              title="Dismiss"
+            >
+              <X size={13} />
+            </button>
           </div>
         </div>
       )}

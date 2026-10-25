@@ -17,7 +17,7 @@ pub fn run() {
             memory::start_ram_trimmer_thread();
 
             // Initial memory trim
-            memory::trim_ram_working_set_internal();
+            memory::trim_ram_working_set_internal(true);
 
             // Create native Windows System Tray (^) and context menu
             if let Err(e) = tray::create_tray(app.handle()) {

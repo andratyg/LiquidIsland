@@ -12,7 +12,7 @@ pub struct TrayActionPayload {
 }
 
 pub const TRAY_ID: &str = "main-tray";
-pub const DEFAULT_TOOLTIP: &str = "LiquidIsland OS - Active (~9.2 MB RAM)";
+pub const DEFAULT_TOOLTIP: &str = "LiquidIsland OS - Active (<= 20.0 MB RAM Tier)";
 
 /// Builds the native Windows System Tray icon, menu, and event handlers
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -35,7 +35,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let toggle_dev = MenuItemBuilder::with_id("toggle_dev_controls", "Developer Controls Toolbar (Ctrl+Shift+D)")
         .build(app)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let trim_ram = MenuItemBuilder::with_id("trim_ram", "Optimize RAM Now (~10 MB Trimmer)")
+    let trim_ram = MenuItemBuilder::with_id("trim_ram", "Optimize RAM Now (Smart 20 MB Governor)")
         .build(app)?;
     let quit_app = MenuItemBuilder::with_id("quit_app", "Quit LiquidIsland OS")
         .build(app)?;
@@ -117,7 +117,7 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         let is_visible = window.is_visible().unwrap_or(true);
                         if is_visible {
                             let _ = window.hide();
-                            let ram = memory::trim_ram_working_set_internal();
+                            let ram = memory::trim_ram_working_set_internal(true);
                             let payload = TrayActionPayload {
                                 action: "toggle_power".to_string(),
                                 ram_mb: Some(ram),
@@ -195,9 +195,9 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     let _ = app.emit("tray-command", &payload);
                 }
                 "trim_ram" => {
-                    let ram_mb = memory::trim_ram_working_set_internal();
+                    let ram_mb = memory::trim_ram_working_set_internal(true);
                     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-                        let tooltip = format!("LiquidIsland OS - Active (~{:.1} MB RAM)", ram_mb);
+                        let tooltip = format!("LiquidIsland OS - Active ({:.1} MB / 20.0 MB)", ram_mb);
                         let _ = tray.set_tooltip(Some(tooltip));
                     }
                     let payload = TrayActionPayload {

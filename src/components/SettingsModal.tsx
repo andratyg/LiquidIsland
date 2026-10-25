@@ -867,31 +867,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               background: isDark ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.03)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    backgroundColor: '#22c55e',
+                    boxShadow: '0 0 6px #22c55e',
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Cpu size={12} strokeWidth={1.8} style={{ color: isDark ? '#94a3b8' : '#64748b' }} />
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: isDark ? '#ffffff' : '#0f172a',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {localRam ? `${localRam.toFixed(1)} MB` : '12.4 MB'} / 20.0 MB
+                  </span>
+                  <span style={{ fontSize: '9.5px', color: isDark ? '#64748b' : '#94a3b8' }}>
+                    (20 MB Tier)
+                  </span>
+                </div>
+              </div>
+
+              {/* Sleek Visual Micro Progress Bar */}
               <div
                 style={{
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  backgroundColor: '#22c55e',
-                  boxShadow: '0 0 6px #22c55e',
+                  width: '148px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+                  overflow: 'hidden',
+                  marginLeft: '15px',
                 }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Cpu size={12} strokeWidth={1.8} style={{ color: isDark ? '#94a3b8' : '#64748b' }} />
-                <span
+              >
+                <div
                   style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: isDark ? '#ffffff' : '#0f172a',
-                    fontVariantNumeric: 'tabular-nums',
+                    height: '100%',
+                    width: `${Math.min(100, Math.max(5, ((localRam ?? 12.4) / 20.0) * 100))}%`,
+                    borderRadius: '2px',
+                    backgroundColor: (localRam ?? 12.4) > 18.5 ? '#f59e0b' : '#22c55e',
+                    boxShadow: '0 0 6px rgba(34, 197, 94, 0.4)',
+                    transition: 'width 0.3s ease',
                   }}
-                >
-                  {localRam ? `${localRam.toFixed(1)} MB` : '~8.5 MB'}
-                </span>
-                <span style={{ fontSize: '10px', color: isDark ? '#64748b' : '#94a3b8' }}>
-                  RAM Working Set
-                </span>
+                />
               </div>
             </div>
 

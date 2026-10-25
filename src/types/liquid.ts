@@ -74,7 +74,9 @@ export type ToastType =
   | 'hud'
   | 'desktop-switch'
   | 'window-pin'
-  | 'workspace';
+  | 'workspace'
+  | 'wifi'
+  | 'bluetooth';
 
 export type BatteryStatus = 'charging' | 'unplugged' | 'low' | 'guard' | 'normal';
 
@@ -84,7 +86,7 @@ export interface ToastPayload {
   subtitle: string;
   value?: number;               // 0–100 or metric
   percent?: number;             // Battery / Device %
-  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin' | 'workspace';
+  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin' | 'workspace' | 'wifi' | 'bluetooth';
   hudType?: 'volume' | 'brightness' | 'mic';
   hudValue?: number;            // 0–100
   isMicMuted?: boolean;

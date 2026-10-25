@@ -96,6 +96,19 @@ export const LaunchpadModal: React.FC<LaunchpadModalProps> = ({ onClose, onOpenS
     return () => clearTimeout(t);
   }, []);
 
+  // Global Escape key listener to dismiss Launchpad
+  useEffect(() => {
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        playToggleClick();
+        onClose();
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [onClose]);
+
   // Filter apps by query & category
   const filteredApps = useMemo(() => {
     let list = apps;
@@ -155,14 +168,12 @@ export const LaunchpadModal: React.FC<LaunchpadModalProps> = ({ onClose, onOpenS
         position: 'fixed',
         inset: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.45)',
-        backdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(12px)',
         zIndex: 99998,
         display: 'flex',
-        alignItems: 'flex-end',
+        alignItems: 'center',
         justifyContent: 'center',
-        paddingBottom: '68px',
-        paddingLeft: '20px',
-        paddingRight: '20px',
+        padding: '20px',
         pointerEvents: 'auto',
       }}
     >
@@ -175,9 +186,10 @@ export const LaunchpadModal: React.FC<LaunchpadModalProps> = ({ onClose, onOpenS
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
         style={{
-          width: '600px',
-          height: '420px',
-          maxHeight: '425px',
+          width: '640px',
+          maxWidth: '94vw',
+          height: '520px',
+          maxHeight: '560px',
           borderRadius: '26px',
           backgroundColor:
             theme === 'light' ? 'rgba(255, 255, 255, 0.96)' : 'rgba(15, 23, 42, 0.94)',
@@ -186,8 +198,8 @@ export const LaunchpadModal: React.FC<LaunchpadModalProps> = ({ onClose, onOpenS
           backdropFilter: 'blur(36px) saturate(210%)',
           border: '1px solid rgba(255, 255, 255, 0.16)',
           boxShadow:
-            '0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.25)',
-          padding: '18px 22px',
+            '0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 1px rgba(255, 255, 255, 0.06)',
+          padding: '20px 24px',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',

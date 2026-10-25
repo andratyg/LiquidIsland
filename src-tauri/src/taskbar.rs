@@ -106,15 +106,15 @@ pub unsafe fn extract_exe_icon_base64(exe_path: &str) -> Option<String> {
     }
 
     let hicon = shfi.h_icon;
-    let width = 32i32;
-    let height = 32i32;
+    let width = 48i32;
+    let height = 48i32;
 
     let screen_dc = GetDC(std::ptr::null_mut());
     let mem_dc = CreateCompatibleDC(screen_dc);
     let hbitmap = CreateCompatibleBitmap(screen_dc, width, height);
     let old_bmp = SelectObject(mem_dc, hbitmap);
 
-    // DrawIconEx automatically scales any 16x16, 48x48, 64x64 or 256x256 icon cleanly into the exact 32x32 canvas
+    // DrawIconEx automatically scales any 16x16, 32x32, 64x64 or 256x256 icon cleanly into high-DPI 48x48 canvas
     DrawIconEx(
         mem_dc,
         0,

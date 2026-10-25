@@ -19,10 +19,37 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongW, GetWindowRect,
-    GetWindowTextW, GetWindowThreadProcessId, SetWindowPos, GWL_EXSTYLE, HWND_NOTOPMOST,
-    HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, WS_EX_TOPMOST,
+    FindWindowExW, FindWindowW, GetDesktopWindow, GetForegroundWindow, GetShellWindow,
+    GetWindowLongW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, SetWindowPos,
+    ShowWindow, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, WS_EX_TOPMOST,
 };
+
+#[cfg(windows)]
+unsafe fn suppress_native_windows_osd() {
+    // 1. Windows 10/11 MediaFlyout / OSD host ("NativeHWNDHost" with "DirectUIHWND")
+    let class_native: Vec<u16> = "NativeHWNDHost\0".encode_utf16().collect();
+    let mut hwnd = FindWindowW(class_native.as_ptr(), std::ptr::null());
+    let mut iterations = 0;
+    while !hwnd.is_null() && iterations < 8 {
+        let class_direct: Vec<u16> = "DirectUIHWND\0".encode_utf16().collect();
+        let child = FindWindowExW(hwnd, std::ptr::null_mut(), class_direct.as_ptr(), std::ptr::null());
+        if !child.is_null() {
+            ShowWindow(hwnd, SW_HIDE);
+            SetWindowPos(hwnd, std::ptr::null_mut(), -9999, -9999, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE);
+        }
+        hwnd = FindWindowExW(std::ptr::null_mut(), hwnd, class_native.as_ptr(), std::ptr::null());
+        iterations += 1;
+    }
+
+    // 2. Modern Windows Hardware Notification Window ("HardwareNotificationWindow")
+    let class_hw: Vec<u16> = "HardwareNotificationWindow\0".encode_utf16().collect();
+    let hw_hwnd = FindWindowW(class_hw.as_ptr(), std::ptr::null());
+    if !hw_hwnd.is_null() {
+        ShowWindow(hw_hwnd, SW_HIDE);
+        SetWindowPos(hw_hwnd, std::ptr::null_mut(), -9999, -9999, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE);
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WorkspaceActivityPayload {
@@ -186,14 +213,20 @@ pub fn start_workspace_activity_listener(window: Window) {
             let mut tick_count: u32 = 0;
 
             loop {
-                std::thread::sleep(Duration::from_millis(40));
+                std::thread::sleep(Duration::from_millis(25));
                 tick_count = tick_count.wrapping_add(1);
+
+                // Helper to detect both current state (0x8000) and transition state (0x0001) for ultra-fast taps (<30ms)
+                let is_key_down = |vk: i32| -> bool {
+                    let s = GetAsyncKeyState(vk) as u16;
+                    (s & 0x8000) != 0 || (s & 0x0001) != 0
+                };
 
                 // -----------------------------------------------------------
                 // Global Hotkey: Alt + S (Toggle Spotlight Search)
                 // -----------------------------------------------------------
-                let alt_down = (GetAsyncKeyState(VK_MENU as i32) as u16 & 0x8000) != 0;
-                let s_down = (GetAsyncKeyState(0x53) as u16 & 0x8000) != 0; // 0x53 = 'S'
+                let alt_down = is_key_down(VK_MENU as i32);
+                let s_down = is_key_down(0x53); // 0x53 = 'S'
 
                 if alt_down && s_down {
                     if !last_alt_s_down {
@@ -207,19 +240,22 @@ pub fn start_workspace_activity_listener(window: Window) {
                 // -----------------------------------------------------------
                 // Dedicated Volume & Screen Brightness Hardware HUD Keys
                 // -----------------------------------------------------------
-                let vol_up_down = (GetAsyncKeyState(0xAF) as u16 & 0x8000) != 0; // VK_VOLUME_UP
-                let vol_down_down = (GetAsyncKeyState(0xAE) as u16 & 0x8000) != 0; // VK_VOLUME_DOWN
-                let mute_down = (GetAsyncKeyState(0xAD) as u16 & 0x8000) != 0; // VK_VOLUME_MUTE
+                let vol_up_down = is_key_down(0xAF); // VK_VOLUME_UP
+                let vol_down_down = is_key_down(0xAE); // VK_VOLUME_DOWN
+                let mute_down = is_key_down(0xAD); // VK_VOLUME_MUTE
 
-                let arrow_up_down = (GetAsyncKeyState(0x26) as u16 & 0x8000) != 0; // VK_UP
-                let arrow_down_down = (GetAsyncKeyState(0x28) as u16 & 0x8000) != 0; // VK_DOWN
+                let arrow_up_down = is_key_down(0x26); // VK_UP
+                let arrow_down_down = is_key_down(0x28); // VK_DOWN
+                let oem_bright_up = is_key_down(0xE9); // VK_BRIGHTNESS_UP
+                let oem_bright_down = is_key_down(0xEA); // VK_BRIGHTNESS_DOWN
 
-                let bright_up_down = alt_down && arrow_up_down;
-                let bright_down_down = alt_down && arrow_down_down;
+                let bright_up_down = oem_bright_up || (alt_down && arrow_up_down);
+                let bright_down_down = oem_bright_down || (alt_down && arrow_down_down);
 
                 if vol_up_down {
                     if !last_vol_up {
                         last_vol_up = true;
+                        suppress_native_windows_osd();
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "volume".to_string(),
                             delta: 4,
@@ -232,6 +268,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if vol_down_down {
                     if !last_vol_down {
                         last_vol_down = true;
+                        suppress_native_windows_osd();
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "volume".to_string(),
                             delta: -4,
@@ -244,6 +281,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if mute_down {
                     if !last_mute {
                         last_mute = true;
+                        suppress_native_windows_osd();
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "mute".to_string(),
                             delta: 0,
@@ -256,6 +294,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if bright_up_down {
                     if !last_bright_up {
                         last_bright_up = true;
+                        suppress_native_windows_osd();
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "brightness".to_string(),
                             delta: 5,
@@ -268,6 +307,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if bright_down_down {
                     if !last_bright_down {
                         last_bright_down = true;
+                        suppress_native_windows_osd();
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "brightness".to_string(),
                             delta: -5,
@@ -280,11 +320,10 @@ pub fn start_workspace_activity_listener(window: Window) {
                 // -----------------------------------------------------------
                 // Case 3: Virtual Desktop Switch (Ctrl + Win + Left/Right)
                 // -----------------------------------------------------------
-                let ctrl_down = (GetAsyncKeyState(VK_CONTROL as i32) as u16 & 0x8000) != 0;
-                let win_down = (GetAsyncKeyState(VK_LWIN as i32) as u16 & 0x8000) != 0
-                    || (GetAsyncKeyState(VK_RWIN as i32) as u16 & 0x8000) != 0;
-                let left_down = (GetAsyncKeyState(VK_LEFT as i32) as u16 & 0x8000) != 0;
-                let right_down = (GetAsyncKeyState(VK_RIGHT as i32) as u16 & 0x8000) != 0;
+                let ctrl_down = is_key_down(VK_CONTROL as i32);
+                let win_down = is_key_down(VK_LWIN as i32) || is_key_down(VK_RWIN as i32);
+                let left_down = is_key_down(VK_LEFT as i32);
+                let right_down = is_key_down(VK_RIGHT as i32);
 
                 if ctrl_down && win_down {
                     if left_down && !last_left_down {
@@ -311,8 +350,8 @@ pub fn start_workspace_activity_listener(window: Window) {
                 last_left_down = left_down;
                 last_right_down = right_down;
 
-                // Only check foreground window every 5 ticks (~200ms) to conserve CPU
-                if tick_count % 5 != 0 {
+                // Only check foreground window every 8 ticks (~200ms at 25ms loop) to conserve CPU
+                if tick_count % 8 != 0 {
                     continue;
                 }
 

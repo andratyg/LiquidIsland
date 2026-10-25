@@ -280,10 +280,12 @@ export const App: React.FC = () => {
     let unlistenSettingsUpdated: (() => void) | null = null;
     let unlistenSpotlight: (() => void) | null = null;
     let unlistenLaunchpad: (() => void) | null = null;
+    let unlistenToggleLaunchpad: (() => void) | null = null;
     let unlistenSettings: (() => void) | null = null;
     let unlistenSlide: (() => void) | null = null;
     let unlistenWorkspace: (() => void) | null = null;
     let unlistenHud: (() => void) | null = null;
+    let unlistenToast: (() => void) | null = null;
     let isMounted = true;
 
     async function registerTrayListeners() {
@@ -354,10 +356,28 @@ export const App: React.FC = () => {
         });
         unlistenSpotlight = sub6;
 
-        const sub6b = await listen('open-launchpad', () => {
-          systemStore.toggleLaunchpad();
+        const handleLaunchpadToggle = async (openState?: boolean) => {
+          const current = systemStore.getState().launchpadOpen;
+          const next = typeof openState === 'boolean' ? openState : !current;
+          systemStore.setLaunchpadOpen(next);
+          if (next) {
+            await safeInvoke('set_window_size', { width: 680, height: 640 });
+            safeInvoke('update_hit_box', { width: 640, height: 640, modalOpen: true });
+          } else {
+            await safeInvoke('set_window_size', { width: 640, height: 240 });
+            safeInvoke('update_hit_box', { width: 184, height: 40, modalOpen: false });
+          }
+        };
+
+        const sub6b = await listen<{ open?: boolean }>('open-launchpad', (event) => {
+          handleLaunchpadToggle(event.payload?.open);
         });
         unlistenLaunchpad = sub6b;
+
+        const sub6c = await listen<{ open?: boolean }>('toggle-launchpad', (event) => {
+          handleLaunchpadToggle(event.payload?.open);
+        });
+        unlistenToggleLaunchpad = sub6c;
 
         const sub7 = await listen('open-settings', () => {
           setShowSettingsModal(true);
@@ -390,6 +410,13 @@ export const App: React.FC = () => {
           }
         });
         unlistenHud = sub10;
+
+        const sub11 = await listen<{ type: any; payload?: any }>('system-toast', (event) => {
+          if (event.payload) {
+            systemStore.triggerToast(event.payload.type, event.payload.payload);
+          }
+        });
+        unlistenToast = sub11;
       } catch (err) {
         console.warn('[Tauri Event Listener] Failed to subscribe to tray/media/hardware events:', err);
       }
@@ -407,10 +434,12 @@ export const App: React.FC = () => {
       if (unlistenSettingsUpdated) unlistenSettingsUpdated();
       if (unlistenSpotlight) unlistenSpotlight();
       if (unlistenLaunchpad) unlistenLaunchpad();
+      if (unlistenToggleLaunchpad) unlistenToggleLaunchpad();
       if (unlistenSettings) unlistenSettings();
       if (unlistenSlide) unlistenSlide();
       if (unlistenWorkspace) unlistenWorkspace();
       if (unlistenHud) unlistenHud();
+      if (unlistenToast) unlistenToast();
     };
   }, [handleTrayAction]);
 
@@ -692,7 +721,7 @@ export const App: React.FC = () => {
     : isWorkspaceToast
     ? { width: 380, height: 64 }
     : isHudToast
-    ? { width: 340, height: 56 }
+    ? { width: 320, height: 56 }
     : islandState === 'toast'
     ? { width: 340, height: 64 }
     : ISLAND_DIMENSIONS[islandState] || ISLAND_DIMENSIONS['compact'];

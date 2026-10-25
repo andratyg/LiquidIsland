@@ -314,6 +314,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
   // Fix Stage 2: Supercharged System Tray & Smart Dock Auto-Hide
   const isDockPinned = useSystemStore((s) => s.dockPinned ?? false);
+  const isLaunchpadOpen = useSystemStore((s) => s.launchpadOpen);
   const networkSsid = useSystemStore((s) => s.networkSsid ?? 'Home-WiFi-5G');
   const isWifiEnabled = useSystemStore((s) => s.isWifiEnabled ?? true);
   const isBluetoothEnabled = useSystemStore((s) => s.isBluetoothEnabled ?? true);
@@ -334,9 +335,10 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
   const flyoutRef = useRef<HTMLDivElement>(null);
 
-  // Effective Dock Visibility for Spring Auto-Hide
+  // Effective Dock Visibility for Spring Auto-Hide (keep visible when Launchpad or flyout open)
   const effectiveDockVisible =
     isDockPinned ||
+    isLaunchpadOpen ||
     activeFlyout !== null ||
     showContextMenu ||
     isDockHovered ||
@@ -346,6 +348,33 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   useEffect(() => {
     safeInvoke('set_dock_pinned', { pinned: isDockPinned });
   }, [isDockPinned]);
+
+  // Synchronize Launchpad & Flyout active interactive hit zone (up to 510px) with taskbar.rs
+  useEffect(() => {
+    safeInvoke('set_taskbar_flyout_open', { open: isLaunchpadOpen || activeFlyout !== null });
+  }, [isLaunchpadOpen, activeFlyout]);
+
+  // Global listener for open-launchpad event
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let isMounted = true;
+    async function listenLaunchpad() {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        if (!isMounted) return;
+        unlisten = await listen('open-launchpad', () => {
+          systemStore.setLaunchpadOpen(true);
+        });
+      } catch (err) {
+        console.warn('[Launchpad Event] Listener error:', err);
+      }
+    }
+    listenLaunchpad();
+    return () => {
+      isMounted = false;
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   // 1. Hide Native Windows Taskbar on mount, restore on unmount
   useEffect(() => {
@@ -557,9 +586,11 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
   const triggerOpenLaunchpad = () => {
     playGlassPop();
     closeAllFlyouts();
-    systemStore.toggleLaunchpad();
+    const next = !isLaunchpadOpen;
+    systemStore.setLaunchpadOpen(next);
+    safeEmit('toggle-launchpad', { open: next });
+    safeEmit('open-launchpad', { open: next });
     if (onOpenLaunchpad) onOpenLaunchpad();
-    safeEmit('open-launchpad');
   };
 
   const triggerOpenSettings = () => {
@@ -938,6 +969,26 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         <Wifi size={14} style={{ color: isWifiEnabled ? '#38bdf8' : '#94a3b8' }} />
       </button>
 
+      {/* 3b. Bluetooth Icon (Click opens Network & Bluetooth Control Center) */}
+      <button
+        type="button"
+        style={{
+          background: activeFlyout === 'network' ? 'rgba(129, 140, 248, 0.2)' : 'none',
+          border: activeFlyout === 'network' ? '1px solid rgba(129, 140, 248, 0.45)' : 'none',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          padding: '4px',
+          color: 'var(--text-primary)',
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+        onClick={() => openFlyout('network')}
+        title={`Bluetooth: ${isBluetoothEnabled ? 'AirBuds Pro Connected' : 'Disabled'} (Click for Network Controls)`}
+      >
+        <Bluetooth size={14} style={{ color: isBluetoothEnabled ? '#818cf8' : '#94a3b8' }} />
+      </button>
+
       {/* 4. Volume Indicator (Click = Volume Center, Wheel = Adjust Volume) */}
       <button
         type="button"
@@ -1051,20 +1102,24 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             position: 'absolute',
             bottom: '72px',
             right: 0,
-            width: activeFlyout === 'calendar' ? '340px' : activeFlyout === 'tray' ? '340px' : '320px',
-            backgroundColor: theme === 'light' ? 'rgba(255, 255, 255, 0.96)' : 'rgba(12, 16, 26, 0.95)',
+            width: activeFlyout === 'calendar' ? '340px' : activeFlyout === 'tray' ? '340px' : activeFlyout === 'network' ? '360px' : '320px',
+            backgroundColor: activeFlyout === 'network'
+              ? 'rgba(18, 18, 22, 0.94)'
+              : theme === 'light'
+              ? 'rgba(255, 255, 255, 0.96)'
+              : 'rgba(12, 16, 26, 0.95)',
             backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.1), transparent 75%)',
-            backdropFilter: 'blur(36px) saturate(200%)',
-            border: '1px solid rgba(255, 255, 255, 0.14)',
-            borderRadius: '20px',
+            backdropFilter: 'blur(32px) saturate(200%)',
+            border: activeFlyout === 'network' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.14)',
+            borderRadius: activeFlyout === 'network' ? '24px' : '20px',
             boxShadow: '0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
-            padding: '14px 16px',
+            padding: activeFlyout === 'network' ? '16px' : '14px 16px',
             boxSizing: 'border-box',
             pointerEvents: 'auto',
             zIndex: 99999,
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: activeFlyout === 'network' ? '10px' : '12px',
           }}
         >
           {/* FLYOUT 1: Active Background Apps & System Tray Flyout (^) */}
@@ -1184,124 +1239,311 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
             </>
           )}
 
-          {/* FLYOUT 2: Network & Bluetooth Control Center */}
+          {/* FLYOUT 2: Interactive Wi-Fi & Bluetooth Control Center */}
           {activeFlyout === 'network' && (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff' }}>Network & Bluetooth</span>
-                <button type="button" onClick={closeAllFlyouts} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px' }} title="Close">
+              {/* Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                  paddingBottom: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      background: isWifiEnabled ? '#38bdf8' : '#64748b',
+                      boxShadow: isWifiEnabled ? '0 0 8px #38bdf8' : 'none',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#ffffff',
+                      letterSpacing: '-0.01em',
+                    }}
+                  >
+                    Network & Bluetooth
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAllFlyouts}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    borderRadius: '7px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Close"
+                >
                   <X size={13} />
                 </button>
               </div>
 
-              {/* Wi-Fi Card */}
+              {/* Wi-Fi Row */}
               <div
-                onClick={() => systemStore.toggleWifi()}
+                onClick={() => {
+                  playToggleClick();
+                  systemStore.toggleWifi();
+                }}
                 style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '10px',
-                  padding: '9px 12px',
+                  backgroundColor: isWifiEnabled ? 'rgba(56, 189, 248, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                  border: isWifiEnabled ? '1px solid rgba(56, 189, 248, 0.28)' : '1px solid rgba(255, 255, 255, 0.07)',
+                  borderRadius: '16px',
+                  padding: '11px 13px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   cursor: 'pointer',
+                  transition: 'all 0.18s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Wifi size={18} style={{ color: isWifiEnabled ? '#38bdf8' : '#64748b' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '12px',
+                      background: isWifiEnabled
+                        ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.28), rgba(14, 165, 233, 0.16))'
+                        : 'rgba(255, 255, 255, 0.05)',
+                      border: isWifiEnabled ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Wifi size={19} style={{ color: isWifiEnabled ? '#38bdf8' : '#64748b' }} />
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff' }}>
-                      {isWifiEnabled ? networkSsid : 'Wi-Fi Disabled'}
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
+                      {isWifiEnabled ? networkSsid : 'Wi-Fi'}
                     </span>
-                    <span style={{ fontSize: '9.5px', color: isWifiEnabled ? '#38bdf8' : '#64748b' }}>
-                      {isWifiEnabled ? 'Wi-Fi 6 (802.11ax) • 5.0 GHz' : 'Tap to enable Wi-Fi'}
+                    <span style={{ fontSize: '10.5px', color: isWifiEnabled ? '#38bdf8' : '#64748b', fontWeight: 500 }}>
+                      {isWifiEnabled ? 'Wi-Fi 6 (802.11ax) • 5.0 GHz' : 'Turned Off'}
                     </span>
                   </div>
                 </div>
-                <div style={{ width: '36px', height: '20px', borderRadius: '10px', background: isWifiEnabled ? '#0284c7' : 'rgba(255,255,255,0.16)', position: 'relative', transition: 'background 0.2s ease' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#ffffff', position: 'absolute', top: '2px', left: isWifiEnabled ? '18px' : '2px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }} />
+
+                {/* iOS-Style Toggle Switch */}
+                <div
+                  style={{
+                    width: '42px',
+                    height: '24px',
+                    borderRadius: '12px',
+                    background: isWifiEnabled ? '#0284c7' : 'rgba(255, 255, 255, 0.14)',
+                    position: 'relative',
+                    transition: 'background 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
+                    flexShrink: 0,
+                    boxShadow: isWifiEnabled ? '0 0 10px rgba(2, 132, 199, 0.5)' : 'none',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      background: '#ffffff',
+                      position: 'absolute',
+                      top: '2px',
+                      left: isWifiEnabled ? '20px' : '2px',
+                      transition: 'left 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+                      boxShadow: '0 2px 5px rgba(0, 0, 0, 0.35)',
+                    }}
+                  />
                 </div>
               </div>
 
-              {/* Bluetooth Card */}
+              {/* Bluetooth Row */}
               <div
-                onClick={() => systemStore.toggleBluetooth()}
+                onClick={() => {
+                  playToggleClick();
+                  systemStore.toggleBluetooth();
+                }}
                 style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '10px',
-                  padding: '9px 12px',
+                  backgroundColor: isBluetoothEnabled ? 'rgba(129, 140, 248, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                  border: isBluetoothEnabled ? '1px solid rgba(129, 140, 248, 0.28)' : '1px solid rgba(255, 255, 255, 0.07)',
+                  borderRadius: '16px',
+                  padding: '11px 13px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   cursor: 'pointer',
+                  transition: 'all 0.18s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Bluetooth size={18} style={{ color: isBluetoothEnabled ? '#818cf8' : '#64748b' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '12px',
+                      background: isBluetoothEnabled
+                        ? 'linear-gradient(135deg, rgba(129, 140, 248, 0.28), rgba(99, 102, 241, 0.16))'
+                        : 'rgba(255, 255, 255, 0.05)',
+                      border: isBluetoothEnabled ? '1px solid rgba(129, 140, 248, 0.45)' : '1px solid rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Bluetooth size={19} style={{ color: isBluetoothEnabled ? '#818cf8' : '#64748b' }} />
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
                       {isBluetoothEnabled ? 'Bluetooth On' : 'Bluetooth Off'}
                     </span>
-                    <span style={{ fontSize: '9.5px', color: isBluetoothEnabled ? '#818cf8' : '#64748b' }}>
-                      {isBluetoothEnabled ? 'AirBuds Pro — Connected' : 'Tap to pair devices'}
+                    <span style={{ fontSize: '10.5px', color: isBluetoothEnabled ? '#a5b4fc' : '#64748b', fontWeight: 500 }}>
+                      {isBluetoothEnabled ? 'AirBuds Pro — Connected' : 'Discoverable as Windows PC'}
                     </span>
                   </div>
                 </div>
-                <div style={{ width: '36px', height: '20px', borderRadius: '10px', background: isBluetoothEnabled ? '#6366f1' : 'rgba(255,255,255,0.16)', position: 'relative', transition: 'background 0.2s ease' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#ffffff', position: 'absolute', top: '2px', left: isBluetoothEnabled ? '18px' : '2px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }} />
+
+                {/* iOS-Style Toggle Switch */}
+                <div
+                  style={{
+                    width: '42px',
+                    height: '24px',
+                    borderRadius: '12px',
+                    background: isBluetoothEnabled ? '#6366f1' : 'rgba(255, 255, 255, 0.14)',
+                    position: 'relative',
+                    transition: 'background 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
+                    flexShrink: 0,
+                    boxShadow: isBluetoothEnabled ? '0 0 10px rgba(99, 102, 241, 0.5)' : 'none',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      background: '#ffffff',
+                      position: 'absolute',
+                      top: '2px',
+                      left: isBluetoothEnabled ? '20px' : '2px',
+                      transition: 'left 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+                      boxShadow: '0 2px 5px rgba(0, 0, 0, 0.35)',
+                    }}
+                  />
                 </div>
               </div>
 
-              {/* Airplane Mode Card */}
+              {/* Airplane Mode Row */}
               <div
-                onClick={() => systemStore.toggleAirplaneMode()}
+                onClick={() => {
+                  playToggleClick();
+                  systemStore.toggleAirplaneMode();
+                }}
                 style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '10px',
-                  padding: '9px 12px',
+                  backgroundColor: isAirplaneMode ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                  border: isAirplaneMode ? '1px solid rgba(245, 158, 11, 0.28)' : '1px solid rgba(255, 255, 255, 0.07)',
+                  borderRadius: '16px',
+                  padding: '11px 13px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   cursor: 'pointer',
+                  transition: 'all 0.18s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Plane size={18} style={{ color: isAirplaneMode ? '#f59e0b' : '#64748b' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '11px' }}>
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '12px',
+                      background: isAirplaneMode
+                        ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.28), rgba(217, 119, 6, 0.16))'
+                        : 'rgba(255, 255, 255, 0.05)',
+                      border: isAirplaneMode ? '1px solid rgba(245, 158, 11, 0.45)' : '1px solid rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Plane size={19} style={{ color: isAirplaneMode ? '#f59e0b' : '#64748b' }} />
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
                       Airplane Mode
                     </span>
-                    <span style={{ fontSize: '9.5px', color: isAirplaneMode ? '#f59e0b' : '#64748b' }}>
+                    <span style={{ fontSize: '10.5px', color: isAirplaneMode ? '#fbbf24' : '#64748b', fontWeight: 500 }}>
                       {isAirplaneMode ? 'All wireless connections off' : 'Wi-Fi & Bluetooth active'}
                     </span>
                   </div>
                 </div>
-                <div style={{ width: '36px', height: '20px', borderRadius: '10px', background: isAirplaneMode ? '#f59e0b' : 'rgba(255,255,255,0.16)', position: 'relative', transition: 'background 0.2s ease' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#ffffff', position: 'absolute', top: '2px', left: isAirplaneMode ? '18px' : '2px', transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }} />
+
+                {/* iOS-Style Toggle Switch */}
+                <div
+                  style={{
+                    width: '42px',
+                    height: '24px',
+                    borderRadius: '12px',
+                    background: isAirplaneMode ? '#f59e0b' : 'rgba(255, 255, 255, 0.14)',
+                    position: 'relative',
+                    transition: 'background 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
+                    flexShrink: 0,
+                    boxShadow: isAirplaneMode ? '0 0 10px rgba(245, 158, 11, 0.5)' : 'none',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      background: '#ffffff',
+                      position: 'absolute',
+                      top: '2px',
+                      left: isAirplaneMode ? '20px' : '2px',
+                      transition: 'left 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+                      boxShadow: '0 2px 5px rgba(0, 0, 0, 0.35)',
+                    }}
+                  />
                 </div>
               </div>
 
-              {/* Action shortcuts */}
+              {/* Bottom Action Shortcuts */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '2px' }}>
                 <button
                   type="button"
-                  onClick={() => safeInvoke('launch_system_action', { action: 'wifi_networks' })}
+                  onClick={async () => {
+                    playGlassPop();
+                    const ok = await safeInvoke('launch_system_action', { action: 'wifi_networks' });
+                    if (!ok) {
+                      safeInvoke('launch_installed_app', { path: 'ms-settings:network-wifi' });
+                    }
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '5px',
-                    padding: '8px 6px',
-                    borderRadius: '8px',
+                    gap: '6px',
+                    padding: '9px 8px',
+                    borderRadius: '10px',
                     background: 'rgba(56, 189, 248, 0.12)',
                     border: '1px solid rgba(56, 189, 248, 0.25)',
                     color: '#38bdf8',
-                    fontSize: '10.5px',
+                    fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   <ExternalLink size={12} />
@@ -1309,20 +1551,27 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => safeInvoke('launch_system_action', { action: 'bluetooth_settings' })}
+                  onClick={async () => {
+                    playGlassPop();
+                    const ok = await safeInvoke('launch_system_action', { action: 'bluetooth_settings' });
+                    if (!ok) {
+                      safeInvoke('launch_installed_app', { path: 'ms-settings:bluetooth' });
+                    }
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '5px',
-                    padding: '8px 6px',
-                    borderRadius: '8px',
+                    gap: '6px',
+                    padding: '9px 8px',
+                    borderRadius: '10px',
                     background: 'rgba(129, 140, 248, 0.12)',
                     border: '1px solid rgba(129, 140, 248, 0.25)',
                     color: '#818cf8',
-                    fontSize: '10.5px',
+                    fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   <ExternalLink size={12} />
@@ -1704,7 +1953,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
 
   return (
     <div
-      ref={flyoutRef}
       style={{
         position: 'relative',
         width: '100%',
