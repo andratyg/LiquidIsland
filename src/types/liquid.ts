@@ -115,6 +115,7 @@ export interface ToastPayload {
   accentColor?: string;
   workspaceActivity?: WorkspaceActivityPayload;
   thumbnail?: string;
+  iconData?: string;
   filename?: string;
   dataUrl?: string;
   recordingTime?: number;
@@ -233,7 +234,7 @@ export interface InstalledAppEntry {
 }
 
 export interface WorkspaceActivityPayload {
-  kind: 'tab-switch' | 'app-switch' | 'desktop-switch';
+  kind: 'tab-switch' | 'app-switch' | 'desktop-switch' | 'alt-tab';
   app_name: string;
   tab_title: string;
   direction?: 'left' | 'right';

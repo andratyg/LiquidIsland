@@ -927,6 +927,17 @@ export const systemStore = {
         dataUrl: payload?.dataUrl,
         ...payload,
       };
+    } else if (type === 'workspace') {
+      fullPayload = {
+        type: 'workspace',
+        title: payload?.title ?? 'Window Focused',
+        subtitle: payload?.subtitle ?? 'Active Window',
+        appName: payload?.appName,
+        tabTitle: payload?.tabTitle,
+        accentColor: payload?.accentColor ?? '#38bdf8',
+        workspaceActivity: payload?.workspaceActivity,
+        ...payload,
+      };
     } else {
       fullPayload = {
         type: 'airbuds',
@@ -1048,22 +1059,25 @@ export const systemStore = {
       workspaceActivity: activityData,
     });
 
-    // UNIFIED DYNAMIC ISLAND: Expand the top notch into a seamless Apple-style system alert!
-    const kindLabel =
-      payload.kind === 'tab-switch'
-        ? 'Active Tab Switched'
-        : payload.kind === 'desktop-switch'
-        ? `Desktop ${payload.desktop_index || 1}`
-        : 'Window Focused';
+    // UNIFIED DYNAMIC ISLAND: When switching tabs or windows, smoothly expand the top notch into the Apple-style alert!
+    if (payload.kind === 'app-switch' || payload.kind === 'tab-switch') {
+      const kindLabel =
+        payload.kind === 'tab-switch'
+          ? 'Active Tab Switched'
+          : 'Window Focused';
 
-    this.triggerToast('workspace', {
-      title: kindLabel,
-      subtitle: payload.tab_title || payload.app_name || 'Active Window',
-      appName: payload.app_name,
-      tabTitle: payload.tab_title,
-      accentColor: payload.accent_color || '#38bdf8',
-      workspaceActivity: activityData,
-    });
+      const iconData = payload.recent_apps?.[0]?.icon_data;
+
+      this.triggerToast('workspace', {
+        title: kindLabel,
+        subtitle: payload.tab_title || payload.app_name || 'Active Window',
+        appName: payload.app_name,
+        tabTitle: payload.tab_title,
+        accentColor: payload.accent_color || '#38bdf8',
+        iconData,
+        workspaceActivity: activityData,
+      });
+    }
 
     // Auto-revert back to compact pill after 1.8 seconds (1800ms)
     workspaceActivityTimeoutId = setTimeout(() => {

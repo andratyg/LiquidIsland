@@ -87,8 +87,17 @@ const DefaultAppLogo: React.FC<{ size?: number }> = ({ size = 22 }) => (
   </svg>
 );
 
+const AntigravityLogo: React.FC<{ size?: number }> = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+    <rect x="4" y="4" width="40" height="40" rx="11" fill="#4f46e5" />
+    <path d="M24 10L36 34H30L27.5 28.5H20.5L18 34H12L24 10Z" fill="#ffffff" />
+    <path d="M24 17L21.5 24H26.5L24 17Z" fill="#4f46e5" />
+  </svg>
+);
+
 function renderAppLogo(appName: string, size: number = 22) {
   const n = (appName || '').toLowerCase();
+  if (n.includes('antigravity') || n.includes('gemini') || n.includes('projek')) return <AntigravityLogo size={size} />;
   if (n.includes('chrome')) return <ChromeLogo size={size} />;
   if (n.includes('edge')) return <EdgeLogo size={size} />;
   if (n.includes('code') || n.includes('visual studio')) return <VSCodeLogo size={size} />;
@@ -276,7 +285,21 @@ export const ToastView: React.FC = () => {
               overflow: 'hidden',
             }}
           >
-            {renderAppLogo(toastPayload?.appName || '', 22)}
+            {toastPayload?.iconData && toastPayload.iconData.startsWith('data:image/') ? (
+              <img
+                src={toastPayload.iconData}
+                alt={toastPayload?.appName || 'App'}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  objectFit: 'contain',
+                  borderRadius: '5px',
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))',
+                }}
+              />
+            ) : (
+              renderAppLogo(toastPayload?.appName || '', 22)
+            )}
           </div>
 
           {/* Center: Badge & Titles */}

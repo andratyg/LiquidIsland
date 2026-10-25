@@ -120,7 +120,14 @@ pub fn parse_window_activity(raw: &str) -> (String, String, String) {
         let rest = &trimmed[..trimmed.len() - " - Antigravity".len()];
         let parts: Vec<&str> = rest.split(" - ").collect();
         let tab = parts.first().unwrap_or(&rest).trim();
-        return ("Antigravity".to_string(), tab.to_string(), "#6366f1".to_string());
+        let clean = tab.trim_start_matches(|c: char| c == '●' || c == '*' || c == '•' || c.is_whitespace()).trim();
+        return ("Antigravity".to_string(), clean.to_string(), "#6366f1".to_string());
+    }
+    if trimmed.starts_with("Antigravity") || (trimmed.contains(" / ") && trimmed.contains("PHASE")) {
+        let parts: Vec<&str> = trimmed.split(" / ").collect();
+        let tab = parts.last().unwrap_or(&trimmed).trim();
+        let clean = tab.trim_start_matches(|c: char| c == '●' || c == '*' || c == '•' || c.is_whitespace()).trim();
+        return ("Antigravity".to_string(), clean.to_string(), "#6366f1".to_string());
     }
 
     // 3. Browsers
@@ -230,16 +237,17 @@ pub fn start_workspace_activity_listener(window: Window) {
             let mut last_bright_up = false;
             let mut last_bright_down = false;
             let mut last_clipboard_seq: u32 = GetClipboardSequenceNumber();
+            let mut last_activity_time = std::time::Instant::now();
             let mut tick_count: u32 = 0;
 
             loop {
                 std::thread::sleep(Duration::from_millis(25));
                 tick_count = tick_count.wrapping_add(1);
 
-                // Helper to detect both current state (0x8000) and transition state (0x0001) for ultra-fast taps (<30ms)
+                // Strictly check hardware key down bit (0x8000) to eliminate phantom key repeat flickers
                 let is_key_down = |vk: i32| -> bool {
                     let s = GetAsyncKeyState(vk) as u16;
-                    (s & 0x8000) != 0 || (s & 0x0001) != 0
+                    (s & 0x8000) != 0
                 };
 
                 // -----------------------------------------------------------
@@ -279,10 +287,12 @@ pub fn start_workspace_activity_listener(window: Window) {
                 // 40MB Edition - Stage 3: VisionOS 3D Alt+Tab & Ctrl+Tab Interceptor
                 // -----------------------------------------------------------
                 let tab_down = is_key_down(0x09); // VK_TAB
+                let now_inst = std::time::Instant::now();
 
                 if alt_down && tab_down {
-                    if !last_alt_tab_down {
+                    if !last_alt_tab_down && now_inst.duration_since(last_activity_time) >= Duration::from_millis(350) {
                         last_alt_tab_down = true;
+                        last_activity_time = now_inst;
                         let running_apps = crate::taskbar::get_running_apps();
                         let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
                         let (app_name, tab_title, accent_color) = if let Some(first) = top5.first() {
@@ -292,7 +302,7 @@ pub fn start_workspace_activity_listener(window: Window) {
                         };
 
                         let payload = WorkspaceActivityPayload {
-                            kind: "app-switch".to_string(),
+                            kind: "alt-tab".to_string(),
                             app_name,
                             tab_title,
                             direction: None,
@@ -309,8 +319,9 @@ pub fn start_workspace_activity_listener(window: Window) {
                 let win_down = is_key_down(VK_LWIN as i32) || is_key_down(VK_RWIN as i32);
 
                 if ctrl_down && tab_down && !alt_down && !win_down {
-                    if !last_ctrl_tab_down {
+                    if !last_ctrl_tab_down && now_inst.duration_since(last_activity_time) >= Duration::from_millis(350) {
                         last_ctrl_tab_down = true;
+                        last_activity_time = now_inst;
                         let running_apps = crate::taskbar::get_running_apps();
                         let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
                         let (app_name, tab_title, accent_color) = if let Some(first) = top5.first() {
@@ -575,34 +586,44 @@ pub fn start_workspace_activity_listener(window: Window) {
 
                 let is_first = last_hwnd.is_null();
                 if !is_first {
-                    if hwnd == last_hwnd && current_title != last_title {
+                    let now = std::time::Instant::now();
+                    let (curr_app, curr_tab, curr_color) = parse_window_activity(&current_title);
+                    let (_last_app, last_tab, _) = parse_window_activity(&last_title);
+
+                    if hwnd == last_hwnd {
                         // Case 1: Tab Switch inside the same application
-                        let (app_name, tab_title, accent_color) = parse_window_activity(&current_title);
-                        let running_apps = crate::taskbar::get_running_apps();
-                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
-                        let payload = WorkspaceActivityPayload {
-                            kind: "tab-switch".to_string(),
-                            app_name,
-                            tab_title,
-                            direction: None,
-                            accent_color,
-                            recent_apps: Some(top5),
-                        };
-                        let _ = app_handle.emit("workspace-activity", payload);
-                    } else if hwnd != last_hwnd && current_title != last_title {
+                        // Only emit if the clean tab title actually changed and cooldown passed
+                        // (prevents continuous flickers from typing, cursor movements, and editor autosaves)
+                        if curr_tab != last_tab && now.duration_since(last_activity_time) >= Duration::from_millis(600) {
+                            last_activity_time = now;
+                            let running_apps = crate::taskbar::get_running_apps();
+                            let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
+                            let payload = WorkspaceActivityPayload {
+                                kind: "tab-switch".to_string(),
+                                app_name: curr_app,
+                                tab_title: curr_tab,
+                                direction: None,
+                                accent_color: curr_color,
+                                recent_apps: Some(top5),
+                            };
+                            let _ = app_handle.emit("workspace-activity", payload);
+                        }
+                    } else if hwnd != last_hwnd {
                         // Case 2: App Switch to a different foreground application
-                        let (app_name, tab_title, accent_color) = parse_window_activity(&current_title);
-                        let running_apps = crate::taskbar::get_running_apps();
-                        let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
-                        let payload = WorkspaceActivityPayload {
-                            kind: "app-switch".to_string(),
-                            app_name,
-                            tab_title,
-                            direction: None,
-                            accent_color,
-                            recent_apps: Some(top5),
-                        };
-                        let _ = app_handle.emit("workspace-activity", payload);
+                        if now.duration_since(last_activity_time) >= Duration::from_millis(400) {
+                            last_activity_time = now;
+                            let running_apps = crate::taskbar::get_running_apps();
+                            let top5: Vec<crate::taskbar::RunningAppInfo> = running_apps.into_iter().take(5).collect();
+                            let payload = WorkspaceActivityPayload {
+                                kind: "app-switch".to_string(),
+                                app_name: curr_app,
+                                tab_title: curr_tab,
+                                direction: None,
+                                accent_color: curr_color,
+                                recent_apps: Some(top5),
+                            };
+                            let _ = app_handle.emit("workspace-activity", payload);
+                        }
                     }
                 }
 

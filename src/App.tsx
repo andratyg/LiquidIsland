@@ -122,21 +122,18 @@ export const App: React.FC = () => {
   const [showDevToolbar, setShowDevToolbar] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  // Window sizing synchronization for Modals, CaptureBar, and 3D Workspace Switcher Overlay
+  // Window sizing synchronization: only resizes for large modals (Spotlight, Launchpad, Settings)
+  // Transparent idle canvas is permanently 640x260 to eliminate DWM resize flickering (ngeblink)
   useEffect(() => {
     if (isTaskbarWindow) return;
     if (captureBarOpen || spotlightOpen || launchpadOpen || showSettingsModal) {
       safeInvoke('set_window_size', { width: 680, height: 640 });
       safeInvoke('update_hit_box', { width: 640, height: 640, modalOpen: true });
-    } else if (workspaceActivity) {
-      // 40MB Edition - Stage 3: VisionOS 3D Stage deck is 540x148 at top:76 (needs ~260px height)
-      safeInvoke('set_window_size', { width: 640, height: 260 });
-      safeInvoke('update_hit_box', { width: 540, height: 240, modalOpen: false });
     } else {
-      safeInvoke('set_window_size', { width: 640, height: 240 });
+      safeInvoke('set_window_size', { width: 640, height: 260 });
       safeInvoke('update_hit_box', { width: 184, height: 40, modalOpen: false });
     }
-  }, [captureBarOpen, spotlightOpen, launchpadOpen, showSettingsModal, workspaceActivity, isTaskbarWindow]);
+  }, [captureBarOpen, spotlightOpen, launchpadOpen, showSettingsModal, isTaskbarWindow]);
   const [wallpaperPreview, setWallpaperPreview] = useState<'none' | 'dark' | 'light' | 'vibrant'>('none');
   const [testHeadphones, setTestHeadphones] = useState(false);
   const [testGlasses, setTestGlasses] = useState(false);

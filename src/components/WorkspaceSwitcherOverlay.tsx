@@ -151,10 +151,11 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
     }
   }, [workspaceActivity]);
 
-  const isVisible = Boolean(workspaceActivity);
+  const isAltTab = workspaceActivity?.kind === 'alt-tab';
   const isDesktopSwitch = workspaceActivity?.kind === 'desktop-switch';
-  const isTabOrAppSwitch =
-    workspaceActivity?.kind === 'tab-switch' || workspaceActivity?.kind === 'app-switch';
+  // ONLY render 3D stage deck on explicit Alt+Tab or Virtual Desktop Panorama switch.
+  // Everyday background window/tab switches are handled cleanly inside the top Dynamic Island notch!
+  const isVisible = Boolean(workspaceActivity && (isAltTab || isDesktopSwitch));
   const accentColor = workspaceActivity?.accent_color || '#38bdf8';
 
   // 1. Resolve Available Apps Pool from Payload or Fallback
@@ -387,7 +388,7 @@ export const WorkspaceSwitcherOverlay: React.FC = () => {
           {/* ================================================================ */}
           {/* VIEW A: VISIONOS 3D COVERFLOW APP & TAB SWITCHER                 */}
           {/* ================================================================ */}
-          {isTabOrAppSwitch && (
+          {isAltTab && (
             <div
               style={{
                 display: 'flex',
