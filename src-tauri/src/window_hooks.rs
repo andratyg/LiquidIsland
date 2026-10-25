@@ -432,15 +432,15 @@ pub fn start_workspace_activity_listener(window: Window) {
 
                 if caps_down && !last_caps_down {
                     last_caps_down = true;
-                    std::thread::sleep(Duration::from_millis(15));
-                    let committed_caps_on = (GetKeyState(VK_CAPITAL as i32) & 0x0001) != 0;
-                    last_caps_on = committed_caps_on;
+                    // Instant 0ms latency hardware toggle response
+                    let new_state = !last_caps_on;
+                    last_caps_on = new_state;
                     let _ = app_handle.emit("capslock-change", CapsLockPayload {
-                        is_on: committed_caps_on,
+                        is_on: new_state,
                     });
                 } else if !caps_down {
                     last_caps_down = false;
-                    // Detect external / on-screen keyboard toggle
+                    // Detect external / on-screen keyboard toggle or reconcile with Win32 state
                     if current_caps_on != last_caps_on {
                         last_caps_on = current_caps_on;
                         let _ = app_handle.emit("capslock-change", CapsLockPayload {

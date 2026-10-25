@@ -28,8 +28,8 @@ pub fn run() {
             // Center window on primary monitor, restore taskbar region & start cursor hit-test loop
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window_manager::center_on_monitor(window.as_ref().window().clone(), 0);
-                // Ensure native Windows taskbar region is clean
-                taskbar::restore_default_taskbar();
+                // Suppress native Windows taskbar so LiquidIsland dock has exclusive control
+                taskbar::set_native_taskbar_hidden(true);
                 // Default clickable on startup so the Island is always interactive
                 let _ = window.set_ignore_cursor_events(false);
                 // Start background Win32 GetCursorPos hit-test thread (35ms)

@@ -1794,7 +1794,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
           onMouseEnter={handleDockMouseEnter}
           onMouseLeave={handleDockMouseLeave}
           initial={{ y: 50, opacity: 0 }}
-          animate={{ y: effectiveDockVisible ? 0 : 72, opacity: effectiveDockVisible ? 1 : 0 }}
+          animate={{ y: effectiveDockVisible ? 0 : 84, opacity: effectiveDockVisible ? 1 : 0 }}
           exit={{ y: 50, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 32 }}
           className="liquid-taskbar-full"
@@ -1814,7 +1814,7 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
         <motion.div
           className="liquid-dock-container"
           initial={{ y: 30, opacity: 0 }}
-          animate={{ y: effectiveDockVisible ? 0 : 72, opacity: effectiveDockVisible ? 1 : 0 }}
+          animate={{ y: effectiveDockVisible ? 0 : 84, opacity: effectiveDockVisible ? 1 : 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 32 }}
           style={{ pointerEvents: effectiveDockVisible ? 'auto' : 'none', position: 'relative' }}
         >

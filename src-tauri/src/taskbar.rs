@@ -31,7 +31,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 pub static TASKBAR_MODIFIED: AtomicBool = AtomicBool::new(false);
-pub static NATIVE_TASKBAR_HIDDEN: AtomicBool = AtomicBool::new(false);
+pub static NATIVE_TASKBAR_HIDDEN: AtomicBool = AtomicBool::new(true);
 pub static DOCK_LOOP_STARTED: AtomicBool = AtomicBool::new(false);
 pub static DOCK_HOVERED: AtomicBool = AtomicBool::new(false);
 pub static FLYOUT_OPEN: AtomicBool = AtomicBool::new(false);
@@ -810,6 +810,7 @@ pub fn spawn_or_update_taskbar_window(app: &AppHandle) -> Result<(), Box<dyn std
     }
 
     let _ = window.set_ignore_cursor_events(false);
+    set_native_taskbar_hidden(true);
     start_dock_hit_test_loop(window.as_ref().window().clone());
 
     Ok(())
