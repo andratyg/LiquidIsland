@@ -8,7 +8,7 @@ import { WaterSlide } from './slides/WaterSlide';
 import { ShelfSlide } from './slides/ShelfSlide';
 import { TodoSlide } from './slides/TodoSlide';
 import { SlidePlaceholder } from './slides/SlidePlaceholder';
-import { ChevronLeft, ChevronRight, X, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Search, Settings } from 'lucide-react';
 import { SlideIndex } from '../types/liquid';
 
 const SLIDE_TITLES: Record<SlideIndex, string> = {
@@ -21,9 +21,13 @@ const SLIDE_TITLES: Record<SlideIndex, string> = {
 
 interface ExpandedContainerProps {
   onDropJellyBounce?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({ onDropJellyBounce }) => {
+export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({
+  onDropJellyBounce,
+  onOpenSettings,
+}) => {
   const activeSlide = useSystemStore((s) => s.activeSlide);
   const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
   const volume = useSystemStore((s) => s.volume);
@@ -201,8 +205,8 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({ onDropJell
           <span>{currentDateStr}</span>
         </div>
 
-        {/* Right: 5-Bar Waveform Visualizer + Subtle Collapse/Close Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Right: 5-Bar Waveform Visualizer + Spotlight + Settings + Subtle Collapse/Close Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* 5-Bar Animated Audio Waveform */}
           <div
             title={`Audio Visualizer (${isAudioPlaying ? 'Playing' : 'Paused'}) - Click to Toggle`}
@@ -224,7 +228,7 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({ onDropJell
             <span className={`audio-bar ${isAudioPlaying ? 'audio-bar-playing' : 'audio-bar-paused'}`} />
           </div>
 
-          {/* Spotlight Search Trigger (Alt + Space) */}
+          {/* 1. 🔍 Spotlight Search Trigger (Alt + Space) */}
           <button
             type="button"
             onClick={(e) => {
@@ -252,11 +256,39 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({ onDropJell
             <Search size={13} />
           </button>
 
-          {/* Close / Collapse Button (×) */}
+          {/* 2. ⚙️ Settings Dashboard Trigger */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              playGlassPop();
+              onOpenSettings?.();
+            }}
+            title="Settings Dashboard & Character Studio (⚙️)"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '2px',
+              borderRadius: '4px',
+              outline: 'none',
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+          >
+            <Settings size={13} />
+          </button>
+
+          {/* 3. Close / Collapse Button (×) */}
           <button
             type="button"
             onClick={handleCollapse}
-            title="Collapse Expanded Dashboard"
+            title="Collapse Expanded Dashboard (Esc)"
             style={{
               background: 'transparent',
               border: 'none',
@@ -354,20 +386,30 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({ onDropJell
       </div>
 
       {/* ==================================================================== */}
-      {/* 3. Carousel Navigation & Elongated Pagination Dots                   */}
+      {/* 3. Floating Left / Right Navigation Chevrons & Bottom Pagination Dots */}
       {/* ==================================================================== */}
-      <div className="carousel-footer">
-        {/* Left Chevron Button (<) */}
-        <button
-          type="button"
-          onClick={handlePrevSlide}
-          className="carousel-chevron-btn"
-          title="Previous Slide (<)"
-        >
-          <ChevronLeft size={15} />
-        </button>
+      {/* Left Chevron Button (<) */}
+      <button
+        type="button"
+        onClick={handlePrevSlide}
+        className="carousel-nav-btn carousel-nav-prev"
+        title="Previous Slide (<)"
+      >
+        <ChevronLeft size={14} />
+      </button>
 
-        {/* Center Pagination Dots (Active dot morphs into 14px elongated pill) */}
+      {/* Right Chevron Button (>) */}
+      <button
+        type="button"
+        onClick={handleNextSlide}
+        className="carousel-nav-btn carousel-nav-next"
+        title="Next Slide (>)"
+      >
+        <ChevronRight size={14} />
+      </button>
+
+      {/* Bottom Center Pagination Dots (Active dot morphs into 14px elongated pill) */}
+      <div className="carousel-pagination-bottom">
         <div className="pagination-track">
           {([0, 1, 2, 3, 4] as SlideIndex[]).map((idx) => {
             const isActive = activeSlide === idx;
@@ -381,16 +423,6 @@ export const ExpandedContainer: React.FC<ExpandedContainerProps> = ({ onDropJell
             );
           })}
         </div>
-
-        {/* Right Chevron Button (>) */}
-        <button
-          type="button"
-          onClick={handleNextSlide}
-          className="carousel-chevron-btn"
-          title="Next Slide (>)"
-        >
-          <ChevronRight size={15} />
-        </button>
       </div>
     </div>
   );

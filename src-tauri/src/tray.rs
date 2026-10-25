@@ -16,6 +16,8 @@ pub const DEFAULT_TOOLTIP: &str = "LiquidIsland OS - Active (~9.2 MB RAM)";
 
 /// Builds the native Windows System Tray icon, menu, and event handlers
 pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let open_settings = MenuItemBuilder::with_id("open_settings", "Settings Dashboard & Studio (⚙️)")
+        .build(app)?;
     let toggle_power = MenuItemBuilder::with_id("toggle_power", "Enable / Disable Dynamic Island (On/Off)")
         .build(app)?;
     let stealth_bezel = MenuItemBuilder::with_id("stealth_bezel", "Sembunyikan ke Garis Bezel (Stealth Mode)")
@@ -28,6 +30,8 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .build(app)?;
     let cycle_taskbar = MenuItemBuilder::with_id("cycle_taskbar", "Mode Taskbar: Opsi A / B / C")
         .build(app)?;
+    let toggle_dev = MenuItemBuilder::with_id("toggle_dev_controls", "Developer Controls Toolbar (Ctrl+Shift+D)")
+        .build(app)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let trim_ram = MenuItemBuilder::with_id("trim_ram", "Optimize RAM Now (~10 MB Trimmer)")
         .build(app)?;
@@ -36,12 +40,14 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     let menu = MenuBuilder::new(app)
         .items(&[
+            &open_settings,
             &toggle_power,
             &stealth_bezel,
             &switch_theme,
             &switch_companion,
             &toggle_lofi,
             &cycle_taskbar,
+            &toggle_dev,
             &sep,
             &trim_ram,
             &quit_app,
@@ -91,6 +97,18 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             match id {
+                "open_settings" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let payload = TrayActionPayload {
+                            action: "open_settings".to_string(),
+                            ram_mb: None,
+                        };
+                        let _ = window.emit("tray-menu-action", &payload);
+                        let _ = window.emit("tray-command", &payload);
+                    }
+                }
                 "toggle_power" => {
                     if let Some(window) = app.get_webview_window("main") {
                         let is_visible = window.is_visible().unwrap_or(true);
@@ -150,6 +168,14 @@ pub fn create_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 "cycle_taskbar" => {
                     let payload = TrayActionPayload {
                         action: "cycle_taskbar".to_string(),
+                        ram_mb: None,
+                    };
+                    let _ = app.emit("tray-menu-action", &payload);
+                    let _ = app.emit("tray-command", &payload);
+                }
+                "toggle_dev_controls" => {
+                    let payload = TrayActionPayload {
+                        action: "toggle_dev_controls".to_string(),
                         ram_mb: None,
                     };
                     let _ = app.emit("tray-menu-action", &payload);

@@ -269,7 +269,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
       </AnimatePresence>
 
       {/* ==================================================================== */}
-      {/* 1. Left Dropzone Box (124px × 86px)                                  */}
+      {/* 1. Left Dropzone Box (122px × 84px)                                  */}
       {/* ==================================================================== */}
       <motion.div
         onDragOver={handleDragOver}
@@ -283,9 +283,9 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
         }}
         transition={{ type: 'spring', stiffness: 450, damping: 24 }}
         style={{
-          width: '124px',
-          height: '86px',
-          minWidth: '124px',
+          width: '122px',
+          height: '84px',
+          minWidth: '122px',
           borderWidth: '1.5px',
           borderStyle: 'dashed',
           borderRadius: '12px',
@@ -299,6 +299,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
           boxSizing: 'border-box',
           position: 'relative',
           overflow: 'hidden',
+          flexShrink: 0,
         }}
         title="Click to browse files or drop files here"
       >
@@ -349,7 +350,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
       <div
         style={{
           flex: 1,
-          height: '86px',
+          height: '84px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
@@ -409,7 +410,7 @@ export const ShelfSlide: React.FC<ShelfSlideProps> = ({ onDropJellyBounce }) => 
                   style={{
                     minWidth: '256px',
                     width: '256px',
-                    height: '86px',
+                    height: '84px',
                     borderRadius: '12px',
                     backgroundColor: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid var(--glass-border)',

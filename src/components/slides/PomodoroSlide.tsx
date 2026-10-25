@@ -190,14 +190,14 @@ export const PomodoroSlide: React.FC = () => {
       }}
     >
       {/* ==================================================================== */}
-      {/* 1. Left Graphic: 72x72px Glowing Red Stopwatch Ring with Crown       */}
+      {/* 1. Left Graphic: 70x70px Glowing Red Stopwatch Ring with Crown       */}
       {/* ==================================================================== */}
       <div
         style={{
-          width: '72px',
-          height: '72px',
-          minWidth: '72px',
-          borderRadius: '16px',
+          width: '70px',
+          height: '70px',
+          minWidth: '70px',
+          borderRadius: '14px',
           background: 'rgba(239, 68, 68, 0.05)',
           border: '1px solid rgba(239, 68, 68, 0.16)',
           display: 'flex',
@@ -206,19 +206,19 @@ export const PomodoroSlide: React.FC = () => {
           position: 'relative',
           overflow: 'hidden',
           boxShadow: isPomodoroRunning
-            ? '0 0 16px rgba(239, 68, 68, 0.22), inset 0 0 12px rgba(239, 68, 68, 0.08)'
+            ? '0 0 16px rgba(239, 68, 68, 0.28), inset 0 0 12px rgba(239, 68, 68, 0.08)'
             : '0 4px 12px rgba(0, 0, 0, 0.2)',
           transition: 'box-shadow 0.3s ease',
         }}
         title={`Pomodoro Stopwatch (${isPomodoroRunning ? 'Running' : 'Paused'})`}
       >
         <svg
-          width="72"
-          height="72"
+          width="70"
+          height="70"
           viewBox="0 0 72 72"
           fill="none"
           style={{
-            filter: 'drop-shadow(0 0 10px rgba(239, 68, 68, 0.42))',
+            filter: 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.45))',
           }}
         >
           {/* Top Stopwatch Mechanical Crown & Winder Button */}
@@ -320,7 +320,7 @@ export const PomodoroSlide: React.FC = () => {
           minWidth: 0,
         }}
       >
-        {/* Top Row: Reset Button (↺), Large Tabular Countdown, and Focus Streak Pill */}
+        {/* Top Row: Reset Button (↺), Large 32px Tabular Countdown, and Badges */}
         <div
           style={{
             display: 'flex',
@@ -329,14 +329,14 @@ export const PomodoroSlide: React.FC = () => {
             width: '100%',
           }}
         >
-          {/* Left: Reset Button (↺) */}
+          {/* Left: Circular Reset Button (↺) */}
           <button
             type="button"
             onClick={resetTimer}
             title="Reset Pomodoro Timer (↺)"
             style={{
-              width: '26px',
-              height: '26px',
+              width: '28px',
+              height: '28px',
               borderRadius: '50%',
               background: 'var(--pill-bg)',
               border: '1px solid var(--glass-border)',
@@ -348,6 +348,7 @@ export const PomodoroSlide: React.FC = () => {
               transition: 'all 0.15s ease',
               outline: 'none',
               padding: 0,
+              flexShrink: 0,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.color = '#ef4444';
@@ -360,85 +361,78 @@ export const PomodoroSlide: React.FC = () => {
               e.currentTarget.style.transform = 'rotate(0deg)';
             }}
           >
-            <RotateCcw size={12} />
+            <RotateCcw size={13} />
           </button>
 
-          {/* Center: Large Tabular Countdown Display */}
+          {/* Center: Large 32px Tabular Countdown Display */}
           <div
             style={{
               fontVariantNumeric: 'tabular-nums',
-              fontSize: '22px',
-              fontWeight: 700,
-              letterSpacing: '-0.4px',
+              fontSize: '32px',
+              fontWeight: 800,
+              letterSpacing: '-0.6px',
               color: 'var(--text-primary)',
-              textShadow: isPomodoroRunning ? '0 0 10px rgba(239, 68, 68, 0.35)' : 'none',
+              textShadow: isPomodoroRunning ? '0 0 12px rgba(239, 68, 68, 0.4)' : 'none',
+              lineHeight: 1,
             }}
           >
             {timeDisplay}
           </div>
 
-          {/* Right: Daily Focus Streak Pill */}
-          <div
-            title="Today's Total Focus Streak"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '2.5px 8px',
-              borderRadius: '9999px',
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.28)',
-              color: '#fca5a5',
-              fontSize: '10px',
-              fontWeight: 600,
-              letterSpacing: '0.2px',
-              userSelect: 'none',
-            }}
-          >
-            <Flame size={10} style={{ color: '#ef4444' }} />
-            <span>2h 05m</span>
-          </div>
-        </div>
-
-        {/* Middle/Sub-Row: Optional Lofi Mixer Badge (when enabled) */}
-        {enableOptionalLofi && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              width: '100%',
-              margin: '-2px 0',
-            }}
-          >
-            <button
-              type="button"
-              onClick={handleCycleLofi}
-              title="Optional Lofi Focus Mixer - Click to cycle soundscape (Rain / Lofi Pad / White Noise / Off)"
+          {/* Right: Badges Stack (Daily Focus Streak + Compact Lofi Badge) */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', flexShrink: 0 }}>
+            <div
+              title="Today's Total Focus Streak"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '3px',
                 padding: '2px 7px',
-                borderRadius: '6px',
-                background: lofiSound !== 'off' ? 'rgba(59, 130, 246, 0.18)' : 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid',
-                borderColor: lofiSound !== 'off' ? 'rgba(59, 130, 246, 0.4)' : 'rgba(255, 255, 255, 0.08)',
-                color: lofiSound !== 'off' ? '#93c5fd' : 'var(--text-secondary)',
-                fontSize: '9px',
+                borderRadius: '9999px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.28)',
+                color: '#fca5a5',
+                fontSize: '9.5px',
                 fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                outline: 'none',
+                letterSpacing: '0.2px',
+                userSelect: 'none',
               }}
             >
-              <Sparkles size={8} style={{ color: lofiSound !== 'off' ? '#60a5fa' : 'inherit' }} />
-              <span>Lofi: {lofiLabel}</span>
-            </button>
-          </div>
-        )}
+              <Flame size={10} style={{ color: '#ef4444' }} />
+              <span>2h 05m</span>
+            </div>
 
-        {/* Bottom Row: "Short Break" Pill, Circular Play/Pause (▶/⏸), and "Focus Time" Pill */}
+            {/* Optional Lofi Mixer Badge (when enabled) */}
+            {enableOptionalLofi && (
+              <button
+                type="button"
+                onClick={handleCycleLofi}
+                title="Optional Lofi Focus Mixer - Click to cycle soundscape (Rain / Lofi Pad / White Noise / Off)"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  padding: '1.5px 6px',
+                  borderRadius: '5px',
+                  background: lofiSound !== 'off' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid',
+                  borderColor: lofiSound !== 'off' ? 'rgba(59, 130, 246, 0.45)' : 'rgba(255, 255, 255, 0.08)',
+                  color: lofiSound !== 'off' ? '#93c5fd' : 'var(--text-secondary)',
+                  fontSize: '8.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  outline: 'none',
+                }}
+              >
+                <Sparkles size={7.5} style={{ color: lofiSound !== 'off' ? '#60a5fa' : 'inherit' }} />
+                <span>{lofiLabel}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom Row: Symmetrical "Short Break" Pill, Circular Play/Pause (▶/⏸), and "Focus Time" Pill */}
         <div
           style={{
             display: 'flex',

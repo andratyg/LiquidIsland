@@ -21,13 +21,13 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
   isCharging = false,
   isLowBattery = false,
 }) => {
-  // Blinking cycle: random blink every 3.5 - 5.5 seconds
+  // Blinking cycle: random blink every 3.2 - 5.2 seconds
   const [isBlinking, setIsBlinking] = useState(false);
   const blinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function scheduleBlink() {
-      const nextDelay = 3500 + Math.random() * 2000;
+      const nextDelay = 3200 + Math.random() * 2000;
       blinkTimerRef.current = setTimeout(() => {
         setIsBlinking(true);
         setTimeout(() => {
@@ -39,12 +39,12 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
               setTimeout(() => {
                 setIsBlinking(false);
                 scheduleBlink();
-              }, 120);
-            }, 100);
+              }, 110);
+            }, 90);
           } else {
             scheduleBlink();
           }
-        }, 150);
+        }, 140);
       }, nextDelay);
     }
 
@@ -54,9 +54,9 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
     };
   }, []);
 
-  // Pupil displacement clamped to eye socket boundaries
-  const maxRx = 4.2;
-  const maxRy = 2.8;
+  // Pupil displacement clamped to eye boundaries
+  const maxRx = 1.1;
+  const maxRy = 1.0;
   const pupilX = Math.cos(cursorDelta.angle) * cursorDelta.distance * maxRx;
   const pupilY = Math.sin(cursorDelta.angle) * cursorDelta.distance * maxRy;
 
@@ -66,24 +66,24 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
   let slimeY = 0;
 
   if (isDraggingFile) {
-    // Swallow anticipation: stretch downward and narrow horizontally
-    slimeScaleX = 0.92;
-    slimeScaleY = 1.16;
-    slimeY = 3.5;
-  } else if (isPetting) {
-    // Jelly squash and bounce
-    slimeScaleX = 1.14;
-    slimeScaleY = 0.86;
-    slimeY = 1.8;
-  } else if (isLowBattery) {
-    // Low battery: sleepy squish
-    slimeScaleX = 1.06;
-    slimeScaleY = 0.92;
+    // Excited stretch anticipation
+    slimeScaleX = 0.94;
+    slimeScaleY = 1.12;
     slimeY = 1.5;
+  } else if (isPetting) {
+    // Kawaii squish and bounce
+    slimeScaleX = 1.14;
+    slimeScaleY = 0.88;
+    slimeY = 1.2;
+  } else if (isLowBattery) {
+    // Low battery sleepy slouch
+    slimeScaleX = 1.06;
+    slimeScaleY = 0.94;
+    slimeY = 1.0;
   } else if (isCharging) {
     // Energized buoyant stretch
-    slimeScaleX = 1.04;
-    slimeScaleY = 1.02;
+    slimeScaleX = 1.03;
+    slimeScaleY = 1.03;
     slimeY = -0.5;
   }
 
@@ -103,9 +103,9 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
       }}
     >
       <motion.svg
-        width="168"
-        height="40"
-        viewBox="0 0 168 40"
+        width="60"
+        height="38"
+        viewBox="0 0 60 38"
         fill="none"
         animate={{
           scaleX: slimeScaleX,
@@ -119,389 +119,287 @@ export const SlimeCompanion: React.FC<CompanionSharedProps> = ({
           mass: 0.6,
         }}
         style={{
-          transformOrigin: 'center 32px',
+          transformOrigin: '30px 36px',
           overflow: 'visible',
         }}
       >
         <defs>
-          {/* Liquid Goo Filter (feGaussianBlur + feColorMatrix for liquid surface tension) */}
-          <filter id="slime-liquid-goo" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="2.4" result="blur" />
-            <feColorMatrix
-              in="blur"
-              mode="matrix"
-              values="1 0 0 0 0  
-                      0 1 0 0 0  
-                      0 0 1 0 0  
-                      0 0 0 18 -7"
-              result="goo"
-            />
-            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
-          </filter>
-
-          {/* Slime Droplet Body Gradient: Luminous, multi-layered liquid crystal */}
+          {/* Slime Plump Body Gradient: Soft, 3D translucent liquid mochi */}
           <radialGradient
-            id="slime-body-grad"
-            cx="48%"
-            cy="30%"
-            r="68%"
-            fx="44%"
+            id="slime-plump-grad"
+            cx="44%"
+            cy="28%"
+            r="66%"
+            fx="40%"
             fy="22%"
           >
             <stop offset="0%" stopColor="#ffffff" stopOpacity={isDark ? '0.65' : '0.85'} />
-            <stop offset="25%" stopColor={companionColor} stopOpacity={isDark ? '0.96' : '0.90'} />
-            <stop offset="70%" stopColor={companionColor} stopOpacity={isDark ? '0.82' : '0.74'} />
-            <stop offset="100%" stopColor={companionColor} stopOpacity={isDark ? '0.55' : '0.45'} />
+            <stop offset="26%" stopColor={companionColor} stopOpacity={isDark ? '0.96' : '0.90'} />
+            <stop offset="72%" stopColor={companionColor} stopOpacity={isDark ? '0.85' : '0.78'} />
+            <stop offset="100%" stopColor={companionColor} stopOpacity={isDark ? '0.60' : '0.50'} />
           </radialGradient>
 
           {/* Inner Glowing Fluid Core */}
           <radialGradient id="slime-core-glow" cx="50%" cy="55%" r="50%">
-            <stop offset="0%" stopColor={companionColor} stopOpacity="0.8" />
-            <stop offset="60%" stopColor={companionColor} stopOpacity="0.3" />
+            <stop offset="0%" stopColor={companionColor} stopOpacity="0.75" />
+            <stop offset="60%" stopColor={companionColor} stopOpacity="0.30" />
             <stop offset="100%" stopColor={companionColor} stopOpacity="0.0" />
           </radialGradient>
 
-          {/* Primary Top-Left Specular Highlight Crescent */}
-          <linearGradient id="slime-specular-crescent" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-            <stop offset="40%" stopColor="#ffffff" stopOpacity="0.6" />
+          {/* Soft Upper-Left Specular Highlight Gradient */}
+          <linearGradient id="slime-soft-specular" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.90" />
+            <stop offset="50%" stopColor="#ffffff" stopOpacity="0.55" />
             <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
-          </linearGradient>
-
-          {/* Bottom Refraction Caustics Rim */}
-          <linearGradient id="slime-caustics-rim" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="transparent" />
-            <stop offset="50%" stopColor="#ffffff" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="transparent" />
           </linearGradient>
         </defs>
 
         {/* Ambient Underglow Droplet Pool */}
         <ellipse
-          cx="84"
-          cy="31"
-          rx="38"
-          ry="9"
+          cx="30"
+          cy="35.5"
+          rx="18"
+          ry="3.0"
           fill={companionColor}
-          opacity={isDark ? '0.4' : '0.25'}
-          filter="blur(5px)"
+          opacity={isDark ? '0.38' : '0.24'}
+          filter="blur(3px)"
         />
 
         {/* ================================================================= */}
-        {/* 1. Main Liquid Slime Droplet Body with Cute Teardrop Crown        */}
+        {/* 1. Kawaii Chubby Round Dome/Droplet Shape (Mochi-Style)           */}
         {/* ================================================================= */}
-        <g filter="url(#slime-liquid-goo)">
-          <path
-            d="M 84 4 
-               C 86.5 7, 93 11, 99 15 
-               C 107 20, 115 24, 114 30 
-               C 113 36, 101 37.5, 84 37.5 
-               C 67 37.5, 55 36, 54 30 
-               C 53 24, 61 20, 69 15 
-               C 75 11, 81.5 7, 84 4 Z"
-            fill="url(#slime-body-grad)"
-          />
-        </g>
+        <path
+          d="M 14 26 C 14 10, 46 10, 46 26 C 48 33, 42 36, 30 36 C 18 36, 12 33, 14 26 Z"
+          fill="url(#slime-plump-grad)"
+        />
 
-        {/* Inner Glowing Liquid Core */}
+        {/* Inner Glowing Liquid Fluid Core */}
         <ellipse
-          cx="84"
-          cy="26"
-          rx="25"
-          ry="9"
+          cx="30"
+          cy="28"
+          rx="14"
+          ry="6.5"
           fill="url(#slime-core-glow)"
         />
 
-        {/* ================================================================= */}
-        {/* 2. Floating Internal Micro-Bubbles                               */}
-        {/* ================================================================= */}
+        {/* Internal Micro-Bubbles */}
         <g opacity={isDark ? '0.75' : '0.6'}>
-          {/* Bubble 1: Left */}
-          <circle cx="68" cy="28" r="2.2" fill="#ffffff" opacity="0.35" />
-          <circle cx="67.5" cy="27.5" r="0.8" fill="#ffffff" opacity="0.8" />
-
-          {/* Bubble 2: Right Top */}
-          <circle cx="98" cy="18" r="1.8" fill="#ffffff" opacity="0.4" />
-          <circle cx="97.6" cy="17.6" r="0.6" fill="#ffffff" opacity="0.85" />
-
-          {/* Bubble 3: Center Bottom */}
-          <circle cx="88" cy="31" r="1.4" fill="#ffffff" opacity="0.3" />
+          <circle cx="21" cy="29" r="0.9" fill="#ffffff" opacity="0.4" />
+          <circle cx="39" cy="21" r="0.75" fill="#ffffff" opacity="0.45" />
+          <circle cx="33" cy="31" r="0.6" fill="#ffffff" opacity="0.35" />
         </g>
 
         {/* ================================================================= */}
-        {/* 3. 3D Glass Specular Highlights & Surface Tension Caustics        */}
+        {/* 2. Soft 3D Specular Highlight on Upper-Left Curve                */}
         {/* ================================================================= */}
-        {/* Primary Specular Arc (Catching top light) */}
         <path
-          d="M 68 14 C 74 9, 82 7, 87 8"
-          stroke="url(#slime-specular-crescent)"
-          strokeWidth="2.2"
+          d="M 18 22 C 18 14, 25 12, 32 12"
+          stroke="url(#slime-soft-specular)"
+          strokeWidth="1.8"
           strokeLinecap="round"
           fill="none"
+          opacity="0.80"
         />
-
-        {/* Secondary Glint Pearl on Shoulder */}
-        <ellipse
-          cx="64"
-          cy="18"
-          rx="2.6"
-          ry="1.6"
-          transform="rotate(-28 64 18)"
+        {/* Glint Pearl Dot */}
+        <circle
+          cx="17.5"
+          cy="18.5"
+          r="1.0"
           fill="#ffffff"
           opacity="0.85"
         />
 
-        {/* Teardrop Tip Specular Pearl */}
-        <circle
-          cx="83.8"
-          cy="6.8"
-          r="1.2"
-          fill="#ffffff"
-          opacity="0.9"
-        />
-
-        {/* Bottom Caustics Rim Reflection */}
+        {/* Subtle Bottom Caustics Rim */}
         <path
-          d="M 66 35 C 75 36.8, 93 36.8, 102 35"
-          stroke="url(#slime-caustics-rim)"
-          strokeWidth="1.2"
+          d="M 21 34.8 C 26 35.8, 34 35.8, 39 34.8"
+          stroke="#ffffff"
+          strokeWidth="0.75"
           strokeLinecap="round"
+          opacity="0.30"
           fill="none"
         />
 
         {/* ================================================================= */}
-        {/* 4. Suspended Expressive Eyes & Dynamic Mouth                     */}
+        {/* 3. Cute Expressive Oval Eyes (cx=23, cx=37, cy=24) & Smile Mouth  */}
         {/* ================================================================= */}
         {isPetting ? (
           /* Petting Happy Eyes: Joyful Squint Arcs (^ ^) with Blushing Cheeks */
           <g>
             <path
-              d="M 69 21 Q 74 15 79 21"
+              d="M 20.5 24.5 Q 23 21.5 25.5 24.5"
               stroke={eyeSocketWhite}
-              strokeWidth="2.4"
+              strokeWidth="1.8"
               strokeLinecap="round"
               fill="none"
             />
             <path
-              d="M 89 21 Q 94 15 99 21"
+              d="M 34.5 24.5 Q 37 21.5 39.5 24.5"
               stroke={eyeSocketWhite}
-              strokeWidth="2.4"
+              strokeWidth="1.8"
               strokeLinecap="round"
               fill="none"
             />
 
             {/* Glowing Blushing Cheeks */}
-            <ellipse cx="64" cy="24.5" rx="3.4" ry="2.0" fill="#f43f5e" opacity="0.75" />
-            <ellipse cx="104" cy="24.5" rx="3.4" ry="2.0" fill="#f43f5e" opacity="0.75" />
+            <ellipse cx="18" cy="26" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.75" />
+            <ellipse cx="42" cy="26" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.75" />
 
             {/* Joyful Open Smile */}
             <path
-              d="M 80.5 23 Q 84 28.5 87.5 23 Z"
+              d="M 28 25.5 Q 30 28.5 32 25.5 Z"
               fill={isDark ? '#f43f5e' : '#e11d48'}
-              stroke={eyeSocketWhite}
-              strokeWidth="0.8"
             />
 
             {/* Tiny Floating Love Heart on Petting */}
             <motion.path
-              d="M 84 10 C 82 8, 79 9, 81 12 L 84 14 L 87 12 C 89 9, 86 8, 84 10 Z"
+              d="M 30 7 C 28.5 5.5, 26 6.5, 27.5 9 L 30 11 L 32.5 9 C 34 6.5, 31.5 5.5, 30 7 Z"
               fill="#f43f5e"
-              initial={{ scale: 0, y: 4, opacity: 0 }}
-              animate={{ scale: [0, 1.2, 1], y: [-2, -8, -12], opacity: [0, 1, 0] }}
+              initial={{ scale: 0, y: 3, opacity: 0 }}
+              animate={{ scale: [0, 1.2, 1], y: [-1, -6, -9], opacity: [0, 1, 0] }}
               transition={{ duration: 1.2, repeat: Infinity, ease: 'easeOut' }}
-              style={{ transformOrigin: '84px 11px' }}
+              style={{ transformOrigin: '30px 8px' }}
             />
           </g>
         ) : (
           /* Normal / Cursor Tracking / Blinking Eyes */
-          <g style={{ transformOrigin: '84px 21px' }}>
-            {/* Left Eye */}
+          <g style={{ transformOrigin: '30px 24px' }}>
+            {/* Left Eye (cx=23, cy=24) */}
             <g
-              transform="translate(74, 21)"
+              transform="translate(23, 24)"
               style={{
                 transformOrigin: '0 0',
-                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.38 : 1})`,
+                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.35 : 1})`,
                 transition: 'transform 0.08s ease-out',
               }}
             >
-              {/* Eye Socket White */}
-              <circle cx="0" cy="0" r="4.6" fill={eyeSocketWhite} />
-              {/* Tracking Pupil */}
-              <circle
+              <ellipse cx="0" cy="0" rx="2.4" ry="3.2" fill={eyeSocketWhite} />
+              {/* Pupil tracking */}
+              <ellipse
                 cx={pupilX}
                 cy={pupilY}
-                r="2.8"
+                rx="1.5"
+                ry="2.1"
                 fill={pupilCoreDark}
               />
-              {/* Inner Iris Accent Glow */}
+              {/* Primary Glint Catchlight */}
               <circle
-                cx={pupilX}
-                cy={pupilY + 0.8}
-                r="1.5"
-                fill={companionColor}
-                opacity="0.8"
-              />
-              {/* Primary Glint Star/Catchlight */}
-              <circle
-                cx={pupilX + 1.0}
-                cy={pupilY - 1.0}
-                r="1.2"
+                cx={pupilX + 0.6}
+                cy={pupilY - 0.7}
+                r="0.8"
                 fill="#ffffff"
               />
-              {/* Secondary Micro Highlight */}
+              {/* Micro Secondary Highlight */}
               <circle
-                cx={pupilX - 0.9}
-                cy={pupilY + 0.9}
-                r="0.6"
+                cx={pupilX - 0.5}
+                cy={pupilY + 0.6}
+                r="0.4"
                 fill="#ffffff"
                 opacity="0.8"
               />
             </g>
 
-            {/* Right Eye */}
+            {/* Right Eye (cx=37, cy=24) */}
             <g
-              transform="translate(94, 21)"
+              transform="translate(37, 24)"
               style={{
                 transformOrigin: '0 0',
-                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.38 : 1})`,
+                transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.35 : 1})`,
                 transition: 'transform 0.08s ease-out',
               }}
             >
-              {/* Eye Socket White */}
-              <circle cx="0" cy="0" r="4.6" fill={eyeSocketWhite} />
-              {/* Tracking Pupil */}
-              <circle
+              <ellipse cx="0" cy="0" rx="2.4" ry="3.2" fill={eyeSocketWhite} />
+              {/* Pupil tracking */}
+              <ellipse
                 cx={pupilX}
                 cy={pupilY}
-                r="2.8"
+                rx="1.5"
+                ry="2.1"
                 fill={pupilCoreDark}
               />
-              {/* Inner Iris Accent Glow */}
+              {/* Primary Glint Catchlight */}
               <circle
-                cx={pupilX}
-                cy={pupilY + 0.8}
-                r="1.5"
-                fill={companionColor}
-                opacity="0.8"
-              />
-              {/* Primary Glint Star/Catchlight */}
-              <circle
-                cx={pupilX + 1.0}
-                cy={pupilY - 1.0}
-                r="1.2"
+                cx={pupilX + 0.6}
+                cy={pupilY - 0.7}
+                r="0.8"
                 fill="#ffffff"
               />
-              {/* Secondary Micro Highlight */}
+              {/* Micro Secondary Highlight */}
               <circle
-                cx={pupilX - 0.9}
-                cy={pupilY + 0.9}
-                r="0.6"
+                cx={pupilX - 0.5}
+                cy={pupilY + 0.6}
+                r="0.4"
                 fill="#ffffff"
                 opacity="0.8"
               />
             </g>
 
-            {/* Cute Cheek Blush Spots */}
-            <ellipse cx="66" cy="25.5" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.4" />
-            <ellipse cx="102" cy="25.5" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.4" />
+            {/* Rosy Soft Cheeks */}
+            <ellipse
+              cx="18.5"
+              cy="26"
+              rx="1.8"
+              ry="1.1"
+              fill="#f43f5e"
+              opacity={isDark ? 0.40 : 0.48}
+            />
+            <ellipse
+              cx="41.5"
+              cy="26"
+              rx="1.8"
+              ry="1.1"
+              fill="#f43f5e"
+              opacity={isDark ? 0.40 : 0.48}
+            />
 
-            {/* Energized Smile when Charging */}
-            {isCharging && (
-              <path
-                d="M 81 24 Q 84 27.5 87 24"
-                stroke={eyeSocketWhite}
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                fill="none"
-              />
-            )}
-
-            {/* Low Battery Floating Sleepy Zs */}
-            {isLowBattery && (
-              <>
-                <motion.text
-                  x="98"
-                  y="14"
-                  fill="#94a3b8"
-                  fontSize="9"
-                  fontWeight="700"
-                  animate={{ y: [14, 6], opacity: [0, 0.9, 0], x: [98, 102] }}
-                  transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
-                >
-                  z
-                </motion.text>
-                <motion.text
-                  x="105"
-                  y="10"
-                  fill="#94a3b8"
-                  fontSize="11"
-                  fontWeight="700"
-                  animate={{ y: [10, 0], opacity: [0, 0.9, 0], x: [105, 110] }}
-                  transition={{ duration: 1.8, delay: 0.6, repeat: Infinity, ease: 'easeOut' }}
-                >
-                  Z
-                </motion.text>
-              </>
-            )}
-
-            {/* Charging Electric Sparkle Particles */}
-            {isCharging && (
-              <>
-                <motion.polygon
-                  points="84,2 85.5,5.5 89,6 86.5,8.5 87,12 84,10 81,12 81.5,8.5 79,6 82.5,5.5"
-                  fill="#fde047"
-                  animate={{ y: [-1, -4, -1], rotate: [0, 20, -20, 0], scale: [0.8, 1.15, 0.8] }}
-                  transition={{ duration: 1.2, repeat: Infinity }}
-                  style={{ transformOrigin: '84px 7px' }}
-                />
-                <motion.polygon
-                  points="65,9 66,11.5 68.5,12 66.8,13.8 67.2,16 65,14.6 62.8,16 63.2,13.8 61.5,12 64,11.5"
-                  fill="#4ade80"
-                  animate={{ y: [0, -3, 0], scale: [0.7, 1.05, 0.7] }}
-                  transition={{ duration: 1.4, delay: 0.3, repeat: Infinity }}
-                />
-                <motion.polygon
-                  points="103,9 104,11.5 106.5,12 104.8,13.8 105.2,16 103,14.6 100.8,16 101.2,13.8 99.5,12 102,11.5"
-                  fill="#38bdf8"
-                  animate={{ y: [0, -3, 0], scale: [0.7, 1.05, 0.7] }}
-                  transition={{ duration: 1.4, delay: 0.6, repeat: Infinity }}
-                />
-              </>
-            )}
-            <ellipse cx="102" cy="25.5" rx="2.5" ry="1.5" fill="#f43f5e" opacity="0.4" />
-
-            {/* Dynamic Mouth */}
-            {isDraggingFile ? (
-              /* File Drag Anticipation: Excited Open "O" Mouth with Cute Tongue */
-              <g>
-                <ellipse
-                  cx="84"
-                  cy="27"
-                  rx="4.4"
-                  ry="5.8"
-                  fill="#0f172a"
-                  stroke="#ffffff"
-                  strokeWidth="1.2"
-                />
-                {/* Cute Tongue */}
-                <path
-                  d="M 81.5 29.5 Q 84 32.5 86.5 29.5"
-                  fill="#f43f5e"
-                />
-                {/* Sparkle Drop */}
-                <circle cx="84" cy="25" r="0.8" fill="#ffffff" opacity="0.8" />
-              </g>
-            ) : (
-              /* Idle Cute Curved Cat Mouth (ω) */
-              <path
-                d="M 81.2 24.8 Q 82.8 26.6 84 25.2 Q 85.2 26.6 86.8 24.8"
-                stroke={isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.65)'}
-                strokeWidth="1.1"
-                strokeLinecap="round"
-                fill="none"
-              />
-            )}
+            {/* Tiny Kawaii Mouth Between Eyes */}
+            <path
+              d="M 28.3 26.8 Q 30 28.2 31.7 26.8"
+              stroke={pupilCoreDark}
+              strokeWidth="0.9"
+              strokeLinecap="round"
+              fill="none"
+              opacity={isDark ? 0.8 : 0.7}
+            />
           </g>
+        )}
+
+        {/* Low Battery Floating Sleepy Zs */}
+        {isLowBattery && (
+          <>
+            <motion.text
+              x="42"
+              y="14"
+              fill="#94a3b8"
+              fontSize="7"
+              fontWeight="700"
+              animate={{ y: [14, 8], opacity: [0, 0.9, 0], x: [42, 46] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+            >
+              z
+            </motion.text>
+            <motion.text
+              x="47"
+              y="11"
+              fill="#94a3b8"
+              fontSize="8.5"
+              fontWeight="700"
+              animate={{ y: [11, 4], opacity: [0, 0.9, 0], x: [47, 52] }}
+              transition={{ duration: 1.8, delay: 0.6, repeat: Infinity, ease: 'easeOut' }}
+            >
+              Z
+            </motion.text>
+          </>
+        )}
+
+        {/* Charging Sparkle Crown */}
+        {isCharging && (
+          <motion.polygon
+            points="30,3 31.2,5.8 34,6.2 32,8.2 32.4,11 30,9.5 27.6,11 28,8.2 26,6.2 28.8,5.8"
+            fill="#fde047"
+            animate={{ y: [-1, -3, -1], rotate: [0, 15, -15, 0], scale: [0.85, 1.15, 0.85] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+            style={{ transformOrigin: '30px 7px' }}
+          />
         )}
       </motion.svg>
     </div>

@@ -42,6 +42,8 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   volume: 75,
   brightness: 80,
   isAudioPlaying: true,
+  playbackTime: 193,
+  duration: 256,
   isPomodoroRunning: false,
 
   // Phase 6 defaults
@@ -81,7 +83,7 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   privacyBlurEnabled: false,
   nightEyeCareEnabled: false,
   companionSensitivity: 'playful',
-  showTaskbarDock: true,
+  showTaskbarDock: false,
   isWindowMaximizedSimulated: false,
 };
 
@@ -152,7 +154,7 @@ function loadInitialSettings(): SystemSettings {
       privacyBlurEnabled: typeof parsed.privacyBlurEnabled === 'boolean' ? parsed.privacyBlurEnabled : false,
       nightEyeCareEnabled: typeof parsed.nightEyeCareEnabled === 'boolean' ? parsed.nightEyeCareEnabled : false,
       companionSensitivity: parsed.companionSensitivity === 'calm' ? 'calm' : 'playful',
-      showTaskbarDock: typeof parsed.showTaskbarDock === 'boolean' ? parsed.showTaskbarDock : true,
+      showTaskbarDock: typeof parsed.showTaskbarDock === 'boolean' ? parsed.showTaskbarDock : false,
       isWindowMaximizedSimulated: typeof parsed.isWindowMaximizedSimulated === 'boolean' ? parsed.isWindowMaximizedSimulated : false,
     };
   } catch (err) {
@@ -754,6 +756,26 @@ export const systemStore = {
   toggleWindowMaximizedSimulated() {
     const next = !currentSettings.isWindowMaximizedSimulated;
     systemStore.setIsWindowMaximizedSimulated(next);
+  },
+
+  setPlaybackTime(time: number | ((prev: number) => number)) {
+    const current = currentSettings.playbackTime ?? 193;
+    const next = typeof time === 'function' ? time(current) : time;
+    const dur = currentSettings.duration ?? 256;
+    const clamped = next >= dur ? 0 : Math.max(0, next);
+    saveSettings({ ...currentSettings, playbackTime: clamped });
+  },
+
+  tickPlaybackTime() {
+    if (!currentSettings.isAudioPlaying) return;
+    const current = currentSettings.playbackTime ?? 193;
+    const dur = currentSettings.duration ?? 256;
+    const next = current + 1 >= dur ? 0 : current + 1;
+    saveSettings({ ...currentSettings, playbackTime: next });
+  },
+
+  setDuration(duration: number) {
+    saveSettings({ ...currentSettings, duration });
   },
 
   subscribe(listener: () => void) {

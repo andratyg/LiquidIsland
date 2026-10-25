@@ -32,6 +32,21 @@ import {
 } from 'lucide-react';
 import { CompanionMode, TaskbarMode } from '../types/liquid';
 
+// Safe Tauri IPC Invoker with web browser fallback
+async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
+  try {
+    const isTauri =
+      typeof window !== 'undefined' &&
+      ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (!isTauri) return null;
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<T>(cmd, args);
+  } catch (err) {
+    console.warn(`[Tauri IPC] "${cmd}" returned:`, err);
+    return null;
+  }
+}
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -97,7 +112,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="settings-modal-overlay" onClick={onClose}>
+      <div
+        id="settings-modal-root"
+        className="settings-modal-overlay"
+        onClick={onClose}
+        onMouseEnter={() => safeInvoke('set_click_through', { ignore: false })}
+        onMouseLeave={() => safeInvoke('set_click_through', { ignore: true })}
+      >
         <motion.div
           key="settings-card"
           initial={{ opacity: 0, scale: 0.94, y: 16 }}

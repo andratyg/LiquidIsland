@@ -26,6 +26,7 @@ interface IslandShellProps {
   activeDimensions: IslandDimensions;
   onHoverChange?: (hovered: boolean) => void;
   isJellyBouncing?: boolean;
+  isModalOpen?: boolean;
 }
 
 export const IslandShell: React.FC<IslandShellProps> = ({
@@ -33,6 +34,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   activeDimensions,
   onHoverChange,
   isJellyBouncing = false,
+  isModalOpen = false,
 }) => {
   const islandState = useSystemStore((s) => s.islandState);
   const currentVolume = useSystemStore((s) => s.volume);
@@ -86,8 +88,20 @@ export const IslandShell: React.FC<IslandShellProps> = ({
   const handleMouseLeave = useCallback(async () => {
     setIsMagneticHover(false);
     onHoverChange?.(false);
-    await safeInvoke('set_click_through', { ignore: true });
-  }, [onHoverChange]);
+    if (!isModalOpen) {
+      await safeInvoke('set_click_through', { ignore: true });
+    }
+  }, [onHoverChange, isModalOpen]);
+
+  // Double-Click Notch to Expand into Dashboard
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const current = systemStore.getState().islandState;
+    if (current === 'compact' || current === 'eyes') {
+      playGlassPop();
+      systemStore.expandIsland();
+    }
+  }, []);
 
   // Mouse Wheel: Scroll gesture to adjust Volume or Brightness via Toast Mode C HUD
   const handleWheel = useCallback(
@@ -156,8 +170,22 @@ export const IslandShell: React.FC<IslandShellProps> = ({
 
   const isBezelLine = islandState === 'bezel-line';
 
+  // Dynamic bottom squircle radii
+  const bottomCornerRadius =
+    islandState === 'expanded' || islandState === 'expanded-lyrics'
+      ? '34px'
+      : islandState === 'toast'
+      ? '32px'
+      : islandState === 'bezel-line'
+      ? '4px'
+      : '24px';
+
   return (
     <div
+      id="liquid-island-root"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onDoubleClick={handleDoubleClick}
       style={{
         position: 'relative',
         display: 'flex',
@@ -172,34 +200,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       <div className="top-bezel-strip" />
 
       {/* ==================================================================== */}
-      {/* 2. Concave SVG Notch Corner Ears (16x16 Corner Fillets)              */}
-      {/* ==================================================================== */}
-      {/* Left Notch Ear */}
-      <div
-        className="notch-ear notch-ear-left"
-        style={{
-          opacity: isBezelLine ? 0 : 1,
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M 0,0 L 16,0 L 16,16 A 16,16 0 0,0 0,0 Z" />
-        </svg>
-      </div>
-
-      {/* Right Notch Ear (Horizontally Flipped) */}
-      <div
-        className="notch-ear notch-ear-right"
-        style={{
-          opacity: isBezelLine ? 0 : 1,
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M 0,0 L 16,0 L 16,16 A 16,16 0 0,0 0,0 Z" />
-        </svg>
-      </div>
-
-      {/* ==================================================================== */}
-      {/* 3. Master Notch Container with Spring Physics Transitions             */}
+      {/* 2. Master Notch Container with Spring Physics Transitions             */}
       {/* ==================================================================== */}
       <motion.div
         ref={shellRef}
@@ -218,17 +219,33 @@ export const IslandShell: React.FC<IslandShellProps> = ({
           mass: 0.8,
         }}
         onMouseMove={handleMouseMove}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         style={{
           pointerEvents: 'auto',
           position: 'relative',
-          borderBottomLeftRadius: islandState === 'toast' ? '32px' : undefined,
-          borderBottomRightRadius: islandState === 'toast' ? '32px' : undefined,
+          borderBottomLeftRadius: bottomCornerRadius,
+          borderBottomRightRadius: bottomCornerRadius,
         }}
       >
+        {/* Concave SVG Notch Corner Ears (Mounted inside motion.div for 1:1 edge tracking) */}
+        {!isBezelLine && (
+          <>
+            {/* Left Notch Ear */}
+            <div className="notch-ear notch-ear-left">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M 0,0 L 16,0 L 16,16 A 16,16 0 0,0 0,0 Z" />
+              </svg>
+            </div>
+
+            {/* Right Notch Ear (Horizontally Flipped) */}
+            <div className="notch-ear notch-ear-right">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M 0,0 L 16,0 L 16,16 A 16,16 0 0,0 0,0 Z" />
+              </svg>
+            </div>
+          </>
+        )}
         {/* State 0: Stealth Bezel Line with Magnetic Tension Wake */}
         {isBezelLine ? (
           <div

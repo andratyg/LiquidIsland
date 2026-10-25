@@ -3,6 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSystemStore, systemStore } from '../../store/useSystemStore';
 import { playToggleClick, playGlassPop, playWaterDrop } from '../../utils/sfx';
 import {
+  PAPER_SKY_LYRICS,
+  TOTAL_DURATION,
+  formatTime,
+  formatRemaining,
+  type LyricLine,
+} from '../../utils/lyricsData';
+import {
   Play,
   Pause,
   SkipBack,
@@ -11,101 +18,7 @@ import {
   Languages,
 } from 'lucide-react';
 
-export interface LyricLine {
-  id: number;
-  time: number; // Seconds
-  textEn: string;
-  textId: string;
-}
-
-export const PAPER_SKY_LYRICS: LyricLine[] = [
-  {
-    id: 1,
-    time: 0,
-    textEn: '[Intro - Gentle breeze & acoustic guitar]',
-    textId: '[Intro - Angin sepoi & gitar akustik]',
-  },
-  {
-    id: 2,
-    time: 14,
-    textEn: 'Paper airplanes across the morning sky',
-    textId: 'Pesawat kertas melintasi langit pagi',
-  },
-  {
-    id: 3,
-    time: 32,
-    textEn: 'Tracing the whispers of a forgotten dream',
-    textId: 'Menelusuri bisikan dari mimpi yang terlupa',
-  },
-  {
-    id: 4,
-    time: 50,
-    textEn: 'If I could be by your side today',
-    textId: 'Jika aku bisa berada di sisimu hari ini',
-  },
-  {
-    id: 5,
-    time: 72,
-    textEn: "I'll give you all my seasons, rain or shine",
-    textId: 'Kan kuberikan seluruh musimku padamu, hujan atau panas',
-  },
-  {
-    id: 6,
-    time: 96,
-    textEn: 'Drifting clouds beneath the summer sun',
-    textId: 'Awan berarak di bawah mentari musim panas',
-  },
-  {
-    id: 7,
-    time: 120,
-    textEn: 'Catching the light before the day is done',
-    textId: 'Menangkap cahaya sebelum senja berlabuh',
-  },
-  {
-    id: 8,
-    time: 144,
-    textEn: 'We wrote our names upon the open blue',
-    textId: 'Kita tuliskan nama kita di atas hamparan biru',
-  },
-  {
-    id: 9,
-    time: 168,
-    textEn: 'Every folded page returns to you',
-    textId: 'Setiap lipatan halaman kan kembali kepadamu',
-  },
-  {
-    id: 10,
-    time: 190, // Active at 03:13 (193s)
-    textEn: 'And when the paper wings begin to fall',
-    textId: 'Dan saat sayap kertas mulai berjatuhan',
-  },
-  {
-    id: 11,
-    time: 208,
-    textEn: 'Your melody will guide me through it all',
-    textId: 'Melodimu kan menuntunku melalui segalanya',
-  },
-  {
-    id: 12,
-    time: 226,
-    textEn: 'Lumen Coast fades into evening glow',
-    textId: 'Lumen Coast memudar dalam pendar petang',
-  },
-  {
-    id: 13,
-    time: 242,
-    textEn: 'Paper sky, wherever you may go...',
-    textId: 'Langit kertas, ke mana pun kau melangkah...',
-  },
-  {
-    id: 14,
-    time: 252,
-    textEn: '[Outro - Ambient waves & lo-fi reverb]',
-    textId: '[Outro - Debur ombak & dengung lo-fi]',
-  },
-];
-
-const TOTAL_DURATION = 256; // 04:16
+export { type LyricLine, PAPER_SKY_LYRICS };
 
 const AUDIO_OUTPUT_DEVICES = [
   '🎧 AirBuds Pro',
@@ -118,9 +31,8 @@ export const MusicLyricsSlide: React.FC = () => {
   const lyricsOpen = useSystemStore((s) => s.lyricsOpen);
   const dualSubtitleEnabled = useSystemStore((s) => s.dualSubtitleEnabled);
   const islandState = useSystemStore((s) => s.islandState);
+  const currentTime = useSystemStore((s) => s.playbackTime ?? 193);
 
-  // Playback timestamp in seconds (default initial: 193s = 03:13)
-  const [currentTime, setCurrentTime] = useState<number>(193);
   const [deviceIndex, setDeviceIndex] = useState<number>(0);
 
   // Seek bar drag state
@@ -130,22 +42,6 @@ export const MusicLyricsSlide: React.FC = () => {
   // Active lyric item scroll ref
   const activeLineRef = useRef<HTMLDivElement>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
-
-  // Live playback timer: advances currentTime when playing
-  useEffect(() => {
-    if (!isAudioPlaying || isSeeking) return;
-
-    const interval = setInterval(() => {
-      setCurrentTime((prev) => {
-        if (prev >= TOTAL_DURATION) {
-          return 0; // Loop song
-        }
-        return prev + 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isAudioPlaying, isSeeking]);
 
   // Determine current active lyric index
   const activeLyricIndex = (() => {
@@ -167,21 +63,6 @@ export const MusicLyricsSlide: React.FC = () => {
     }
   }, [activeLyricIndex, lyricsOpen]);
 
-  // Format seconds to mm:ss
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Remaining time (-mm:ss)
-  const formatRemaining = (seconds: number) => {
-    const remaining = Math.max(0, TOTAL_DURATION - seconds);
-    const mins = Math.floor(remaining / 60);
-    const secs = Math.floor(remaining % 60);
-    return `-${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Toggle Play / Pause
   const handleTogglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -193,7 +74,7 @@ export const MusicLyricsSlide: React.FC = () => {
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
     playGlassPop();
-    setCurrentTime(0);
+    systemStore.setPlaybackTime(0);
   };
 
   // Skip Next
@@ -202,7 +83,7 @@ export const MusicLyricsSlide: React.FC = () => {
     playGlassPop();
     // Advance to next section or loop
     const nextLine = PAPER_SKY_LYRICS[Math.min(activeLyricIndex + 1, PAPER_SKY_LYRICS.length - 1)];
-    setCurrentTime(nextLine.time);
+    systemStore.setPlaybackTime(nextLine.time);
   };
 
   // Toggle Lyrics Wing
@@ -233,7 +114,7 @@ export const MusicLyricsSlide: React.FC = () => {
     const clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
     const ratio = clickX / rect.width;
     const newTime = Math.round(ratio * TOTAL_DURATION);
-    setCurrentTime(newTime);
+    systemStore.setPlaybackTime(newTime);
   };
 
   const handleSeekMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -259,7 +140,7 @@ export const MusicLyricsSlide: React.FC = () => {
   const handleLyricClick = (lineTime: number, e: React.MouseEvent) => {
     e.stopPropagation();
     playWaterDrop();
-    setCurrentTime(lineTime);
+    systemStore.setPlaybackTime(lineTime);
   };
 
   const isExpandedLyrics = islandState === 'expanded-lyrics' || lyricsOpen;
@@ -294,13 +175,13 @@ export const MusicLyricsSlide: React.FC = () => {
       >
         {/* Top Info Row: Album Art + Track Info + Device Switcher */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '11px', width: '100%' }}>
-          {/* Album Art: 72x72px Notebook Lined Texture + Blue Slash Graphic */}
+          {/* Album Art: 66x66px Notebook Lined Texture + Blue Slash Graphic */}
           <div
             className={`album-art-card notebook-paper-texture ${isAudioPlaying ? 'album-art-playing' : ''}`}
             title="Lumen Coast - Paper Sky"
           >
             {/* SVG Minimalist Graphic: Sapphire Blue Circle with Slash */}
-            <svg width="42" height="42" viewBox="0 0 42 42" fill="none">
+            <svg width="38" height="38" viewBox="0 0 42 42" fill="none">
               <circle
                 cx="21"
                 cy="21"

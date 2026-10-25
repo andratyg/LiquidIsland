@@ -98,7 +98,7 @@ export const WaterSlide: React.FC = () => {
           <div
             style={{
               fontVariantNumeric: 'tabular-nums',
-              fontSize: '19px',
+              fontSize: '18px',
               fontWeight: 700,
               letterSpacing: '-0.4px',
               color: 'var(--text-primary)',
@@ -341,14 +341,16 @@ export const WaterSlide: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          flex: 1,
-          height: '100%',
-          minWidth: 0,
+          width: '185px',
+          height: '86px',
+          minWidth: '185px',
+          maxWidth: '185px',
           background: 'rgba(255, 255, 255, 0.03)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           borderRadius: '12px',
           padding: '8px 10px 6px 12px',
           boxSizing: 'border-box',
+          flexShrink: 0,
         }}
       >
         {/* Main Chart Graphic: 8 Vertical Bars + X-Axis Labels */}

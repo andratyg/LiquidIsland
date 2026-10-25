@@ -120,7 +120,7 @@ export const TodoSlide: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
           <span
             style={{
-              fontSize: '29px',
+              fontSize: '30px',
               fontWeight: 800,
               lineHeight: 1,
               letterSpacing: '-0.5px',
@@ -360,7 +360,7 @@ export const TodoSlide: React.FC = () => {
                     ? 'rgba(34, 197, 94, 0.22)'
                     : 'rgba(255, 255, 255, 0.05)',
                   border: task.completed
-                    ? '1px solid rgba(34, 197, 94, 0.38)'
+                    ? '1px solid rgba(34, 197, 94, 0.4)'
                     : '1px solid var(--glass-border)',
                   padding: '0 8px 0 12px',
                   boxSizing: 'border-box',

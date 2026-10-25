@@ -16,13 +16,13 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
   isCharging = false,
   isLowBattery = false,
 }) => {
-  // Blinking loop: random blink every 3.6s - 5.4s
+  // Blinking loop: random blink every 3.4s - 5.2s
   const [isBlinking, setIsBlinking] = useState(false);
   const blinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function scheduleBlink() {
-      const delay = 3600 + Math.random() * 1800;
+      const delay = 3400 + Math.random() * 1800;
       blinkTimerRef.current = setTimeout(() => {
         setIsBlinking(true);
         setTimeout(() => {
@@ -48,7 +48,7 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
     };
   }, []);
 
-  // Paw Swat Gesture: when cursor hovers near the bottom edge for ~1 second
+  // Paw Swat Gesture: when cursor hovers near the bottom edge
   const [isSwatting, setIsSwatting] = useState(false);
   const swatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,7 +63,7 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
             setIsSwatting(false);
             swatTimerRef.current = null;
           }, 500);
-        }, 900);
+        }, 850);
       }
     } else {
       if (swatTimerRef.current) {
@@ -74,21 +74,21 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
   }, [cursorDelta, isSwatting, isPetting]);
 
   // Pupil displacement clamped to eye socket boundaries
-  const maxRx = 3.6;
-  const maxRy = 2.4;
+  const maxRx = 1.0;
+  const maxRy = 0.9;
   const pupilX = Math.cos(cursorDelta.angle) * cursorDelta.distance * maxRx;
   const pupilY = Math.sin(cursorDelta.angle) * cursorDelta.distance * maxRy;
 
   const isDark = theme === 'dark';
   // Rich velvety feline silhouette tone
-  const catBodyColor = isDark ? '#15151c' : '#2d3748';
-  const catHighlight = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.45)';
+  const catBodyColor = isDark ? '#14141a' : '#2d3748';
+  const catHighlight = isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.45)';
   const earInnerPink = isDark ? '#3b1d36' : '#fed7e2';
-  const earFluffColor = isDark ? 'rgba(255, 255, 255, 0.25)' : '#ffffff';
+  const earFluffColor = isDark ? 'rgba(255, 255, 255, 0.28)' : '#ffffff';
   const eyeGlowColor = companionColor || (isDark ? '#38bdf8' : '#0284c7');
 
   // =========================================================================
-  // Stealth Bezel-Line Peek Mode: Cute Rounded Ears and Swaying Tail
+  // Stealth Bezel-Line Peek Mode: Cute Rounded Ears
   // =========================================================================
   if (isBezelLine) {
     return (
@@ -103,44 +103,20 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
           fill="none"
           style={{ position: 'absolute', top: '-12px', overflow: 'visible' }}
         >
-          {/* Left Peeking Rounded Ear */}
-          <path
-            d="M 50 18 C 50 12, 54 4, 57 4 C 60 4, 63 10, 64 18 Z"
-            fill={catBodyColor}
-          />
-          <path
-            d="M 53 18 C 53 14, 55 8, 57 8 C 59 8, 61 12, 62 18 Z"
-            fill={earInnerPink}
-            opacity="0.8"
-          />
+          {/* Left Peeking Cat Ear */}
+          <path d="M 50 18 C 50 12, 54 4, 57 4 C 60 4, 63 10, 64 18 Z" fill={catBodyColor} />
+          <path d="M 53 18 C 53 14, 55 8, 57 8 C 59 8, 61 12, 62 18 Z" fill={earInnerPink} opacity="0.8" />
 
-          {/* Right Peeking Rounded Ear */}
-          <path
-            d="M 72 18 C 73 10, 76 4, 79 4 C 82 4, 86 12, 86 18 Z"
-            fill={catBodyColor}
-          />
-          <path
-            d="M 74 18 C 75 12, 77 8, 79 8 C 81 8, 83 14, 83 18 Z"
-            fill={earInnerPink}
-            opacity="0.8"
-          />
-
-          {/* Swaying Tail Tip */}
-          <motion.path
-            d="M 106 18 C 110 11, 117 5, 120 7 C 122 9, 116 14, 112 18 Z"
-            fill={catBodyColor}
-            animate={{ rotate: [-6, 8, -6] }}
-            transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
-            style={{ transformOrigin: '108px 18px' }}
-          />
-          <circle cx="119" cy="7" r="1.8" fill={companionColor} opacity="0.85" />
+          {/* Right Peeking Cat Ear */}
+          <path d="M 72 18 C 73 10, 76 4, 79 4 C 82 4, 86 12, 86 18 Z" fill={catBodyColor} />
+          <path d="M 74 18 C 75 12, 77 8, 79 8 C 81 8, 83 14, 83 18 Z" fill={earInnerPink} opacity="0.8" />
         </svg>
       </div>
     );
   }
 
   // =========================================================================
-  // Standard Eyes State Mode (168px × 40px)
+  // Standard Eyes State Mode (Unified 60x38 Coordinate Space)
   // =========================================================================
   return (
     <div
@@ -154,9 +130,9 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
       }}
     >
       <motion.svg
-        width="168"
-        height="40"
-        viewBox="0 0 168 40"
+        width="60"
+        height="38"
+        viewBox="0 0 60 38"
         fill="none"
         style={{ overflow: 'visible' }}
       >
@@ -170,28 +146,22 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
           </radialGradient>
 
           {/* Velvet Cat Fur Gradient */}
-          <linearGradient id="cat-velvet-grad" x1="0" y1="0" x2="0" y2="40" gradientUnits="userSpaceOnUse">
+          <linearGradient id="cat-velvet-grad" x1="0" y1="0" x2="0" y2="38" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor={isDark ? '#23232c' : '#3d4a5d'} />
             <stop offset="60%" stopColor={catBodyColor} />
             <stop offset="100%" stopColor={isDark ? '#111116' : '#1e2633'} />
           </linearGradient>
-
-          {/* Soft Paw Shadow */}
-          <radialGradient id="paw-shadow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#000000" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#000000" stopOpacity="0" />
-          </radialGradient>
         </defs>
 
-        {/* Ambient Underglow */}
+        {/* Ambient Underglow Pool */}
         <ellipse
-          cx="84"
-          cy="32"
-          rx="42"
-          ry="8"
+          cx="30"
+          cy="35"
+          rx="18"
+          ry="3.0"
           fill={eyeGlowColor}
-          opacity={isDark ? '0.18' : '0.12'}
-          filter="blur(6px)"
+          opacity={isDark ? '0.22' : '0.14'}
+          filter="blur(3px)"
         />
 
         {/* ================================================================= */}
@@ -199,25 +169,21 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
         {/* ================================================================= */}
         <motion.g
           animate={{
-            rotate: isPetting ? [0, 10, -5, 0] : [-4, 7, -4],
+            rotate: isPetting ? [0, 8, -4, 0] : [-3, 6, -3],
           }}
           transition={{
             duration: isPetting ? 0.9 : 3.0,
             repeat: Infinity,
             ease: 'easeInOut',
           }}
-          style={{ transformOrigin: '124px 34px' }}
+          style={{ transformOrigin: '48px 33px' }}
         >
           <path
-            d="M 121 34 
-               C 125 27, 133 21, 134 13 
-               C 134.5 7.5, 128 8, 127 13 
-               C 126 18, 121 26, 117 34 Z"
+            d="M 46 33 C 49 27, 54 22, 54 15 C 54.5 11, 50 11.5, 49 15 C 48.5 19, 46 26, 44 33 Z"
             fill="url(#cat-velvet-grad)"
           />
           {/* Luminous Tail Tip */}
-          <circle cx="132" cy="10" r="2.2" fill={companionColor} opacity="0.9" />
-          <circle cx="132" cy="10" r="1.0" fill="#ffffff" opacity="0.8" />
+          <circle cx="53" cy="13" r="1.5" fill={companionColor} opacity="0.9" />
         </motion.g>
 
         {/* ================================================================= */}
@@ -227,34 +193,27 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
         <motion.g
           className={!isPetting && !isDraggingFile ? 'cat-ear-twitch-left' : ''}
           animate={{
-            scaleY: isDraggingFile ? 1.15 : isPetting ? 0.88 : 1,
-            rotate: isPetting ? -10 : 0,
+            scaleY: isDraggingFile ? 1.12 : isPetting ? 0.90 : 1,
+            rotate: isPetting ? -8 : 0,
           }}
           transition={{ type: 'spring', stiffness: 380, damping: 22 }}
-          style={{ transformOrigin: '64px 15px' }}
+          style={{ transformOrigin: '19px 15px' }}
         >
-          {/* Outer Ear with Rounded Apex */}
           <path
-            d="M 54 18 
-               C 53 12, 59 3, 63.5 2 
-               C 66.5 2, 72 9, 74 16 Z"
+            d="M 15 18 C 14 13, 17 5, 20.5 4 C 22.5 4, 25 10, 26 16 Z"
             fill="url(#cat-velvet-grad)"
             stroke={catHighlight}
-            strokeWidth="0.75"
+            strokeWidth="0.6"
           />
-          {/* Inner Ear Cavity */}
           <path
-            d="M 57 16 
-               C 56 12, 60 6, 63.5 5 
-               C 66 6, 69 11, 71 15 Z"
+            d="M 17 16 C 16 13, 18 7, 20.5 6 C 22 7, 24 11, 24.5 15 Z"
             fill={earInnerPink}
             opacity="0.85"
           />
-          {/* Fluffy Ear Fur Tufts */}
           <path
-            d="M 56 15 Q 60 12 58 9 M 57 16 Q 62 13 60 11"
+            d="M 16 15 Q 19 13 18 10 M 17 16 Q 20 14 19 12"
             stroke={earFluffColor}
-            strokeWidth="0.8"
+            strokeWidth="0.6"
             strokeLinecap="round"
           />
         </motion.g>
@@ -263,34 +222,27 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
         <motion.g
           className={!isPetting && !isDraggingFile ? 'cat-ear-twitch-right' : ''}
           animate={{
-            scaleY: isDraggingFile ? 1.15 : isPetting ? 0.88 : 1,
-            rotate: isPetting ? 10 : 0,
+            scaleY: isDraggingFile ? 1.12 : isPetting ? 0.90 : 1,
+            rotate: isPetting ? 8 : 0,
           }}
           transition={{ type: 'spring', stiffness: 380, damping: 22 }}
-          style={{ transformOrigin: '104px 15px' }}
+          style={{ transformOrigin: '41px 15px' }}
         >
-          {/* Outer Ear with Rounded Apex */}
           <path
-            d="M 94 16 
-               C 96 9, 101.5 2, 104.5 2 
-               C 109 3, 115 12, 114 18 Z"
+            d="M 34 16 C 35 10, 37.5 4, 39.5 4 C 43 5, 46 13, 45 18 Z"
             fill="url(#cat-velvet-grad)"
             stroke={catHighlight}
-            strokeWidth="0.75"
+            strokeWidth="0.6"
           />
-          {/* Inner Ear Cavity */}
           <path
-            d="M 97 15 
-               C 99 11, 102 6, 104.5 5 
-               C 108 6, 112 12, 111 16 Z"
+            d="M 35.5 15 C 36 11, 38 7, 39.5 6 C 42 7, 44 13, 43 16 Z"
             fill={earInnerPink}
             opacity="0.85"
           />
-          {/* Fluffy Ear Fur Tufts */}
           <path
-            d="M 112 15 Q 108 12 110 9 M 111 16 Q 106 13 108 11"
+            d="M 44 15 Q 41 13 42 10 M 43 16 Q 40 14 41 12"
             stroke={earFluffColor}
-            strokeWidth="0.8"
+            strokeWidth="0.6"
             strokeLinecap="round"
           />
         </motion.g>
@@ -299,169 +251,142 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
         {/* 3. Main Head Silhouette with Chubby Fluffy Cheeks                */}
         {/* ================================================================= */}
         <path
-          d="M 56 22 
-             C 53 23, 50 26, 52 28 
-             C 54 30, 56 31, 58 32
-             C 65 36, 74 36.5, 84 36.5 
-             C 94 36.5, 103 36, 110 32 
-             C 112 31, 114 30, 116 28 
-             C 118 26, 115 23, 112 22 
-             C 111 13, 98 9.5, 84 9.5 
-             C 70 9.5, 57 13, 56 22 Z"
+          d="M 16 21 
+             C 14 22, 12 25, 13 27 
+             C 14 29, 16 30, 18 31
+             C 22 35, 26 36, 30 36 
+             C 34 36, 38 35, 42 31 
+             C 44 30, 46 29, 47 27 
+             C 48 25, 46 22, 44 21 
+             C 43 14, 37 11, 30 11 
+             C 23 11, 17 14, 16 21 Z"
           fill="url(#cat-velvet-grad)"
           stroke={catHighlight}
           strokeWidth="0.6"
         />
 
-        {/* Subtle Forehead Shadow Depth */}
-        <path
-          d="M 72 13 Q 84 15 96 13"
-          stroke="rgba(0,0,0,0.3)"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          fill="none"
-        />
-
         {/* Graceful Curved Whisker Pairs */}
-        <g stroke={isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)'} strokeWidth="0.75" strokeLinecap="round" fill="none">
+        <g stroke={isDark ? 'rgba(255,255,255,0.40)' : 'rgba(0,0,0,0.30)'} strokeWidth="0.65" strokeLinecap="round" fill="none">
           {/* Left Whiskers */}
-          <path d="M 55 24 Q 45 22 38 23" />
-          <path d="M 55 26.5 Q 46 27 39 30" />
+          <path d="M 15 25 Q 9 23 4 24" />
+          <path d="M 15 27 Q 9 27.5 5 30" />
           {/* Right Whiskers */}
-          <path d="M 113 24 Q 123 22 130 23" />
-          <path d="M 113 26.5 Q 122 27 129 30" />
+          <path d="M 45 25 Q 51 23 56 24" />
+          <path d="M 45 27 Q 51 27.5 55 30" />
         </g>
 
         {/* ================================================================= */}
-        {/* 4. Expressive Feline Eyes & Face Details                         */}
+        {/* 4. Expressive Feline Eyes (cx=22, cx=38, cy=24) & Face Details    */}
         {/* ================================================================= */}
         {isPetting ? (
           /* Petting Happy Eyes: Purring Feline Arcs (^ ^) with Blushing Cheeks */
           <g>
             <path
-              d="M 68 21 Q 74 15 80 21"
+              d="M 19.5 24.5 Q 22.5 21 25.5 24.5"
               stroke="#ffffff"
-              strokeWidth="2.4"
+              strokeWidth="1.8"
               strokeLinecap="round"
               fill="none"
             />
             <path
-              d="M 88 21 Q 94 15 100 21"
+              d="M 34.5 24.5 Q 37.5 21 40.5 24.5"
               stroke="#ffffff"
-              strokeWidth="2.4"
+              strokeWidth="1.8"
               strokeLinecap="round"
               fill="none"
             />
             {/* Rosy Blushing Cheeks */}
-            <ellipse cx="64" cy="25" rx="3.5" ry="2.0" fill="#f43f5e" opacity="0.65" />
-            <ellipse cx="104" cy="25" rx="3.5" ry="2.0" fill="#f43f5e" opacity="0.65" />
+            <ellipse cx="17" cy="26" rx="2.4" ry="1.4" fill="#f43f5e" opacity="0.65" />
+            <ellipse cx="43" cy="26" rx="2.4" ry="1.4" fill="#f43f5e" opacity="0.65" />
           </g>
         ) : (
           /* Normal / Cursor Tracking / Dilated Eyes */
-          <g>
-            {/* Left Eye */}
+          <g style={{ transformOrigin: '30px 24px' }}>
+            {/* Left Eye (cx=22, cy=24) */}
             <g
-              transform="translate(74, 21)"
+              transform="translate(22, 24)"
               style={{
                 transformOrigin: '0 0',
                 transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.28 : 1})`,
                 transition: 'transform 0.07s ease-out',
               }}
             >
-              {/* Outer Eyeliner Border with Cat Wing */}
+              {/* Outer Eyeliner Border with Wing */}
               <path
-                d="M -6.5 0 Q -3 -4.5 4.5 -1 Q 6 0 7 0.5 Q 4 4.5 -3 4 Q -5.5 2.5 -6.5 0 Z"
+                d="M -4 0 Q -2 -3 3 -0.8 Q 4 0 4.5 0.3 Q 2.5 3 -2 2.6 Q -3.5 1.6 -4 0 Z"
                 fill="#090d16"
               />
               {/* Iris Luminous Gradient */}
               <ellipse
                 cx="0"
                 cy="0"
-                rx={isDraggingFile ? 5.2 : 4.4}
-                ry={isDraggingFile ? 5.2 : 3.8}
+                rx={isDraggingFile ? 3.4 : 3.0}
+                ry={isDraggingFile ? 3.4 : 2.6}
                 fill="url(#cat-iris-glow)"
               />
-              {/* Responsive Pupil */}
+              {/* Responsive Pupil: Dilates when dragging/excited, sleek vertical slit otherwise */}
               {isDraggingFile ? (
-                /* Wide Dilated Pupil on File Pounce */
-                <circle cx={pupilX} cy={pupilY} r="3.4" fill="#060910" />
+                <circle cx={pupilX} cy={pupilY} r="2.2" fill="#060910" />
               ) : (
-                /* Elegant Feline Slit Pupil Tracking Cursor */
                 <ellipse
                   cx={pupilX}
                   cy={pupilY}
-                  rx="1.5"
-                  ry="3.2"
+                  rx="1.0"
+                  ry="2.2"
                   fill="#060910"
                 />
               )}
-              {/* Primary Star/Catchlight Glint */}
+              {/* Catchlight Glint */}
               <circle
-                cx={pupilX + 1.4}
-                cy={pupilY - 1.3}
-                r="1.2"
+                cx={pupilX + 0.8}
+                cy={pupilY - 0.8}
+                r="0.75"
                 fill="#ffffff"
                 opacity="0.95"
-              />
-              {/* Secondary Micro Highlight */}
-              <circle
-                cx={pupilX - 1.2}
-                cy={pupilY + 1.2}
-                r="0.6"
-                fill="#ffffff"
-                opacity="0.75"
               />
             </g>
 
-            {/* Right Eye */}
+            {/* Right Eye (cx=38, cy=24) */}
             <g
-              transform="translate(94, 21)"
+              transform="translate(38, 24)"
               style={{
                 transformOrigin: '0 0',
                 transform: `scaleY(${isBlinking ? 0.10 : isLowBattery ? 0.28 : 1})`,
                 transition: 'transform 0.07s ease-out',
               }}
             >
-              {/* Outer Eyeliner Border with Cat Wing */}
+              {/* Outer Eyeliner Border with Wing */}
               <path
-                d="M 6.5 0 Q 3 -4.5 -4.5 -1 Q -6 0 -7 0.5 Q -4 4.5 3 4 Q 5.5 2.5 6.5 0 Z"
+                d="M 4 0 Q 2 -3 -3 -0.8 Q -4 0 -4.5 0.3 Q -2.5 3 2 2.6 Q 3.5 1.6 4 0 Z"
                 fill="#090d16"
               />
               {/* Iris Luminous Gradient */}
               <ellipse
                 cx="0"
                 cy="0"
-                rx={isDraggingFile ? 5.2 : 4.4}
-                ry={isDraggingFile ? 5.2 : 3.8}
+                rx={isDraggingFile ? 3.4 : 3.0}
+                ry={isDraggingFile ? 3.4 : 2.6}
                 fill="url(#cat-iris-glow)"
               />
               {/* Responsive Pupil */}
               {isDraggingFile ? (
-                <circle cx={pupilX} cy={pupilY} r="3.4" fill="#060910" />
+                <circle cx={pupilX} cy={pupilY} r="2.2" fill="#060910" />
               ) : (
                 <ellipse
                   cx={pupilX}
                   cy={pupilY}
-                  rx="1.5"
-                  ry="3.2"
+                  rx="1.0"
+                  ry="2.2"
                   fill="#060910"
                 />
               )}
-              {/* Primary Star/Catchlight Glint */}
+              {/* Catchlight Glint */}
               <circle
-                cx={pupilX + 1.4}
-                cy={pupilY - 1.3}
-                r="1.2"
+                cx={pupilX + 0.8}
+                cy={pupilY - 0.8}
+                r="0.75"
                 fill="#ffffff"
                 opacity="0.95"
-              />
-              {/* Secondary Micro Highlight */}
-              <circle
-                cx={pupilX - 1.2}
-                cy={pupilY + 1.2}
-                r="0.6"
-                fill="#ffffff"
-                opacity="0.75"
               />
             </g>
           </g>
@@ -469,40 +394,40 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
 
         {/* Cute Heart-Triangle Pink Nose */}
         <path
-          d="M 82.5 24.5 Q 84 24 85.5 24.5 Q 84 26.5 84 26.5 Z"
+          d="M 29 25.5 Q 30 25 31 25.5 Q 30 27 30 27 Z"
           fill="#f43f5e"
         />
 
         {/* Adorable Cat Muzzle ("3" / "w" Smile) */}
         <path
-          d="M 80.5 26.5 Q 82.2 28.2 84 26.8 Q 85.8 28.2 87.5 26.5"
+          d="M 28.2 27.2 Q 29.1 28.4 30 27.5 Q 30.9 28.4 31.8 27.2"
           stroke={isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)'}
-          strokeWidth="1.0"
+          strokeWidth="0.8"
           strokeLinecap="round"
           fill="none"
         />
 
-        {/* Low Battery Floating Sleepy Zs */}
+        {/* Low Battery Sleepy Floating Zs */}
         {isLowBattery && (
           <>
             <motion.text
-              x="100"
+              x="44"
               y="14"
               fill="#94a3b8"
-              fontSize="9"
+              fontSize="7"
               fontWeight="700"
-              animate={{ y: [14, 6], opacity: [0, 0.9, 0], x: [100, 105] }}
+              animate={{ y: [14, 8], opacity: [0, 0.9, 0], x: [44, 48] }}
               transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
             >
               z
             </motion.text>
             <motion.text
-              x="108"
-              y="10"
+              x="49"
+              y="11"
               fill="#94a3b8"
-              fontSize="11"
+              fontSize="8.5"
               fontWeight="700"
-              animate={{ y: [10, 0], opacity: [0, 0.9, 0], x: [108, 114] }}
+              animate={{ y: [11, 4], opacity: [0, 0.9, 0], x: [49, 54] }}
               transition={{ duration: 1.8, delay: 0.6, repeat: Infinity, ease: 'easeOut' }}
             >
               Z
@@ -510,60 +435,55 @@ export const CatCompanion: React.FC<CatCompanionProps> = ({
           </>
         )}
 
-        {/* Charging Electric Sparkle Cheeks & Crown */}
+        {/* Charging Sparkle Crown */}
         {isCharging && (
-          <>
-            <motion.polygon
-              points="84,2 85.5,5.5 89,6 86.5,8.5 87,12 84,10 81,12 81.5,8.5 79,6 82.5,5.5"
-              fill="#fde047"
-              animate={{ y: [-1, -4, -1], rotate: [0, 20, -20, 0], scale: [0.8, 1.15, 0.8] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-              style={{ transformOrigin: '84px 7px' }}
-            />
-            <circle cx="60" cy="24" r="2" fill="#fde047" className="sparkle-particle" />
-            <circle cx="108" cy="24" r="2" fill="#fde047" className="sparkle-particle" />
-          </>
+          <motion.polygon
+            points="30,3 31.2,5.8 34,6.2 32,8.2 32.4,11 30,9.5 27.6,11 28,8.2 26,6.2 28.8,5.8"
+            fill="#fde047"
+            animate={{ y: [-1, -3, -1], rotate: [0, 15, -15, 0], scale: [0.85, 1.15, 0.85] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+            style={{ transformOrigin: '30px 7px' }}
+          />
         )}
 
         {/* ================================================================= */}
         {/* 5. Marshmallow Paws Resting on Bottom Rim & Swat Reaction        */}
         {/* ================================================================= */}
-        {/* Left Paw (Calm resting on bottom notch lip) */}
-        <g transform="translate(67, 34.5)">
-          {/* Main Paw Mound */}
-          <ellipse cx="0" cy="0" rx="5.5" ry="3.2" fill="url(#cat-velvet-grad)" stroke={catHighlight} strokeWidth="0.5" />
+        {/* Left Paw (Resting on bottom rim) */}
+        <g transform="translate(21, 35)">
+          <ellipse cx="0" cy="0" rx="3.6" ry="2.0" fill="url(#cat-velvet-grad)" stroke={catHighlight} strokeWidth="0.4" />
           {/* 3 Cute Rounded Toe Beans */}
-          <circle cx="-3" cy="0.2" r="1.3" fill={earInnerPink} opacity="0.8" />
-          <circle cx="0" cy="-0.6" r="1.4" fill={earInnerPink} opacity="0.85" />
-          <circle cx="3" cy="0.2" r="1.3" fill={earInnerPink} opacity="0.8" />
+          <circle cx="-1.8" cy="0.1" r="0.8" fill={earInnerPink} opacity="0.85" />
+          <circle cx="0" cy="-0.4" r="0.9" fill={earInnerPink} opacity="0.9" />
+          <circle cx="1.8" cy="0.1" r="0.8" fill={earInnerPink} opacity="0.85" />
         </g>
 
-        {/* Right Paw (Interactive: Playful Paw Swat reaching toward cursor) */}
+        {/* Right Paw (Interactive Playful Swat) */}
         <motion.g
           animate={{
-            y: isSwatting ? 8 : 0,
-            x: isSwatting ? 2.5 : 0,
-            scale: isSwatting ? 1.25 : 1,
+            y: isSwatting ? 4 : 0,
+            x: isSwatting ? 1.5 : 0,
+            scale: isSwatting ? 1.2 : 1,
           }}
           transition={{
             type: 'spring',
             stiffness: 550,
             damping: 18,
           }}
-          style={{ transformOrigin: '101px 34.5px' }}
+          style={{ transformOrigin: '39px 35px' }}
         >
-          <g transform="translate(101, 34.5)">
-            <ellipse cx="0" cy="0" rx="5.5" ry="3.2" fill="url(#cat-velvet-grad)" stroke={catHighlight} strokeWidth="0.5" />
-            <circle cx="-3" cy="0.2" r="1.3" fill={earInnerPink} opacity="0.8" />
-            <circle cx="0" cy="-0.6" r="1.4" fill={earInnerPink} opacity="0.85" />
-            <circle cx="3" cy="0.2" r="1.3" fill={earInnerPink} opacity="0.8" />
+          <g transform="translate(39, 35)">
+            <ellipse cx="0" cy="0" rx="3.6" ry="2.0" fill="url(#cat-velvet-grad)" stroke={catHighlight} strokeWidth="0.4" />
+            <circle cx="-1.8" cy="0.1" r="0.8" fill={earInnerPink} opacity="0.85" />
+            <circle cx="0" cy="-0.4" r="0.9" fill={earInnerPink} opacity="0.9" />
+            <circle cx="1.8" cy="0.1" r="0.8" fill={earInnerPink} opacity="0.85" />
 
             {/* Claws Extend Playfully During Swat */}
             {isSwatting && (
-              <g stroke="#ffffff" strokeWidth="0.8" strokeLinecap="round">
-                <line x1="-3.2" y1="2" x2="-3.2" y2="4.8" />
-                <line x1="0" y1="2.4" x2="0" y2="5.5" />
-                <line x1="3.2" y1="2" x2="3.2" y2="4.8" />
+              <g stroke="#ffffff" strokeWidth="0.6" strokeLinecap="round">
+                <line x1="-1.8" y1="1.2" x2="-1.8" y2="3.2" />
+                <line x1="0" y1="1.5" x2="0" y2="3.8" />
+                <line x1="1.8" y1="1.2" x2="1.8" y2="3.2" />
               </g>
             )}
           </g>

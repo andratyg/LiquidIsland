@@ -77,12 +77,23 @@ export const App: React.FC = () => {
   const privacyBlurEnabled = useSystemStore((s) => s.privacyBlurEnabled);
   const nightEyeCareEnabled = useSystemStore((s) => s.nightEyeCareEnabled);
   const showTaskbarDock = useSystemStore((s) => s.showTaskbarDock);
+  const isAudioPlaying = useSystemStore((s) => s.isAudioPlaying);
+
+  // Global 1s audio playback ticker so lyrics advance seamlessly in all views
+  useEffect(() => {
+    if (!isAudioPlaying) return;
+    const ticker = setInterval(() => {
+      systemStore.tickPlaybackTime();
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, [isAudioPlaying]);
 
   const [ramWorkingSet, setRamWorkingSet] = useState<number | null>(null);
   const [monitors, setMonitors] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState<string>('Phase 10 Liquid Glass Final Active');
   const [isTrimming, setIsTrimming] = useState(false);
   const [showTraySim, setShowTraySim] = useState(false);
+  const [showDevControls, setShowDevControls] = useState(false);
   const [showDevToolbar, setShowDevToolbar] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [wallpaperPreview, setWallpaperPreview] = useState<'none' | 'dark' | 'light' | 'vibrant'>('none');
@@ -199,6 +210,12 @@ export const App: React.FC = () => {
           systemStore.setIslandEnabled(true);
           systemStore.setIslandState('compact');
           setStatusMsg('Island Awakened');
+          break;
+        }
+
+        case 'toggle_dev_controls': {
+          playToggleClick();
+          setShowDevControls((prev) => !prev);
           break;
         }
 
@@ -349,7 +366,7 @@ export const App: React.FC = () => {
         return;
       }
 
-      // 3. Escape: Close Modals or Unlock Privacy
+      // 3. Escape: Close Modals, Unlock Privacy, or Collapse Expanded Dashboard
       if (e.key === 'Escape') {
         if (privacyBlurEnabled) {
           e.preventDefault();
@@ -367,6 +384,13 @@ export const App: React.FC = () => {
           systemStore.setSpotlightOpen(false);
           return;
         }
+        const state = systemStore.getState().islandState;
+        if (state === 'expanded' || state === 'expanded-lyrics') {
+          e.preventDefault();
+          playGlassPop();
+          systemStore.collapseIsland();
+          return;
+        }
       }
 
       // 4. Ctrl + Alt + T: Toggle Pin Active Window
@@ -379,6 +403,14 @@ export const App: React.FC = () => {
           subtitle: msg,
           isPinned: !msg.includes('Unpinned'),
         });
+        return;
+      }
+
+      // 5. Ctrl + Shift + D: Toggle Developer Controls Toolbar & Taskbar Dock
+      if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        e.preventDefault();
+        playToggleClick();
+        setShowDevControls((prev) => !prev);
         return;
       }
     }
@@ -400,14 +432,36 @@ export const App: React.FC = () => {
     return () => clearInterval(fsTimer);
   }, [autoFullscreenStealth]);
 
-  // Dynamic Window Resizing for Spotlight & Overlays
+  // Initial mount: Immediately enable click-through so transparent area never blocks underlying apps
+  useEffect(() => {
+    safeInvoke('set_click_through', { ignore: true });
+  }, []);
+
+  // Collapse Island when clicking outside #liquid-island-root
+  useEffect(() => {
+    function handlePointerDown(e: MouseEvent) {
+      const currentState = systemStore.getState().islandState;
+      if (currentState === 'expanded' || currentState === 'expanded-lyrics') {
+        const root = document.getElementById('liquid-island-root');
+        if (root && !root.contains(e.target as Node)) {
+          playGlassPop();
+          systemStore.collapseIsland();
+        }
+      }
+    }
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
+
+  // Dynamic Window Resizing for Spotlight & Settings Modals (620px when open, 210px when closed)
   useEffect(() => {
     async function updateWindowSize() {
       if (spotlightOpen || showSettingsModal) {
-        await safeInvoke('set_window_size', { width: 640, height: 600 });
+        await safeInvoke('set_window_size', { width: 640, height: 620 });
         await safeInvoke('set_click_through', { ignore: false });
       } else {
-        await safeInvoke('set_window_size', { width: 640, height: 220 });
+        await safeInvoke('set_window_size', { width: 640, height: 210 });
+        await safeInvoke('set_click_through', { ignore: true });
       }
     }
     updateWindowSize();
@@ -422,9 +476,11 @@ export const App: React.FC = () => {
     await safeInvoke('set_click_through', { ignore: true });
   }, []);
 
-  // Determine active dimensions strictly matching ARCHITECTURE_LOCK
+  // Determine active dimensions: widen to 360x44 in Companion mode when music is playing
   const activeDimensions = !islandEnabled
     ? { width: 140, height: 26 }
+    : islandState === 'eyes' && isAudioPlaying
+    ? { width: 360, height: 44 }
     : ISLAND_DIMENSIONS[islandState] || ISLAND_DIMENSIONS['compact'];
 
   return (
@@ -432,7 +488,11 @@ export const App: React.FC = () => {
       {/* ==================================================================== */}
       {/* Master 1:1 Dynamic Island Shell                                      */}
       {/* ==================================================================== */}
-      <IslandShell activeDimensions={activeDimensions} isJellyBouncing={isJellyBouncing}>
+      <IslandShell
+        activeDimensions={activeDimensions}
+        isJellyBouncing={isJellyBouncing}
+        isModalOpen={spotlightOpen || showSettingsModal}
+      >
         <AnimatePresence mode="wait">
           {!islandEnabled ? (
             /* Standby / Disabled Pill */
@@ -504,7 +564,10 @@ export const App: React.FC = () => {
               transition={{ duration: 0.16 }}
               style={{ width: '100%', height: '100%' }}
             >
-              <ExpandedContainer onDropJellyBounce={triggerJellyBounce} />
+              <ExpandedContainer
+                onDropJellyBounce={triggerJellyBounce}
+                onOpenSettings={() => setShowSettingsModal(true)}
+              />
             </motion.div>
           ) : (
             /* Fallback State */
@@ -548,8 +611,9 @@ export const App: React.FC = () => {
 
       {/* ==================================================================== */}
       {/* Bottom Liquid Glass Taskbar & System Tray (Options A / B / C)        */}
+      {/* Only rendered in dev mode when enabled                               */}
       {/* ==================================================================== */}
-      {showTaskbarDock && (
+      {showDevControls && showTaskbarDock && (
         <TaskbarPreviewDock
           onOpenSettings={() => setShowSettingsModal(true)}
           onOpenSpotlight={() => systemStore.setSpotlightOpen(true)}
@@ -681,24 +745,26 @@ export const App: React.FC = () => {
 
       {/* ==================================================================== */}
       {/* Collapsible Floating Dev Toolbar (Diagnostic & Production Toggle)    */}
+      {/* Hidden by default in production. Toggle via Ctrl + Shift + D or Tray */}
       {/* ==================================================================== */}
-      <div
-        onMouseEnter={handleToolbarMouseEnter}
-        onMouseLeave={handleToolbarMouseLeave}
-        style={{
-          position: 'fixed',
-          bottom: showTaskbarDock ? '54px' : '8px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '6px',
-          zIndex: 85,
-          pointerEvents: 'auto',
-          transition: 'bottom 0.25s ease',
-        }}
-      >
+      {showDevControls && (
+        <div
+          onMouseEnter={handleToolbarMouseEnter}
+          onMouseLeave={handleToolbarMouseLeave}
+          style={{
+            position: 'fixed',
+            bottom: showTaskbarDock ? '54px' : '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '6px',
+            zIndex: 85,
+            pointerEvents: 'auto',
+            transition: 'bottom 0.25s ease',
+          }}
+        >
         {/* Toggle Pill Button */}
         <button
           type="button"
@@ -1168,6 +1234,7 @@ export const App: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+      )}
     </div>
   );
 };

@@ -103,6 +103,8 @@ export interface SystemSettings {
   volume: number;              // 0–100 (Default: 75)
   brightness: number;          // 0–100 (Default: 80)
   isAudioPlaying: boolean;      // True when waveform visualizer is active
+  playbackTime?: number;        // Track playback timestamp in seconds (Default: 193)
+  duration?: number;            // Total track duration in seconds (Default: 256)
 
   // Phase 4 Extensions (backward compatible)
   isPomodoroRunning: boolean;   // True when focus timer is active (triggers focus glasses)

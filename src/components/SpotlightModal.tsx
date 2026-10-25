@@ -696,11 +696,14 @@ export const SpotlightModal: React.FC<SpotlightModalProps> = ({ onClose, onOpenS
   return (
     <motion.div
       key="spotlight-overlay"
+      id="spotlight-modal-root"
       initial={{ opacity: 0, y: -24, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -24, scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 450, damping: 32 }}
       onKeyDown={handleKeyDown}
+      onMouseEnter={() => safeInvoke('set_click_through', { ignore: false })}
+      onMouseLeave={() => safeInvoke('set_click_through', { ignore: true })}
       style={{
         position: 'relative',
         width: '620px',

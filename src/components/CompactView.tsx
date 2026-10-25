@@ -86,7 +86,11 @@ export const CompactView: React.FC = () => {
   return (
     <div
       onClick={handleExpandIsland}
-      title="Compact Island View - Click background to Expand Dashboard"
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        handleExpandIsland();
+      }}
+      title="Compact Island View - Click or Double-Click to Expand Dashboard"
       style={{
         position: 'relative',
         display: 'flex',
@@ -103,7 +107,7 @@ export const CompactView: React.FC = () => {
       {/* 1. Left Indicator: 17x17px Circular Progress Ring                    */}
       {/* ==================================================================== */}
       <div
-        title={`Status Ring (Volume / Energy: ${volume}%)`}
+        title={`Status Ring (Volume / Energy: ${volume}%) - Click to Expand Dashboard`}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -115,7 +119,7 @@ export const CompactView: React.FC = () => {
         }}
         onClick={(e) => {
           e.stopPropagation();
-          playToggleClick();
+          handleExpandIsland();
         }}
       >
         <svg width="17" height="17" viewBox="0 0 17 17" fill="none">

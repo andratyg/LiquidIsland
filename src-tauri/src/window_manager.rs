@@ -68,7 +68,7 @@ pub fn get_monitors_list(window: Window) -> Vec<String> {
         .collect()
 }
 
-/// Adjusts the overlay window size dynamically (e.g. expanding vertically from 220px to 560px
+/// Adjusts the overlay window size dynamically (e.g. expanding vertically from 210px to 620px
 /// when Spotlight or Settings modals open so 620px glass panels are never clipped).
 #[tauri::command]
 pub fn set_window_size(window: Window, width: u32, height: u32) -> Result<(), String> {
