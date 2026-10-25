@@ -192,6 +192,59 @@ const AnimatedSunSvg: React.FC<{ value: number }> = ({ value }) => {
   );
 };
 
+// Crisp Illuminated CapsLock Indicator SVG
+const CapsLockSvg: React.FC<{ isOn: boolean }> = ({ isOn }) => (
+  <div
+    style={{
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '34px',
+      height: '34px',
+      borderRadius: '11px',
+      backgroundColor: isOn ? 'rgba(56, 189, 248, 0.18)' : 'rgba(148, 163, 184, 0.12)',
+      border: `1px solid ${isOn ? 'rgba(56, 189, 248, 0.45)' : 'rgba(148, 163, 184, 0.25)'}`,
+      boxShadow: isOn
+        ? '0 0 16px rgba(56, 189, 248, 0.55), inset 0 0 8px rgba(56, 189, 248, 0.3)'
+        : '0 0 8px rgba(0, 0, 0, 0.3)',
+      transition: 'all 0.2s ease',
+      flexShrink: 0,
+    }}
+  >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <rect
+        x="3"
+        y="3"
+        width="18"
+        height="18"
+        rx="5"
+        stroke={isOn ? '#38bdf8' : '#94a3b8'}
+        strokeWidth="1.8"
+        fill={isOn ? 'rgba(56, 189, 248, 0.15)' : 'transparent'}
+      />
+      <path
+        d="M12 7L7 13H10V17H14V13H17L12 7Z"
+        fill={isOn ? '#38bdf8' : '#94a3b8'}
+      />
+    </svg>
+    {isOn && (
+      <span
+        style={{
+          position: 'absolute',
+          top: '3px',
+          right: '3px',
+          width: '5px',
+          height: '5px',
+          borderRadius: '50%',
+          backgroundColor: '#38bdf8',
+          boxShadow: '0 0 6px #38bdf8',
+        }}
+      />
+    )}
+  </div>
+);
+
 export const ToastView: React.FC = () => {
   const toastPayload = useSystemStore((s) => s.toastPayload);
 
@@ -724,6 +777,113 @@ export const ToastView: React.FC = () => {
             <div className="toast-sonar-ring" title="Connected">
               <div className="toast-sonar-pulse" />
               <div className="toast-sonar-dot" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDismiss}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: '2px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                opacity: 0.6,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              title="Dismiss"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 4. Exact 1:1 Slider HUD (Volume / Brightness / Mic)                   */}
+      {/* ==================================================================== */}
+      {/* ==================================================================== */}
+      {/* 3c. CapsLock Status Alert (Dedicated Rounded Obsidian Pill)          */}
+      {/* ==================================================================== */}
+      {type === 'capslock' && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            height: '100%',
+          }}
+        >
+          {/* Left: Glowing keyboard / lock SVG indicator */}
+          <CapsLockSvg isOn={Boolean(toastPayload?.isCapsLockOn)} />
+
+          {/* Center: Title & Subtitle */}
+          <div
+            style={{
+              flex: 1,
+              marginLeft: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              lineHeight: 1.25,
+            }}
+          >
+            <div
+              style={{
+                fontSize: '14px',
+                fontWeight: 600,
+                color: '#ffffff',
+                letterSpacing: '-0.2px',
+              }}
+            >
+              {toastPayload?.isCapsLockOn ? 'Caps Lock On' : 'Caps Lock Off'}
+            </div>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: 'var(--text-secondary)',
+                letterSpacing: '-0.1px',
+              }}
+            >
+              {toastPayload?.isCapsLockOn ? 'Uppercase letters enabled' : 'Standard lowercase typing'}
+            </div>
+          </div>
+
+          {/* Right: Active Indicator Badge Pill */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: '9999px',
+                backgroundColor: toastPayload?.isCapsLockOn ? 'rgba(56, 189, 248, 0.16)' : 'rgba(255, 255, 255, 0.08)',
+                border: `1px solid ${toastPayload?.isCapsLockOn ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.12)'}`,
+                boxShadow: toastPayload?.isCapsLockOn ? '0 0 12px rgba(56, 189, 248, 0.35)' : 'none',
+              }}
+            >
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: toastPayload?.isCapsLockOn ? '#38bdf8' : '#64748b',
+                  boxShadow: toastPayload?.isCapsLockOn ? '0 0 8px #38bdf8' : 'none',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  color: toastPayload?.isCapsLockOn ? '#38bdf8' : '#94a3b8',
+                }}
+              >
+                {toastPayload?.isCapsLockOn ? 'CAPS' : 'OFF'}
+              </span>
             </div>
 
             <button

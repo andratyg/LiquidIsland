@@ -225,11 +225,11 @@ function loadInitialSettings(): SystemSettings {
       // Stage 2: Always start null on fresh boot
       workspaceActivity: null,
 
-      // Fix Stage 2 settings & 40MB Edition - Stage 1 auto-hide migration (liquid_dock_pinned_v2)
+      // Fix Stage 2 settings & 40MB Edition - Stage 1 auto-hide migration (liquid_dock_pinned_v3 default false)
       dockPinned: (() => {
-        const v2 = window.localStorage.getItem('liquid_dock_pinned_v2');
-        if (v2 !== null) return v2 === 'true';
-        window.localStorage.setItem('liquid_dock_pinned_v2', 'false');
+        const v3 = window.localStorage.getItem('liquid_dock_pinned_v3');
+        if (v3 !== null) return v3 === 'true';
+        window.localStorage.setItem('liquid_dock_pinned_v3', 'false');
         return false;
       })(),
       networkSsid: typeof parsed.networkSsid === 'string' ? parsed.networkSsid : 'Home-WiFi-5G',
@@ -272,14 +272,14 @@ function emitChange() {
   }
 }
 
-async function safeEmit(event: string, payload?: unknown) {
+async function safeInvokeTauri(cmd: string, args?: Record<string, unknown>) {
   try {
     const isTauri =
       typeof window !== 'undefined' &&
       ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
     if (!isTauri) return;
-    const { emit } = await import('@tauri-apps/api/event');
-    await emit(event, payload);
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke(cmd, args);
   } catch {
     // Non-fatal
   }
@@ -447,10 +447,29 @@ export const systemStore = {
   },
 
   // Phase 3 Actions
+  setInitialVolume(volumeVal: number) {
+    const clamped = Math.max(0, Math.min(100, Math.round(volumeVal)));
+    currentSettings = { ...currentSettings, volume: clamped };
+    emitChange();
+  },
+  syncWindowsMasterVolume(volumeVal: number, isMuted: boolean = false) {
+    const clamped = Math.max(0, Math.min(100, Math.round(volumeVal)));
+    playScrollTick();
+    saveSettings({ ...currentSettings, volume: clamped });
+    this.triggerToast('hud', {
+      hudType: 'volume',
+      hudValue: clamped,
+      value: clamped,
+      title: 'Volume',
+      subtitle: isMuted || clamped === 0 ? 'Muted' : `${clamped}%`,
+      isMuted: isMuted || clamped === 0,
+    });
+  },
   setVolume(volumeOrUpdater: number | ((prev: number) => number)) {
     const nextVal = typeof volumeOrUpdater === 'function' ? volumeOrUpdater(currentSettings.volume) : volumeOrUpdater;
     const clamped = Math.max(0, Math.min(100, Math.round(nextVal)));
     saveSettings({ ...currentSettings, volume: clamped });
+    safeInvokeTauri('set_system_master_volume', { percent: clamped });
   },
   setBrightness(brightnessOrUpdater: number | ((prev: number) => number)) {
     const nextVal = typeof brightnessOrUpdater === 'function' ? brightnessOrUpdater(currentSettings.brightness) : brightnessOrUpdater;
@@ -470,6 +489,7 @@ export const systemStore = {
     }
 
     saveSettings({ ...currentSettings, volume: nextVal });
+    safeInvokeTauri('set_system_master_volume', { percent: nextVal });
 
     this.triggerToast('hud', {
       hudType: 'volume',
@@ -515,6 +535,7 @@ export const systemStore = {
 
     playToggleClick();
     saveSettings({ ...currentSettings, volume: nextVal });
+    safeInvokeTauri('set_system_master_volume', { percent: nextVal });
 
     this.triggerToast('hud', {
       hudType: 'volume',
@@ -927,6 +948,15 @@ export const systemStore = {
         dataUrl: payload?.dataUrl,
         ...payload,
       };
+    } else if (type === 'capslock') {
+      fullPayload = {
+        type: 'capslock',
+        title: payload?.title ?? (payload?.isCapsLockOn ? 'Caps Lock On' : 'Caps Lock Off'),
+        subtitle: payload?.subtitle ?? (payload?.isCapsLockOn ? 'Uppercase letters enabled' : 'Standard lowercase typing'),
+        icon: 'capslock',
+        isCapsLockOn: Boolean(payload?.isCapsLockOn),
+        ...payload,
+      };
     } else if (type === 'workspace') {
       fullPayload = {
         type: 'workspace',
@@ -953,9 +983,7 @@ export const systemStore = {
       toastPayload: fullPayload,
     });
 
-    safeEmit('system-toast', { type, payload: fullPayload });
-
-    const autoRevertMs = (type === 'charging' || type === 'unplugged') ? 3000 : (type === 'hud' ? 2000 : 3200);
+    const autoRevertMs = (type === 'charging' || type === 'unplugged') ? 2500 : (type === 'hud' ? 1600 : type === 'capslock' ? 2200 : 2600);
     toastTimeoutId = setTimeout(() => {
       systemStore.dismissToast();
     }, autoRevertMs);
@@ -967,6 +995,15 @@ export const systemStore = {
 
   showUnpluggedToast(percent: number = 84) {
     this.triggerToast('unplugged', { percent, value: percent });
+  },
+
+  triggerCapsLockToast(isOn: boolean) {
+    playGlassPop();
+    this.triggerToast('capslock', {
+      title: isOn ? 'Caps Lock On' : 'Caps Lock Off',
+      subtitle: isOn ? 'Uppercase letters enabled' : 'Standard lowercase typing',
+      isCapsLockOn: isOn,
+    });
   },
 
   dismissToast() {
@@ -1058,26 +1095,6 @@ export const systemStore = {
       ...currentSettings,
       workspaceActivity: activityData,
     });
-
-    // UNIFIED DYNAMIC ISLAND: When switching tabs or windows, smoothly expand the top notch into the Apple-style alert!
-    if (payload.kind === 'app-switch' || payload.kind === 'tab-switch') {
-      const kindLabel =
-        payload.kind === 'tab-switch'
-          ? 'Active Tab Switched'
-          : 'Window Focused';
-
-      const iconData = payload.recent_apps?.[0]?.icon_data;
-
-      this.triggerToast('workspace', {
-        title: kindLabel,
-        subtitle: payload.tab_title || payload.app_name || 'Active Window',
-        appName: payload.app_name,
-        tabTitle: payload.tab_title,
-        accentColor: payload.accent_color || '#38bdf8',
-        iconData,
-        workspaceActivity: activityData,
-      });
-    }
 
     // Auto-revert back to compact pill after 1.8 seconds (1800ms)
     workspaceActivityTimeoutId = setTimeout(() => {
@@ -1183,7 +1200,7 @@ export const systemStore = {
   setDockPinned(dockPinned: boolean) {
     playToggleClick();
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('liquid_dock_pinned_v2', String(dockPinned));
+      window.localStorage.setItem('liquid_dock_pinned_v3', String(dockPinned));
     }
     saveSettings({ ...currentSettings, dockPinned });
   },

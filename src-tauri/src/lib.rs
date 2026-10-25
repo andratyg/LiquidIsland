@@ -70,6 +70,8 @@ pub fn run() {
             media_session::media_prev_track,
             hardware_monitor::get_battery_hardware_status,
             hardware_monitor::trigger_bluetooth_toast,
+            hardware_monitor::get_system_master_volume,
+            hardware_monitor::set_system_master_volume,
             taskbar::set_dock_click_through,
             taskbar::set_native_taskbar_hidden,
             taskbar::get_running_apps,

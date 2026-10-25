@@ -5,8 +5,6 @@ use tauri::{Emitter, PhysicalPosition, Position, Window};
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::POINT;
 #[cfg(windows)]
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
-#[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
 pub static HIT_WIDTH: AtomicU32 = AtomicU32::new(210);
@@ -36,7 +34,6 @@ pub fn start_hit_test_loop(window: Window) {
     std::thread::spawn(move || {
         #[cfg(windows)]
         let mut pt: POINT = unsafe { std::mem::zeroed() };
-        let mut was_drag_approaching = false;
 
         loop {
             std::thread::sleep(Duration::from_millis(35));
@@ -90,29 +87,7 @@ pub fn start_hit_test_loop(window: Window) {
                             && pt.x >= (win_center_x - bezel_margin_x)
                             && pt.x <= (win_center_x + bezel_margin_x);
 
-                        // Universal Drag-Approach Detector:
-                        // If left mouse button is held down (VK_LBUTTON = 0x01) AND cursor is near top approach zone
-                        // (pt.y <= 250px from top and within 380px from screen horizontal center, covering full expanded Island & Shelf)
-                        let lbutton_down = unsafe { (GetAsyncKeyState(0x01) as u16 & 0x8000) != 0 };
-                        let approach_y_max = win_pos.y + (250.0 * scale).round() as i32;
-                        let approach_x_max = (380.0 * scale).round() as i32;
-                        let in_approach_zone = pt.y >= win_pos.y
-                            && pt.y <= approach_y_max
-                            && (pt.x - win_center_x).abs() <= approach_x_max;
-
-                        let is_drag_approach = lbutton_down && in_approach_zone;
-                        if is_drag_approach {
-                            if !was_drag_approaching {
-                                was_drag_approaching = true;
-                                let _ = window.set_ignore_cursor_events(false);
-                                CURRENT_IGNORE_STATE.store(false, Ordering::Relaxed);
-                                let _ = window.emit("drag-approach-shelf", ());
-                            }
-                        } else if !lbutton_down || !in_approach_zone {
-                            was_drag_approaching = false;
-                        }
-
-                        inside_island || inside_bezel || is_drag_approach
+                        inside_island || inside_bezel
                     }
                 }
 

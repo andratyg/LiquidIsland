@@ -313,7 +313,7 @@ export const App: React.FC = () => {
     let unlistenSlide: (() => void) | null = null;
     let unlistenWorkspace: (() => void) | null = null;
     let unlistenHud: (() => void) | null = null;
-    let unlistenToast: (() => void) | null = null;
+    let unlistenCapsLock: (() => void) | null = null;
     let unlistenCaptureBar: (() => void) | null = null;
     let unlistenScreenshot: (() => void) | null = null;
     let isMounted = true;
@@ -427,26 +427,39 @@ export const App: React.FC = () => {
         });
         unlistenWorkspace = sub9;
 
-        const sub10 = await listen<{ kind: 'volume' | 'brightness' | 'mute'; delta: number }>('hud-change', (event) => {
+        const sub10 = await listen<{
+          kind: 'volume' | 'brightness' | 'mute';
+          delta: number;
+          current_value?: number;
+          is_muted?: boolean;
+        }>('hud-change', (event) => {
           if (event.payload) {
-            const { kind, delta } = event.payload;
+            const { kind, delta, current_value, is_muted } = event.payload;
             if (kind === 'volume') {
-              systemStore.adjustVolume(delta);
+              if (typeof current_value === 'number') {
+                systemStore.syncWindowsMasterVolume(current_value, Boolean(is_muted));
+              } else {
+                systemStore.adjustVolume(delta);
+              }
             } else if (kind === 'brightness') {
               systemStore.adjustBrightness(delta);
             } else if (kind === 'mute') {
-              systemStore.toggleMute();
+              if (typeof current_value === 'number') {
+                systemStore.syncWindowsMasterVolume(current_value, Boolean(is_muted));
+              } else {
+                systemStore.toggleMute();
+              }
             }
           }
         });
         unlistenHud = sub10;
 
-        const sub11 = await listen<{ type: any; payload?: any }>('system-toast', (event) => {
+        const subCaps = await listen<{ is_on: boolean }>('capslock-change', (event) => {
           if (event.payload) {
-            systemStore.triggerToast(event.payload.type, event.payload.payload);
+            systemStore.triggerCapsLockToast(event.payload.is_on);
           }
         });
-        unlistenToast = sub11;
+        unlistenCapsLock = subCaps;
 
         const sub12 = await listen('open-capture-bar', async () => {
           systemStore.toggleCaptureBar();
@@ -528,7 +541,7 @@ export const App: React.FC = () => {
       if (unlistenSlide) unlistenSlide();
       if (unlistenWorkspace) unlistenWorkspace();
       if (unlistenHud) unlistenHud();
-      if (unlistenToast) unlistenToast();
+      if (unlistenCapsLock) unlistenCapsLock();
       if (unlistenCaptureBar) unlistenCaptureBar();
       if (unlistenScreenshot) unlistenScreenshot();
     };
@@ -582,6 +595,10 @@ export const App: React.FC = () => {
       if (isMounted && initialRam !== null) {
         setRamWorkingSet(initialRam);
         syncTrayTooltip(initialRam);
+      }
+      const masterVol = await safeInvoke<[number, boolean]>('get_system_master_volume');
+      if (isMounted && masterVol && Array.isArray(masterVol) && typeof masterVol[0] === 'number') {
+        systemStore.setInitialVolume(masterVol[0]);
       }
     }
     initSystem();

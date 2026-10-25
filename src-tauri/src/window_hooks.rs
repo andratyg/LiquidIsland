@@ -22,41 +22,15 @@ use windows_sys::Win32::System::DataExchange::{
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RIGHT, VK_RWIN, VK_SHIFT,
+    GetAsyncKeyState, GetKeyState, VK_CAPITAL, VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RIGHT, VK_RWIN, VK_SHIFT,
 };
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    FindWindowExW, FindWindowW, GetDesktopWindow, GetForegroundWindow, GetShellWindow,
+    GetDesktopWindow, GetForegroundWindow, GetShellWindow,
     GetWindowLongW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, SetWindowPos,
-    ShowWindow, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, WS_EX_TOPMOST,
+    GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_SHOWWINDOW, WS_EX_TOPMOST,
 };
-
-#[cfg(windows)]
-unsafe fn suppress_native_windows_osd() {
-    // 1. Windows 10/11 MediaFlyout / OSD host ("NativeHWNDHost" with "DirectUIHWND")
-    let class_native: Vec<u16> = "NativeHWNDHost\0".encode_utf16().collect();
-    let mut hwnd = FindWindowW(class_native.as_ptr(), std::ptr::null());
-    let mut iterations = 0;
-    while !hwnd.is_null() && iterations < 8 {
-        let class_direct: Vec<u16> = "DirectUIHWND\0".encode_utf16().collect();
-        let child = FindWindowExW(hwnd, std::ptr::null_mut(), class_direct.as_ptr(), std::ptr::null());
-        if !child.is_null() {
-            ShowWindow(hwnd, SW_HIDE);
-            SetWindowPos(hwnd, std::ptr::null_mut(), -9999, -9999, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE);
-        }
-        hwnd = FindWindowExW(std::ptr::null_mut(), hwnd, class_native.as_ptr(), std::ptr::null());
-        iterations += 1;
-    }
-
-    // 2. Modern Windows Hardware Notification Window ("HardwareNotificationWindow")
-    let class_hw: Vec<u16> = "HardwareNotificationWindow\0".encode_utf16().collect();
-    let hw_hwnd = FindWindowW(class_hw.as_ptr(), std::ptr::null());
-    if !hw_hwnd.is_null() {
-        ShowWindow(hw_hwnd, SW_HIDE);
-        SetWindowPos(hw_hwnd, std::ptr::null_mut(), -9999, -9999, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE);
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WorkspaceActivityPayload {
@@ -70,8 +44,10 @@ pub struct WorkspaceActivityPayload {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HudChangePayload {
-    pub kind: String,              // "volume" | "brightness" | "mute"
-    pub delta: i32,                // step delta e.g. +4, -4, +5, -5
+    pub kind: String,                      // "volume" | "brightness" | "mute"
+    pub delta: i32,                        // step delta e.g. +4, -4, +5, -5
+    pub current_value: Option<u32>,        // exact volume / brightness percent (0..100)
+    pub is_muted: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -80,6 +56,11 @@ pub struct ScreenshotCapturedPayload {
     pub filename: String,
     pub width: u32,
     pub height: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CapsLockPayload {
+    pub is_on: bool,
 }
 
 pub static WORKSPACE_LISTENER_STARTED: AtomicBool = AtomicBool::new(false);
@@ -236,6 +217,8 @@ pub fn start_workspace_activity_listener(window: Window) {
             let mut last_mute = false;
             let mut last_bright_up = false;
             let mut last_bright_down = false;
+            let mut last_caps_on = (GetKeyState(VK_CAPITAL as i32) & 0x0001) != 0;
+            let mut last_caps_down = false;
             let mut last_clipboard_seq: u32 = GetClipboardSequenceNumber();
             let mut last_activity_time = std::time::Instant::now();
             let mut tick_count: u32 = 0;
@@ -362,10 +345,15 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if vol_up_down {
                     if !last_vol_up {
                         last_vol_up = true;
-                        suppress_native_windows_osd();
+                        std::thread::sleep(Duration::from_millis(20));
+                        let (cur_vol, cur_mute) = crate::hardware_monitor::query_master_volume()
+                            .map(|(v, m)| (Some(v), Some(m)))
+                            .unwrap_or((None, None));
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "volume".to_string(),
                             delta: 4,
+                            current_value: cur_vol,
+                            is_muted: cur_mute,
                         });
                     }
                 } else {
@@ -375,10 +363,15 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if vol_down_down {
                     if !last_vol_down {
                         last_vol_down = true;
-                        suppress_native_windows_osd();
+                        std::thread::sleep(Duration::from_millis(20));
+                        let (cur_vol, cur_mute) = crate::hardware_monitor::query_master_volume()
+                            .map(|(v, m)| (Some(v), Some(m)))
+                            .unwrap_or((None, None));
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "volume".to_string(),
                             delta: -4,
+                            current_value: cur_vol,
+                            is_muted: cur_mute,
                         });
                     }
                 } else {
@@ -388,10 +381,15 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if mute_down {
                     if !last_mute {
                         last_mute = true;
-                        suppress_native_windows_osd();
+                        std::thread::sleep(Duration::from_millis(20));
+                        let (cur_vol, cur_mute) = crate::hardware_monitor::query_master_volume()
+                            .map(|(v, m)| (Some(v), Some(m)))
+                            .unwrap_or((None, None));
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "mute".to_string(),
                             delta: 0,
+                            current_value: cur_vol,
+                            is_muted: cur_mute,
                         });
                     }
                 } else {
@@ -401,10 +399,11 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if bright_up_down {
                     if !last_bright_up {
                         last_bright_up = true;
-                        suppress_native_windows_osd();
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "brightness".to_string(),
                             delta: 5,
+                            current_value: None,
+                            is_muted: None,
                         });
                     }
                 } else {
@@ -414,14 +413,40 @@ pub fn start_workspace_activity_listener(window: Window) {
                 if bright_down_down {
                     if !last_bright_down {
                         last_bright_down = true;
-                        suppress_native_windows_osd();
                         let _ = app_handle.emit("hud-change", HudChangePayload {
                             kind: "brightness".to_string(),
                             delta: -5,
+                            current_value: None,
+                            is_muted: None,
                         });
                     }
                 } else {
                     last_bright_down = false;
+                }
+
+                // -----------------------------------------------------------
+                // Dedicated CapsLock Hardware Key & Toggle Detector
+                // -----------------------------------------------------------
+                let caps_down = is_key_down(VK_CAPITAL as i32);
+                let current_caps_on = (GetKeyState(VK_CAPITAL as i32) & 0x0001) != 0;
+
+                if caps_down && !last_caps_down {
+                    last_caps_down = true;
+                    std::thread::sleep(Duration::from_millis(15));
+                    let committed_caps_on = (GetKeyState(VK_CAPITAL as i32) & 0x0001) != 0;
+                    last_caps_on = committed_caps_on;
+                    let _ = app_handle.emit("capslock-change", CapsLockPayload {
+                        is_on: committed_caps_on,
+                    });
+                } else if !caps_down {
+                    last_caps_down = false;
+                    // Detect external / on-screen keyboard toggle
+                    if current_caps_on != last_caps_on {
+                        last_caps_on = current_caps_on;
+                        let _ = app_handle.emit("capslock-change", CapsLockPayload {
+                            is_on: current_caps_on,
+                        });
+                    }
                 }
 
                 // -----------------------------------------------------------

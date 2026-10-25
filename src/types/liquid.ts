@@ -90,7 +90,8 @@ export type ToastType =
   | 'workspace'
   | 'wifi'
   | 'bluetooth'
-  | 'screenshot';
+  | 'screenshot'
+  | 'capslock';
 
 export type BatteryStatus = 'charging' | 'unplugged' | 'low' | 'guard' | 'normal';
 
@@ -100,10 +101,11 @@ export interface ToastPayload {
   subtitle: string;
   value?: number;               // 0–100 or metric
   percent?: number;             // Battery / Device %
-  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin' | 'workspace' | 'wifi' | 'bluetooth' | 'screenshot';
+  icon?: 'airbuds' | 'battery' | 'charging' | 'unplugged' | 'low' | 'guard' | 'volume' | 'brightness' | 'mic' | 'desktop' | 'pin' | 'workspace' | 'wifi' | 'bluetooth' | 'screenshot' | 'capslock';
   hudType?: 'volume' | 'brightness' | 'mic';
   hudValue?: number;            // 0–100
   isMicMuted?: boolean;
+  isCapsLockOn?: boolean;
   direction?: 'left' | 'right';
   batteryStatus?: BatteryStatus;
   pinnedTitle?: string;

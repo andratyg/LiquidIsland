@@ -43,7 +43,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     value: currentVolume,
   });
 
-  // Cursor Enter Logic: Stealth Auto-Wake and 220ms Hover Auto-Expand
+  // Cursor Enter Logic: Stealth Auto-Wake only (No involuntary hover expansions)
   const handleCursorEnter = useCallback(() => {
     if (leaveTimerRef.current) {
       clearTimeout(leaveTimerRef.current);
@@ -54,29 +54,12 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     if (current === 'bezel-line') {
       // Stealth Mode Auto-Wake: Wake to compact immediately
       systemStore.setIslandState('compact');
-      // If hovered for 220ms, smoothly expand to expanded dashboard
-      hoverTimerRef.current = setTimeout(() => {
-        const stateNow = systemStore.getState().islandState;
-        if (stateNow === 'compact' || stateNow === 'eyes') {
-          playGlassPop();
-          systemStore.setIslandState('expanded');
-        }
-      }, 220);
-    } else if (current === 'compact' || current === 'eyes') {
-      // Hover Auto-Expand: expand after 220ms hover
-      hoverTimerRef.current = setTimeout(() => {
-        const stateNow = systemStore.getState().islandState;
-        if (stateNow === 'compact' || stateNow === 'eyes') {
-          playGlassPop();
-          systemStore.setIslandState('expanded');
-        }
-      }, 220);
     }
 
     onHoverChange?.(true);
   }, [onHoverChange]);
 
-  // Cursor Leave Logic: 280ms Debounced Auto-Shrink with Input Focus & Modal Guards
+  // Cursor Leave Logic
   const handleCursorLeave = useCallback(() => {
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
@@ -84,31 +67,6 @@ export const IslandShell: React.FC<IslandShellProps> = ({
     }
 
     onHoverChange?.(false);
-
-    // Auto-Shrink on cursor leave after 280ms
-    leaveTimerRef.current = setTimeout(() => {
-      // Check guards: do not shrink if an input/textarea is focused or modal open
-      const activeEl = document.activeElement;
-      const isInputFocused =
-        activeEl &&
-        (activeEl.tagName === 'INPUT' ||
-          activeEl.tagName === 'TEXTAREA' ||
-          (activeEl as HTMLElement).isContentEditable);
-
-      const store = systemStore.getState();
-      const isModalOpen = store.spotlightOpen || store.privacyBlurEnabled;
-
-      if (isDraggingRef.current) {
-        return; // Inhibit auto-shrink while dragging files over the Island
-      }
-
-      if (!isInputFocused && !isModalOpen) {
-        if (store.islandState === 'expanded' || store.islandState === 'expanded-lyrics') {
-          playGlassPop();
-          systemStore.collapseIsland();
-        }
-      }
-    }, 280);
   }, [onHoverChange]);
 
   // Clean up timers on unmount & listen to Win32 hardware events
@@ -175,7 +133,6 @@ export const IslandShell: React.FC<IslandShellProps> = ({
 
     // Tauri Native Window Drag-Drop Listener for OS-level Explorer drags
     let unlistenTauriDrag: (() => void) | null = null;
-    let unlistenApproach: (() => void) | null = null;
     let isMounted = true;
 
     async function initDragListeners() {
@@ -186,15 +143,7 @@ export const IslandShell: React.FC<IslandShellProps> = ({
 
       try {
         const { getCurrentWebview } = await import('@tauri-apps/api/webview');
-        const { listen } = await import('@tauri-apps/api/event');
         if (!isMounted) return;
-
-        // Listen for hardware-level cursor drag approach from window_manager.rs
-        const subApproach = await listen('drag-approach-shelf', () => {
-          isDraggingRef.current = true;
-          systemStore.wakeShelfForDrop();
-        });
-        unlistenApproach = subApproach;
 
         const unlisten = await getCurrentWebview().onDragDropEvent(async (event) => {
           if (!isMounted) return;
@@ -279,7 +228,6 @@ export const IslandShell: React.FC<IslandShellProps> = ({
       window.removeEventListener('drop', onWindowDrop);
       window.removeEventListener('mouseup', onWindowMouseUp);
       if (unlistenTauriDrag) unlistenTauriDrag();
-      if (unlistenApproach) unlistenApproach();
     };
   }, []);
 
@@ -446,18 +394,39 @@ export const IslandShell: React.FC<IslandShellProps> = ({
           position: 'relative',
           borderBottomLeftRadius: bottomCornerRadius,
           borderBottomRightRadius: bottomCornerRadius,
+          boxShadow: isTabSwitch && workspaceActivity?.accent_color
+            ? `0 0 26px ${workspaceActivity.accent_color}77, 0 10px 32px rgba(0, 0, 0, 0.8)`
+            : undefined,
+          transition: 'box-shadow 0.45s ease',
         }}
       >
-        {/* Traveling Specular Rim Sweep Highlight */}
+        {/* Traveling Specular Rim Sweep & Liquid Glass Ripple Wave */}
         <AnimatePresence>
           {isTabSwitch && (
             <motion.div
-              key={`rim-sweep-${workspaceActivity?.timestamp}`}
-              className="liquid-rim-sweep"
-              initial={{ x: '-100%', opacity: 0 }}
-              animate={{ x: '250%', opacity: [0, 1, 0.8, 0] }}
+              key={`ripple-wave-${workspaceActivity?.timestamp}`}
+              className="liquid-ripple-wave"
+              initial={{ x: '-120%', opacity: 0 }}
+              animate={{ x: '240%', opacity: [0, 1, 0.88, 0] }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '65%',
+                height: '100%',
+                borderRadius: 'inherit',
+                background: `linear-gradient(90deg, transparent 0%, ${
+                  workspaceActivity?.accent_color || '#38bdf8'
+                }33 35%, rgba(255, 255, 255, 0.75) 50%, ${
+                  workspaceActivity?.accent_color || '#38bdf8'
+                }33 65%, transparent 100%)`,
+                boxShadow: `0 0 20px ${workspaceActivity?.accent_color || '#38bdf8'}66`,
+                pointerEvents: 'none',
+                zIndex: 40,
+                filter: 'blur(1px)',
+              }}
             />
           )}
         </AnimatePresence>

@@ -34,10 +34,14 @@ windows-sys = { version = "0.59", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
     "Win32_System_DataExchange",
+    "Win32_Media_Audio",
 ] }
 windows = { version = "0.62", features = [
     "Media_Control",
     "Storage_Streams",
     "Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
 ] }
 windows-future = "0.3"

@@ -6,6 +6,61 @@ use tauri::{Emitter, Manager, Window};
 #[cfg(windows)]
 use windows_sys::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 
+#[cfg(windows)]
+use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+#[cfg(windows)]
+use windows::Win32::Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eRender, eMultimedia};
+#[cfg(windows)]
+use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED};
+
+/// Queries real Windows master volume (0..100) and mute state via Core Audio Endpoint Volume
+pub fn query_master_volume() -> Option<(u32, bool)> {
+    #[cfg(windows)]
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia).ok()?;
+        let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None).ok()?;
+        
+        let level = endpoint_volume.GetMasterVolumeLevelScalar().unwrap_or(0.5);
+        let muted = endpoint_volume.GetMute().map(|b| b.as_bool()).unwrap_or(false);
+        let pct = (level * 100.0).round().clamp(0.0, 100.0) as u32;
+        Some((pct, muted))
+    }
+    #[cfg(not(windows))]
+    None
+}
+
+/// Sets real Windows master volume (0.0 .. 1.0)
+pub fn set_master_volume_scalar(level: f32) -> Result<(), String> {
+    #[cfg(windows)]
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia).map_err(|e| e.to_string())?;
+        let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None).map_err(|e| e.to_string())?;
+        endpoint_volume.SetMasterVolumeLevelScalar(level.clamp(0.0, 1.0), std::ptr::null()).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = level;
+        Ok(())
+    }
+}
+
+/// Tauri Command: Returns current real Windows master volume & mute state
+#[tauri::command]
+pub fn get_system_master_volume() -> (u32, bool) {
+    query_master_volume().unwrap_or((50, false))
+}
+
+/// Tauri Command: Sets current real Windows master volume (0..100)
+#[tauri::command]
+pub fn set_system_master_volume(percent: u32) -> Result<(), String> {
+    set_master_volume_scalar(percent as f32 / 100.0)
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HardwareToastPayload {
     pub kind: String, // "charging" | "unplugged" | "bluetooth"

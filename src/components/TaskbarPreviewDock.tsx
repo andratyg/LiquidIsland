@@ -719,6 +719,10 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
+                boxShadow: isThisAppActive
+                  ? `0 0 16px ${workspaceActivity?.accent_color || '#38bdf8'}99, inset 0 0 10px ${workspaceActivity?.accent_color || '#38bdf8'}44`
+                  : undefined,
+                transition: 'box-shadow 0.3s ease',
               }}
             >
               {renderAppIconGraphic(app.icon_hint, app.title, app.icon_data)}
@@ -728,77 +732,6 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
                 <span className="dock-app-dot-running" />
               )}
             </button>
-
-            {/* Floating Tab-Title Badge right above the focused running app icon */}
-            <AnimatePresence>
-              {isThisAppActive && workspaceActivity && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6, scale: 0.9 }}
-                  animate={{ opacity: 1, y: -44, scale: 1 }}
-                  exit={{ opacity: 0, y: -38, scale: 0.9 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 28 }}
-                  style={{
-                    position: 'absolute',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 9999,
-                    padding: '4px 12px',
-                    borderRadius: '9999px',
-                    backgroundColor: 'rgba(10, 14, 24, 0.94)',
-                    backdropFilter: 'blur(20px)',
-                    border: `1px solid ${workspaceActivity.accent_color || '#38bdf8'}`,
-                    boxShadow: `0 10px 24px rgba(0, 0, 0, 0.65), 0 0 14px ${
-                      workspaceActivity.accent_color || '#38bdf8'
-                    }44`,
-                    color: '#ffffff',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    pointerEvents: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    maxWidth: '280px',
-                    overflow: 'visible',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: workspaceActivity.accent_color || '#38bdf8',
-                      boxShadow: `0 0 6px ${workspaceActivity.accent_color || '#38bdf8'}`,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span
-                    style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: '250px',
-                    }}
-                  >
-                    {workspaceActivity.tab_title}
-                  </span>
-                  {/* Downward Pointer Caret */}
-                  <span
-                    style={{
-                      position: 'absolute',
-                      bottom: '-4px',
-                      left: '50%',
-                      transform: 'translateX(-50%) rotate(45deg)',
-                      width: '7px',
-                      height: '7px',
-                      backgroundColor: 'rgba(10, 14, 24, 0.94)',
-                      borderRight: `1px solid ${workspaceActivity.accent_color || '#38bdf8'}`,
-                      borderBottom: `1px solid ${workspaceActivity.accent_color || '#38bdf8'}`,
-                    }}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         );
       })}
@@ -1897,30 +1830,35 @@ export const TaskbarPreviewDock: React.FC<TaskbarPreviewDockProps> = ({
               flexShrink: 1,
             }}
           >
-            {/* Traveling Specular Rim Sweep & Aurora Wave across Taskbar Dock */}
+            {/* Traveling Specular Rim Sweep & Neon Aurora Light Streak across Taskbar Dock */}
             <AnimatePresence>
               {workspaceActivity && (
                 <motion.div
                   key={`dock-sweep-${workspaceActivity.timestamp}`}
                   className="liquid-rim-sweep"
                   initial={{ x: '-100%', opacity: 0 }}
-                  animate={{ x: '250%', opacity: [0, 1, 0.85, 0] }}
+                  animate={{ x: '220%', opacity: [0, 1, 0.9, 0] }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    width: '100%',
-                    height: '2px',
+                    width: '75%',
+                    height: '2.5px',
+                    borderRadius: '2px',
                     background:
                       workspaceActivity.kind === 'desktop-switch'
-                        ? 'linear-gradient(90deg, transparent 0%, #38bdf8 30%, #a855f7 70%, transparent 100%)'
+                        ? 'linear-gradient(90deg, transparent 0%, #38bdf8 30%, #ffffff 50%, #a855f7 70%, transparent 100%)'
                         : `linear-gradient(90deg, transparent 0%, ${
                             workspaceActivity.accent_color || '#38bdf8'
-                          } 50%, transparent 100%)`,
+                          } 35%, #ffffff 50%, ${
+                            workspaceActivity.accent_color || '#38bdf8'
+                          } 65%, transparent 100%)`,
+                    boxShadow: `0 0 16px ${workspaceActivity.accent_color || '#38bdf8'}, 0 0 28px rgba(56, 189, 248, 0.6)`,
                     pointerEvents: 'none',
-                    zIndex: 10,
+                    zIndex: 25,
+                    filter: 'blur(0.5px)',
                   }}
                 />
               )}
